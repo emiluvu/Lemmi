@@ -1,6 +1,6 @@
 # Anay → Lukas / Kylie: activity contracts A01–A04
 
-November 13, 2026. Branch `anay/device-control-foundation`; changes are in the working tree, not committed. This is a contract increment, ready for counterpart review. New reducers, reviewed live content, catalog hosting and real playback remain pending. A05/A06 and full activity acceptance are not complete.
+November 13, 2026. Branch `anay/activity-contracts-a01-a04`; this commit contains the activity contract increment. This is a contract increment, ready for counterpart review. New reducers, reviewed live content, catalog hosting and real playback remain pending. A05/A06 and full activity acceptance are not complete.
 
 ## State and content shapes (A01/A02)
 
@@ -18,7 +18,7 @@ Import schemas and inferred types from `@lemmi/contracts`. `ActivityStateSchema`
 `ApprovedPackSchema` changes:
 
 - Guessing replaces the old `candidateIds` placeholder with `candidates`, `questions`, and `rounds`, each bounded to 20 and containing unique IDs. Candidates carry `id`, `label`, nullable `assetId`, and nonempty canonical `entityIds`. Questions carry `id`, `prompt`, nonempty `entityIds`, and all four reviewed `branches: {yes, no, not_sure, skip}`. A branch is `{kind:'question', questionId}`, `{kind:'guess', candidateId}`, or `{kind:'round_end'}`. Rounds carry `id`, `candidateIds`, `entryQuestionId` and a terminal `reveal`. All references resolve; every question is reachable from a round; cycles, unreviewed references and guesses outside a round are rejected. At most 20 acyclic question nodes bounds every path. Shared subtrees are allowed.
-- Lukas follows the reviewed answer/skip branches; `guess.reveal` uses the current round's reviewed terminal; `guess.new_round` explicitly starts the next eligible reviewed round in catalog order, or returns a complete/empty state when none remain. It must not automatically loop/retest excluded objects. These are the agreed contract semantics for implementation, not new reducers in this change.
+- Lukas follows the reviewed answer/skip branches; `guess.reveal` uses the current round's reviewed terminal; `guess.new_round` explicitly starts the next eligible reviewed round in catalog order, or returns a complete/empty state when none remain. It must not automatically loop/retest excluded objects. These are the proposed contract semantics for counterpart review and implementation, not new reducers in this change.
 - Photo entries now have stable `id` for `photo.select`, `assetId`, nullable `caption`, nullable approved `discussionContext`, and nonempty `entityIds`. A missing caption/context is represented by null. `collectionKind` still supports `album | place_scenes`. Discussion context stays server-side; participant views never contain it.
 - Matching cards now have stable `id`, `assetId`, canonical primary `entityId`, and nonempty `entityIds` including that primary object. Card IDs distinguish sample/choice positions; several cards may share an object or picture. Filter every tag on sample and distractor cards. A shown pair or nonmatching tap alone cannot emit an uncertainty signal.
 - Music tags are now nonempty too. Schema validation cannot verify the completeness of visual/content tags or whether wording is suitable; content review remains required.
