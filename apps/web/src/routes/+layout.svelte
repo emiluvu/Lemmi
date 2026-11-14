@@ -110,6 +110,10 @@
     crossorigin="anonymous"
   /><meta name="description" content="Lemmi local mock development starter" /></svelte:head
 >
+{#if data.photoStoryRehearsal}<p class="notice">
+    LOCAL PHOTO STORY REHEARSAL · Explicit microphone capture · No saved speech or real
+    notifications
+  </p>{/if}
 <a class="skip-link" href="#main-content">Skip to content</a>
 {#if !data.live || page.url.pathname.startsWith('/caregiver')}
   <header class="app-topbar">

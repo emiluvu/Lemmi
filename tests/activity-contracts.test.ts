@@ -106,10 +106,15 @@ describe('activity state/pack handoff', () => {
       expect(ApprovedPackSchema.safeParse(pack).success).toBe(true);
       const state = createActivity({ instanceId: 'not-implemented' }, pack, contextFor('s'));
       expect(ActivityStateSchema.safeParse(state).success).toBe(true);
-      expect(state.phase).toBe('unavailable');
-      expect(() =>
-        reduceActivity(state, { type: 'activity.leave' }, pack, contextFor('s')),
-      ).toThrow();
+      expect(state.phase).toBe(pack.activityId === 'photo_album' ? 'ready' : 'unavailable');
+      if (pack.activityId === 'photo_album')
+        expect(
+          reduceActivity(state, { type: 'activity.leave' }, pack, contextFor('s')).nextState.phase,
+        ).toBe('ended');
+      else
+        expect(() =>
+          reduceActivity(state, { type: 'activity.leave' }, pack, contextFor('s')),
+        ).toThrow();
     }
   });
   test('reviewed guessing trees require all branches, valid candidates and entry/reveal references', () => {

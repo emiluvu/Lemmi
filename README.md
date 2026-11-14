@@ -184,3 +184,5 @@ The project draws on person-centered care and dementia communication guidance. T
 Product inspiration includes PARO, Joy for All, ElliQ, Memory Lane Games, and Tovertafel. Their features and research findings should not be treated as evidence for Lemmi.
 
 See [camera and robot implementation scope](docs/robot-capabilities-spec.md) for priority, hardware experiments, teammate handoffs and pending acceptance checks. Both additions are planned, not implemented; camera pauses conversation/activities in the first version.
+
+Photo Story voice rehearsal source is integrated from Lukas's checkpoint. Run `bun run photo-story` locally for the explicit reviewed-demo/text-only rehearsal, or follow [the handoff](docs/handoffs/lukas-photo-story-conversation.md) to use existing private speech configuration. It uses separate loopback ports 3011/5183, not the production gateway. It is not yet a live-site activity; scoped approved-media hosting and production transport remain pending.

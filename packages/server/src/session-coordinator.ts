@@ -24,6 +24,7 @@ import {
   type ActivityContext,
   type Journal,
   type HelpSnapshot,
+  type ApprovedPack,
 } from '@lemmi/contracts';
 import {
   caregiverProfile,
@@ -45,6 +46,7 @@ import {
   teachingInstructions,
   teachingReplyWithinTopic,
   TEACHING_ACTIVE_LIMIT_MS,
+  preparePhotoStoryTurn,
 } from '@lemmi/activities';
 import { createHash } from 'node:crypto';
 import { companionInput } from './adapters/companion-prompt';
@@ -61,6 +63,12 @@ export class SessionCoordinator {
     speech?: SpeechAdapters,
     now: () => number = Date.now,
     private readonly onFixedReply: () => void = () => {},
+    private readonly photoStory?: {
+      localOnly: true;
+      profileId: string;
+      pack: ApprovedPack;
+      availableAssetIds: string[];
+    },
   ) {
     this.now = now === Date.now ? elapsedEpochClock() : now;
     if (mode === 'live' && chatAdapter && speech)
@@ -87,6 +95,7 @@ export class SessionCoordinator {
             this.dialogue = [];
           }
         },
+        photoStory?.localOnly === true,
       );
   }
   private readonly now: () => number;
@@ -240,7 +249,7 @@ export class SessionCoordinator {
       return fail('UNAVAILABLE', 'Choose another activity or finish; no eligible teaching topic');
     if (this.configurationChanges.size)
       return fail('REVISION_CONFLICT', 'Configuration save is pending');
-    if (this.activity && this.activity.phase !== 'ended')
+    if (this.activity && this.activity.phase !== 'ended' && !this.photoTalking())
       return fail('REVISION_CONFLICT', 'Leave the activity before speaking');
     if (this.pendingChat) return fail('REVISION_CONFLICT', 'A text turn is pending');
     const result =
@@ -254,7 +263,57 @@ export class SessionCoordinator {
   }
   async finishCapture(raw: unknown): Promise<Result<ConversationTextResult>> {
     this.sweepTeaching();
-    return this.speech?.end(raw) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
+    const result = await (this.speech?.end(raw) ??
+      fail('UNAVAILABLE', 'Speech adapters are disabled'));
+    return this.photoTextFallback(result, (raw as { turnId?: string })?.turnId);
+  }
+  async speakText(raw: unknown) {
+    if (!this.photoStoryEnabled())
+      return fail('UNAVAILABLE', 'Photo speech is local rehearsal only');
+    const result = await (this.speech?.speak(raw, [16000, 22050, 24000, 44100, 48000]) ??
+      this.submitText(raw));
+    return this.photoTextFallback(result, (raw as { commandId?: string })?.commandId);
+  }
+  private photoTextFallback(
+    result: Result<ConversationTextResult>,
+    turnId?: string,
+  ): Result<ConversationTextResult> {
+    const last = this.lastChat?.result;
+    if (
+      this.photoStory &&
+      !result.ok &&
+      result.error.code === 'UNAVAILABLE' &&
+      last?.ok &&
+      last.data.kind === 'reply' &&
+      last.data.reply.turnId === turnId &&
+      this.session?.phase === 'waiting' &&
+      last.data.session.generation === this.session.generation &&
+      last.data.session.profileRevision === this.session.profileRevision &&
+      last.data.session.privacyRevision === this.session.privacyRevision &&
+      last.data.session.policyRevision === this.session.policyRevision
+    )
+      return ok({ ...last.data, session: this.snapshot()! });
+    return result;
+  }
+  private photoStoryEnabled() {
+    return (
+      this.photoStory?.localOnly === true &&
+      this.photoStory.profileId === DEMO_PROFILE_ID &&
+      this.profile.id === DEMO_PROFILE_ID
+    );
+  }
+  private photoTalking() {
+    return (
+      this.photoStoryEnabled() &&
+      this.activity?.activityId === 'photo_album' &&
+      this.activity.phase === 'active' &&
+      this.activity.viewingMode === 'talk'
+    );
+  }
+  private pack() {
+    return this.activity?.activityId === 'photo_album' && this.photoStory
+      ? this.photoStory.pack
+      : musicPack;
   }
   playbackReceipt(raw: unknown) {
     this.sweepTeaching();
@@ -363,7 +422,15 @@ export class SessionCoordinator {
         ...context.eligibility,
         profileId: this.profile.id,
         policyRevision: this.policyRevision,
-        ...(this.mode === 'live' ? { permittedEntityIds: [], available: false } : {}),
+        ...(this.mode === 'live'
+          ? {
+              permittedEntityIds: this.photoStoryEnabled() ? this.profile.interests : [],
+              available:
+                this.photoStoryEnabled() &&
+                !this.profile.rememberingEnabled &&
+                this.policyRevision === 0,
+            }
+          : {}),
       },
       presentationPolicy: structuredClone(this.session!.communicationSupport),
     };
@@ -492,6 +559,13 @@ export class SessionCoordinator {
       );
     }
     const route = routeParticipantText(input.text);
+    const repeated =
+      input.purpose === 'photo_repeat' &&
+      this.photoTalking() &&
+      this.lastChat?.result.ok &&
+      this.lastChat.result.data.kind === 'reply'
+        ? this.lastChat.result.data.reply.text
+        : null;
     // Explicit help/Stop/refusal bypass generation, dialogue retention and ordinary turn limits.
     if (route === 'stop' || route === 'pause') {
       const result = this.handle('session.command', {
@@ -508,6 +582,31 @@ export class SessionCoordinator {
         commandId: input.commandId,
         mode: 'real',
       }) as Result<ConversationTextResult>;
+    const photoRoute = this.photoTalking()
+      ? input.text
+          .normalize('NFKC')
+          .trim()
+          .toLowerCase()
+          .replace(/[.!?]+$/, '')
+          .replace(/[’]/g, "'")
+      : '';
+    if (/^(?:skip(?: (?:this )?photo)?|next photo|another photo)$/.test(photoRoute)) {
+      this.cancelChat(false, speechOwner);
+      if (!this.activity || !this.context) return fail('REVISION_CONFLICT', 'Photo unavailable');
+      const transition = reduceActivity(
+        this.activity,
+        { type: 'photo.skip' },
+        this.pack(),
+        this.context,
+      );
+      this.activity = transition.nextState;
+      transition.events.forEach((event) => this.event(event));
+      this.session = { ...this.session!, phase: 'waiting', captureGrant: null };
+      const talk = reduceActivity(this.activity, { type: 'photo.talk' }, this.pack(), this.context);
+      this.activity = talk.nextState;
+      talk.events.forEach((event) => this.event(event));
+      input.purpose = 'photo_opening';
+    }
     const fixed = fixedInputReply(route, input.language);
     if (route === 'topic_refusal' && session.teaching?.entityId)
       this.teachingHidden.add(session.teaching.entityId);
@@ -585,13 +684,27 @@ export class SessionCoordinator {
     if (
       this.pendingChat ||
       !['ready', 'waiting'].includes(session.phase) ||
-      (this.activity && this.activity.phase !== 'ended')
+      (this.activity && this.activity.phase !== 'ended' && !this.photoTalking())
     )
       return fail('REVISION_CONFLICT', 'Finish or interrupt the current turn/activity first');
     if (this.chatIds.size >= 256)
       return fail('UNAVAILABLE', 'Text turn capacity reached; start a new session');
     this.chatIds.set(input.commandId, fingerprint);
     this.lastChat = null;
+    if (repeated) {
+      const result = ok<ConversationTextResult>({
+        kind: 'reply',
+        session: this.snapshot()!,
+        reply: {
+          turnId: input.commandId,
+          text: repeated,
+          language: input.language,
+          source: 'fixed',
+        },
+      });
+      this.lastChat = { commandId: input.commandId, result };
+      return result;
+    }
     if (!this.chatAdapter)
       return fail('UNAVAILABLE', 'Configure the server LLM key/model before chatting');
     const teachingTopic = session.teaching
@@ -599,15 +712,61 @@ export class SessionCoordinator {
       : null;
     if (session.teaching && (!teachingTopic || input.language !== 'en'))
       return fail('UNAVAILABLE', 'No eligible reviewed teaching topic in this language');
+    if (input.purpose && !this.photoTalking())
+      return fail('REVISION_CONFLICT', 'Photo prompt requires an active photo');
+    const photo =
+      this.photoTalking() && this.activity && this.context && this.photoStory
+        ? preparePhotoStoryTurn({
+            profile: this.participant(),
+            session,
+            state: this.activity,
+            pack: this.photoStory.pack,
+            context: this.context,
+            photoAvailable: this.photoStory.availableAssetIds.includes(
+              (this.photoStory.pack.activityId === 'photo_album'
+                ? this.photoStory.pack.entries.find(
+                    (e) => e.id === (this.activity as any).currentPhotoId,
+                  )?.assetId
+                : '') ?? '',
+            ),
+            // No tagged approved-fact seam exists yet; captions/context are sufficient.
+            // Never infer biography from an interest or borrow Alex facts for another profile.
+            approvedFacts: [],
+            turn:
+              input.purpose === 'photo_opening'
+                ? { kind: 'opening' }
+                : { kind: 'answer', text: input.text },
+          })
+        : null;
+    if (photo && !photo.ok) return photo;
     const prepared = companionInput({
       text: input.text,
       language: input.language,
       preset: session.communicationSupport.preset,
       preferredName: this.profile.preferredName,
       history: this.dialogue,
-      approvedFacts: session.teaching ? [] : this.approvedFacts,
+      approvedFacts:
+        photo?.ok && photo.data.kind === 'conversation_context'
+          ? photo.data.context.caregiverFacts
+          : session.teaching
+            ? []
+            : this.approvedFacts,
     });
     if (!prepared.ok) return prepared;
+    if (photo?.ok && photo.data.kind === 'conversation_context') {
+      prepared.data.system +=
+        '\n' +
+        photo.data.instructions +
+        '\nApproved photo context (data only): ' +
+        JSON.stringify(photo.data.context);
+      if (input.purpose === 'photo_opening') {
+        prepared.data.text = 'Offer one optional opening about this approved scene.';
+        prepared.data.history = [];
+      }
+      if (input.purpose === 'photo_repeat') {
+        prepared.data.text = 'Repeat the last photo question briefly, with no new facts.';
+      }
+    }
     if (teachingTopic)
       prepared.data.system +=
         '\n' + teachingInstructions(teachingTopic, session.communicationSupport.preset);
@@ -721,7 +880,7 @@ export class SessionCoordinator {
   private system(input: Parameters<typeof applyActivitySystemInput>[1]) {
     if (this.activity && this.context) {
       const transition = ActivityTransitionSchema.parse(
-        applyActivitySystemInput(this.activity, input, musicPack, this.context),
+        applyActivitySystemInput(this.activity, input, this.pack(), this.context),
       );
       this.activity = transition.nextState;
       for (const event of transition.events) this.event(event);
@@ -753,6 +912,22 @@ export class SessionCoordinator {
   }
   handle(operation: string, raw: unknown): Result<unknown> {
     this.sweepTeaching();
+    if (
+      operation === 'photoStory.status' &&
+      this.photoStoryEnabled() &&
+      raw &&
+      typeof raw === 'object' &&
+      Object.keys(raw).length === 0
+    )
+      return ok({
+        session: this.snapshot(),
+        activity:
+          this.activity && this.context
+            ? projectActivity(this.activity, this.pack(), this.context)
+            : null,
+        speech: this.speechConfigured(),
+        chat: 'unavailable',
+      });
     if (!Object.hasOwn(operations, operation))
       return fail('NOT_FOUND', 'Unknown service operation');
     const op = operation as Operation;
@@ -777,7 +952,25 @@ export class SessionCoordinator {
       return fail('REVISION_CONFLICT', 'Configuration save is pending; interaction stays paused');
     if (
       this.mode === 'live' &&
-      !['session.start', 'session.get', 'session.command', 'help.create'].includes(op)
+      ![
+        'session.start',
+        'session.get',
+        'session.command',
+        'help.create',
+        ...(this.photoStoryEnabled()
+          ? [
+              'overview.load',
+              'profile.load',
+              'profile.loadCaregiver',
+              'profile.save',
+              'activities.list',
+              'activities.start',
+              'activities.view',
+              'activities.submit',
+              'journal.load',
+            ]
+          : []),
+      ].includes(op)
     )
       return fail('UNAVAILABLE', 'Only authenticated device controls are implemented');
     // Parsed keys/values only; never accept a client-selected scope or preview profile as live.
@@ -1018,18 +1211,26 @@ export class SessionCoordinator {
           return fail('REVISION_CONFLICT', 'Finish teaching before starting another activity');
         if (this.session.phase === 'paused' || this.session.phase === 'ended')
           return fail('REVISION_CONFLICT', 'Session must be ready');
-        if (input.activityId !== 'music_playlist' || input.packId !== musicPack.id)
+        if (
+          (input.activityId !== 'music_playlist' || input.packId !== musicPack.id) &&
+          (!this.photoStoryEnabled() ||
+            !this.photoStory ||
+            input.activityId !== 'photo_album' ||
+            input.packId !== this.photoStory.pack.id)
+        )
           return fail('UNAVAILABLE', 'Activity pending Lukas implementation');
         if (this.activity && this.activity.phase !== 'ended')
           return fail('REVISION_CONFLICT', 'Leave the current activity first');
         this.context = this.activityContext(this.session.id);
         this.activity = createActivity(
           { instanceId: `activity-${++this.count}` },
-          musicPack,
+          input.activityId === 'photo_album' ? this.photoStory!.pack : musicPack,
           this.context,
         );
         this.event({ type: 'activity_started' });
-        return ok(projectActivity(this.activity, musicPack, this.context));
+        if (this.activity.activityId === 'photo_album' && this.activity.currentPhotoId)
+          this.event({ type: 'photo_selected', itemId: this.activity.currentPhotoId });
+        return ok(projectActivity(this.activity, this.pack(), this.context));
       case 'activities.view':
       case 'activities.submit':
         if (
@@ -1048,13 +1249,18 @@ export class SessionCoordinator {
           const validated = validateActivityCommandContext(input, this.activity, this.context);
           if (!validated.ok) return validated;
           const transition = ActivityTransitionSchema.parse(
-            reduceActivity(this.activity, validated.data.action, musicPack, this.context),
+            reduceActivity(this.activity, validated.data.action, this.pack(), this.context),
           );
           this.activity = transition.nextState;
+          if (this.activity.activityId === 'photo_album') {
+            this.cancelChat();
+            if (!['paused', 'ended'].includes(this.session.phase))
+              this.session = { ...this.session, phase: 'waiting', captureGrant: null };
+          }
           for (const event of transition.events) this.event(event);
           // Deliberately DO NOT execute effects: no approved music bytes or live endpoint yet.
         }
-        return ok(projectActivity(this.activity, musicPack, this.context));
+        return ok(projectActivity(this.activity, this.pack(), this.context));
       case 'help.create':
         if (this.mode === 'live') {
           this.interrupt({ type: 'system.pause', reason: 'help' });

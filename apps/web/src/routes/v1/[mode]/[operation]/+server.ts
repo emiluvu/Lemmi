@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request, params, getClientAddress }
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${MOCK_TOKEN()}` },
         body: text,
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(process.env.LEMMI_PHOTO_STORY_DEMO === '1' ? 65000 : 3000),
       },
     );
     return new Response(await response.text(), {

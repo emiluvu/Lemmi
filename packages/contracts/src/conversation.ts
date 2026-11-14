@@ -8,6 +8,7 @@ export const ConversationTextCommandSchema = z.strictObject({
   expectedGeneration: RevisionSchema,
   text: z.string().trim().min(1).max(1000),
   language: z.enum(['en', 'de']),
+  purpose: z.enum(['photo_opening', 'photo_repeat']).optional(),
 });
 export type ConversationTextCommand = z.infer<typeof ConversationTextCommandSchema>;
 export const ConversationReplySchema = z.strictObject({

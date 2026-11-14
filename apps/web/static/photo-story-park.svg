@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Fictional illustration of a leafy park with a bench">
+<rect width="960" height="540" fill="#dfedef"/><rect y="300" width="960" height="240" fill="#a9c4a1"/>
+<path d="M360 540Q600 420 460 280" fill="none" stroke="#dfd0ae" stroke-width="90"/>
+<g fill="#796450"><rect x="160" y="155" width="28" height="230"/><rect x="780" y="130" width="30" height="245"/></g>
+<g fill="#6d9979"><circle cx="170" cy="140" r="110"/><circle cx="790" cy="120" r="112"/><circle cx="290" cy="145" r="78"/></g>
+<g fill="#8e7057"><rect x="570" y="350" width="180" height="19" rx="4"/><rect x="580" y="290" width="165" height="45" rx="4"/><rect x="590" y="360" width="15" height="70"/><rect x="720" y="360" width="15" height="70"/></g>
+</svg>

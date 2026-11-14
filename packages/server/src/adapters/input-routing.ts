@@ -26,6 +26,8 @@ export function routeParticipantText(text: string): InputRoute {
     .replace(/[’‘]/g, "'")
     .replace(/[.!?…]+$/u, '')
     .replace(/\s+/g, ' ');
+  if (/^(?:end (?:the )?(?:game|activity)|finish (?:the )?(?:game|activity))$/.test(value))
+    return 'stop';
   if (
     !/[\p{L}\p{N}]/u.test(value) ||
     /^(?:\[(?:inaudible|unintelligible)\]|i (?:didn't|did not) catch that|could you repeat that|please repeat)$/.test(

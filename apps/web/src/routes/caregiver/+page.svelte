@@ -14,6 +14,9 @@
     type OperationOutput,
     type CaregiverProfile,
   } from '@lemmi/contracts';
+  import { photoEventRecap } from '@lemmi/activities';
+  import type { Journal } from '@lemmi/contracts';
+  let photoJournal = $state<Journal | null>(null);
   import { previewProfiles } from '@lemmi/contracts/fixtures';
   import LiveProfilePanel from '#lib/features/LiveProfilePanel.svelte';
   let { data } = $props();
@@ -96,6 +99,11 @@
         message = '';
       } else message = result.error.message;
       return;
+    }
+    if (data.photoStoryRehearsal) {
+      const result = await clients.journal.load({ profileId: 'profile-alex' });
+      if (result.ok) photoJournal = result.data;
+      else message = result.error.message;
     }
     const result = await clients.overview.load({ profileId: 'profile-alex' });
     if (result.ok) {
@@ -324,3 +332,19 @@
     profile={selectedProfile}
     close={() => (selectedProfile = null)}
   />{/if}
+
+{#if data.photoStoryRehearsal}
+  <section class="card">
+    <h2>Local Photo Story rehearsal events</h2>
+    <p>Unauthenticated fictional rehearsal only. No retained utterances or AI summary.</p>
+    {#each photoJournal?.sessions ?? [] as record}
+      {@const recap = photoEventRecap(photoJournal!, record.sessionId)}
+      <p>{recap.text}</p>
+      <p>
+        Selected (not confirmation of viewing): {recap.viewedPhotoIds.join(', ') || 'none'}.
+        Skipped: {recap.skippedPhotoIds.join(', ') || 'none'}.
+      </p>
+    {/each}
+    <button onclick={load}>Refresh rehearsal events</button>
+  </section>
+{/if}

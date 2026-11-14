@@ -1,5 +1,13 @@
 import { z } from 'zod';
 import {
+  SpeechStartCommandSchema,
+  SpeechInputChunkSchema,
+  SpeechInputEndSchema,
+  SpeechReceiptSchema,
+  SpeechOutputStartSchema,
+  SpeechOutputChunkSchema,
+} from './speech';
+import {
   ProfileDetailSchema,
   ProfileUpdateSchema,
   AssetCreateSchema,
@@ -85,6 +93,33 @@ const operation = <I extends z.ZodType, O extends z.ZodType>(input: I, output: O
 });
 export const operations = {
   'conversation.submit': operation(ConversationTextCommandSchema, ConversationTextResultSchema),
+  'photoStory.status': operation(
+    none,
+    z.strictObject({
+      session: SessionSnapshotSchema.nullable(),
+      activity: ActivityViewSchema.nullable(),
+      speech: z.boolean(),
+      chat: z.enum(['reviewed_demo', 'openrouter', 'unavailable']),
+    }),
+  ),
+  // Browser adapters reuse the existing speech wire schemas and SpeechTurns owner.
+  'conversation.text': operation(ConversationTextCommandSchema, ConversationTextResultSchema),
+  'speech.speak': operation(ConversationTextCommandSchema, ConversationTextResultSchema),
+  'speech.start': operation(SpeechStartCommandSchema, SessionSnapshotSchema),
+  'speech.chunk': operation(
+    SpeechInputChunkSchema,
+    z.strictObject({ acceptedChunks: RevisionSchema }),
+  ),
+  'speech.end': operation(SpeechInputEndSchema, ConversationTextResultSchema),
+  'speech.receipt': operation(SpeechReceiptSchema, SessionSnapshotSchema),
+  'speech.output': operation(
+    session,
+    z.strictObject({
+      metadata: SpeechOutputStartSchema.nullable(),
+      chunks: z.array(SpeechOutputChunkSchema).max(4),
+      ended: z.boolean(),
+    }),
+  ),
   'device.pair': operation(PairDeviceInputSchema, PairDeviceResultSchema),
   'device.claim': operation(ClaimDeviceInputSchema, ClaimDeviceResultSchema),
   'device.revoke': operation(RevokeDeviceInputSchema, RevokeDeviceResultSchema),
@@ -344,7 +379,11 @@ export function createHttpTransport(
           method,
           headers: { 'Content-Type': 'application/json' },
           body: body === undefined ? undefined : JSON.stringify(body),
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(
+            op === 'speech.speak' || op === 'speech.end' || op === 'conversation.text'
+              ? 65000
+              : 5000,
+          ),
         });
         const result: unknown = await response.json();
         const parsed = z
