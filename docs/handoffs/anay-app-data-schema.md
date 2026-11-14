@@ -1,5 +1,7 @@
 # App data schema proposal for Anay
 
+Backend review: see [Anay's review and promotion decision](anay-app-data-schema-review.md). The corrected media-collection subset is an active migration on `anay/app-data-schema`; the rest remains a proposal. The SQL below is preserved as the original draft. Its historical authoring-validation note is superseded by the disposable-database observations in the review.
+
 Status: review draft, November 14, 2026. No runtime behavior or active migration changed. This is a concrete storage handoff, not acceptance of completed journal, consent, contact, camera or deletion features.
 
 The proposed SQL is [db/proposals/002_app_data.sql](../../db/proposals/002_app_data.sql). It extends [001_foundation.sql](../../db/migrations/001_foundation.sql); it does not replace the current backend or session authority. The migration runner only reads `db/migrations`, so normal startup/migration commands do not apply this proposal. Anay owns promotion into ordered migrations and shared contracts. Preserve the existing migration checksum.

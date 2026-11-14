@@ -8,6 +8,7 @@ import {
   ok,
   type ServerEvent,
   type ErrorCode,
+  type SpeechOutputStart,
 } from '@lemmi/contracts';
 import {
   SessionCoordinator,
@@ -24,6 +25,7 @@ import {
   dataFailure,
   boundedJson,
   type DataRepository,
+  type SpeechAdapters,
 } from '@lemmi/server';
 
 type SocketData = {
@@ -35,6 +37,9 @@ type SocketData = {
   window: number;
   messages: number;
   deliveredText: Set<string>;
+  playbackRates: number[];
+  mediaMessages: number;
+  speechOutput?: SpeechOutputStart;
 };
 type Options = {
   publicOrigin: string;
@@ -45,13 +50,17 @@ type Options = {
   repository?: DataRepository;
   caregiverSubject?: string;
   accessKey?: string | null;
+  speech?: SpeechAdapters;
 };
 
 // The same gateway owns pairing and the single existing session authority. A trusted local
 // reverse proxy terminates HTTPS/WSS; it must overwrite Host and X-Forwarded-Proto.
 export function startControlGateway(options: Options) {
   const now = options.now ?? Date.now;
-  const coordinator = new SessionCoordinator('live', options.chatAdapter);
+  const elapsedNow = options.now ?? (() => performance.now());
+  const coordinator = new SessionCoordinator('live', options.chatAdapter, options.speech, now, () =>
+    broadcast(),
+  );
   const sockets = new Set<Bun.ServerWebSocket<SocketData>>();
   let connectionClaimed = false;
   let connectionClaimedAt = 0;
@@ -118,12 +127,14 @@ export function startControlGateway(options: Options) {
           event_id: crypto.randomUUID(),
           session_id: session?.id ?? null,
           turn_id:
-            type === 'response.text' &&
+            (type === 'response.text' || type === 'response.start') &&
             payload &&
             typeof payload === 'object' &&
             'turnId' in payload
               ? payload.turnId
-              : null,
+              : ['audio.chunk', 'audio.end', 'response.cancel'].includes(type)
+                ? (ws.data.speechOutput?.turnId ?? null)
+                : null,
           generation: session?.generation ?? 0,
           sequence: ws.data.outputSequence++,
           type,
@@ -131,7 +142,7 @@ export function startControlGateway(options: Options) {
         }),
       ),
     );
-    if (sent < 0) {
+    if (sent <= 0) {
       coordinator.disconnect();
       ws.close(1013, 'Control backpressure');
     }
@@ -147,8 +158,35 @@ export function startControlGateway(options: Options) {
   function broadcast() {
     void persist().catch(() => {});
     for (const socket of sockets)
-      if (socket.data.hello && access.current(socket.data.identity))
+      if (socket.data.hello && access.current(socket.data.identity)) {
         emit(socket, 'state.changed', { mode: 'live', session: coordinator.snapshot() });
+        const output = coordinator.speechOutputInfo();
+        if (socket.data.speechOutput && socket.data.speechOutput.streamId !== output?.streamId) {
+          emit(socket, 'response.cancel', {
+            leaseId: socket.data.speechOutput.leaseId,
+            streamId: socket.data.speechOutput.streamId,
+            reason: 'interrupted',
+          });
+          socket.data.speechOutput = undefined;
+        }
+        if (output && socket.data.playbackRates.includes(output.sampleRate)) {
+          const batch = coordinator.drainSpeechOutput();
+          if (batch) {
+            socket.data.speechOutput = batch.metadata;
+            if (batch.start) emit(socket, 'response.start', batch.metadata);
+            for (const chunk of batch.chunks) {
+              if (!coordinator.speechOutputInfo()) break;
+              emit(socket, 'audio.chunk', chunk);
+            }
+            if (batch.end && coordinator.speechOutputInfo())
+              emit(socket, 'audio.end', {
+                leaseId: batch.metadata.leaseId,
+                streamId: batch.metadata.streamId,
+                chunkCount: batch.metadata.chunkCount,
+              });
+          }
+        }
+      }
   }
   function endSession() {
     coordinator.revokeDeviceAccess();
@@ -287,17 +325,19 @@ export function startControlGateway(options: Options) {
         return controlResponse(fail('REVISION_CONFLICT', 'Device already connected'));
       // Reserve before upgrade/open: two concurrent handshakes must not both see an empty set.
       connectionClaimed = true;
-      connectionClaimedAt = now();
+      connectionClaimedAt = elapsedNow();
       const upgraded = server.upgrade(request, {
         data: {
           identity,
           hello: false,
           sequence: -1,
           outputSequence: 0,
-          lastHeartbeat: now(),
-          window: now(),
+          lastHeartbeat: elapsedNow(),
+          window: elapsedNow(),
           messages: 0,
           deliveredText: new Set<string>(),
+          playbackRates: [],
+          mediaMessages: 0,
         },
       });
       if (!upgraded) connectionClaimed = false;
@@ -318,11 +358,12 @@ export function startControlGateway(options: Options) {
           ws.close(1008, 'Device access expired or revoked');
           return;
         }
-        if (now() - ws.data.window >= 1000) {
-          ws.data.window = now();
+        if (elapsedNow() - ws.data.window >= 1000) {
+          ws.data.window = elapsedNow();
           ws.data.messages = 0;
+          ws.data.mediaMessages = 0;
         }
-        if (++ws.data.messages > 30) {
+        if (++ws.data.messages > 90) {
           coordinator.disconnect();
           ws.close(1008, 'Control rate limit');
           return;
@@ -337,11 +378,22 @@ export function startControlGateway(options: Options) {
         const parsed = DeviceEventSchema.safeParse(raw);
         if (!parsed.success) {
           error(ws, 'VALIDATION_ERROR', 'Invalid device event');
+          if (coordinator.snapshot()?.phase === 'listening')
+            ws.close(1008, 'Invalid capture frame');
           return;
         }
         const event = parsed.data;
-        if (event.turn_id !== null) {
-          error(ws, 'VALIDATION_ERROR', 'Media turns are unavailable', event.event_id);
+        const media = ['audio.chunk', 'audio.end', 'audio.receipt'].includes(event.type);
+        if (
+          (media && ws.data.playbackRates.length > 0 && event.turn_id === null) ||
+          (!media && event.turn_id !== null)
+        ) {
+          error(
+            ws,
+            'VALIDATION_ERROR',
+            'Use the current media turn ID only for media events',
+            event.event_id,
+          );
           return;
         }
         if (event.sequence <= ws.data.sequence) {
@@ -359,14 +411,31 @@ export function startControlGateway(options: Options) {
           }
           ws.data.hello = true;
           ws.data.sequence = event.sequence;
+          ws.data.playbackRates =
+            coordinator.speechConfigured() &&
+            !('supported' in event.payload.audio) &&
+            event.payload.playback
+              ? [...event.payload.playback.sampleRates]
+              : [];
           emit(ws, 'device.ready', {
             mode: 'live',
             deviceId: ws.data.identity.deviceId,
             profileId: ws.data.identity.profileId,
             credentialExpiresAt: new Date(ws.data.identity.expiresAt).toISOString(),
-            audio: false,
+            audio: ws.data.playbackRates.length
+              ? {
+                  encoding: 'pcm_s16le',
+                  sampleRate: 16000,
+                  channels: 1,
+                  frameMs: 20,
+                  maxCaptureMs: 20000,
+                  playback: event.payload.playback!,
+                  outputWindowChunks: 4,
+                }
+              : false,
             camera: false,
             textChat: !!options.chatAdapter,
+            teaching: true,
             controls: [
               'start',
               'stop',
@@ -375,6 +444,7 @@ export function startControlGateway(options: Options) {
               'mute',
               'help',
               ...(options.chatAdapter ? ['text'] : []),
+              ...(ws.data.playbackRates.length ? ['speak'] : []),
             ],
           });
           emit(ws, 'command.ack', { mode: 'live', commandId: event.event_id, applied: true });
@@ -384,6 +454,16 @@ export function startControlGateway(options: Options) {
         // Consume validated wire sequence even when session preconditions fail; a rejected
         // packet must not become actionable when a later state happens to match it.
         ws.data.sequence = event.sequence;
+        if (event.type === 'audio.chunk' && ++ws.data.mediaMessages > 60) {
+          coordinator.disconnect();
+          ws.close(1008, 'Capture rate limit');
+          return;
+        }
+        if (event.type !== 'audio.chunk' && ws.data.messages - ws.data.mediaMessages > 30) {
+          coordinator.disconnect();
+          ws.close(1008, 'Control rate limit');
+          return;
+        }
         const current = coordinator.snapshot();
         if (
           event.type !== 'heartbeat' &&
@@ -396,19 +476,78 @@ export function startControlGateway(options: Options) {
           return;
         }
         if (event.type === 'heartbeat') {
-          ws.data.lastHeartbeat = now();
+          ws.data.lastHeartbeat = elapsedNow();
           emit(ws, 'heartbeat', { mode: 'live' });
           return;
         }
-        if (event.type === 'input.text') {
-          // Do not await provider work in the control handler. Stop/mute/help/heartbeat
-          // remain responsive; the coordinator drops all obsolete turn results.
-          const work = coordinator.submitText({
-            commandId: event.event_id,
+        if (event.type === 'input.speak' || media) {
+          if (!ws.data.playbackRates.length || current?.endpoint !== 'robot') {
+            error(ws, 'UNAVAILABLE', 'Audio was not negotiated for this endpoint', event.event_id);
+            return;
+          }
+          const scope = {
             sessionId: event.session_id,
             expectedGeneration: event.generation,
-            ...event.payload,
-          });
+            turnId: event.turn_id,
+          };
+          if (event.type === 'input.speak') {
+            const result = coordinator.requestCapture(
+              {
+                sessionId: event.session_id,
+                expectedGeneration: event.generation,
+                commandId: event.event_id,
+                language: event.payload.language,
+              },
+              ws.data.playbackRates,
+            );
+            emit(ws, 'command.ack', {
+              mode: 'live',
+              commandId: event.event_id,
+              applied: result.ok,
+            });
+            if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
+            broadcast();
+            return;
+          }
+          if (event.type === 'audio.chunk') {
+            const result = coordinator.acceptCaptureChunk({ ...scope, ...event.payload });
+            if (!result.ok) {
+              error(ws, result.error.code, result.error.message, event.event_id);
+              broadcast();
+            }
+            return;
+          }
+          if (event.type === 'audio.receipt') {
+            const result = coordinator.playbackReceipt({ ...scope, ...event.payload });
+            if (result.ok && ['completed', 'failed'].includes(event.payload.status))
+              ws.data.speechOutput = undefined;
+            emit(ws, 'command.ack', {
+              mode: 'live',
+              commandId: event.event_id,
+              applied: result.ok,
+            });
+            if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
+            broadcast();
+            return;
+          }
+        }
+        if (event.type === 'input.text' || event.type === 'audio.end') {
+          // Do not await provider work in the control handler. Stop/mute/help/heartbeat
+          // remain responsive; the coordinator drops all obsolete turn results.
+          const work =
+            event.type === 'audio.end'
+              ? coordinator.finishCapture({
+                  sessionId: event.session_id,
+                  expectedGeneration: event.generation,
+                  turnId: event.turn_id,
+                  ...event.payload,
+                })
+              : coordinator.submitText({
+                  commandId: event.event_id,
+                  sessionId: event.session_id,
+                  expectedGeneration: event.generation,
+                  ...event.payload,
+                });
           broadcast();
           void work
             .then((result) => {
@@ -485,7 +624,8 @@ export function startControlGateway(options: Options) {
           });
         } else if (
           current &&
-          ['input.stop', 'input.pause', 'input.resume', 'input.mute'].includes(event.type)
+          (['input.stop', 'input.pause', 'input.resume', 'input.mute'].includes(event.type) ||
+            event.type.startsWith('input.teaching.'))
         ) {
           const action =
             event.type === 'input.mute' && 'muted' in event.payload
@@ -504,6 +644,39 @@ export function startControlGateway(options: Options) {
           );
         emit(ws, 'command.ack', { mode: 'live', commandId: event.event_id, applied: result.ok });
         if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
+        if (
+          result.ok &&
+          ws.data.playbackRates.length &&
+          [
+            'input.teaching.start',
+            'input.teaching.next',
+            'input.teaching.not_sure',
+            'input.teaching.avoid',
+          ].includes(event.type)
+        ) {
+          const selected = coordinator.snapshot()!;
+          if (selected.teaching?.prompt)
+            void coordinator
+              .speakTeachingPrompt(
+                {
+                  sessionId: selected.id,
+                  expectedGeneration: selected.generation,
+                  commandId: event.event_id,
+                  language: 'en',
+                },
+                ws.data.playbackRates,
+              )
+              .then((spoken) => {
+                if (!spoken.ok && sockets.has(ws))
+                  error(ws, spoken.error.code, spoken.error.message, event.event_id);
+                broadcast();
+              })
+              .catch(() => {
+                if (sockets.has(ws))
+                  error(ws, 'UNAVAILABLE', 'Teaching prompt playback unavailable', event.event_id);
+                broadcast();
+              });
+        }
         broadcast();
       },
       close(ws) {
@@ -516,6 +689,13 @@ export function startControlGateway(options: Options) {
   });
   let checkingDatabase = false;
   const watchdog = setInterval(() => {
+    if (coordinator.sweepTeaching()) broadcast();
+    if (coordinator.sweepSpeech()) {
+      for (const socket of sockets)
+        if (socket.data.playbackRates.length)
+          error(socket, 'UNAVAILABLE', 'Speech deadline expired; retry explicitly');
+      broadcast();
+    }
     if (data && !checkingDatabase && sockets.size) {
       checkingDatabase = true;
       void data.devices
@@ -529,13 +709,13 @@ export function startControlGateway(options: Options) {
         });
     }
     access.sweep();
-    if (connectionClaimed && !sockets.size && now() - connectionClaimedAt > 6000)
+    if (connectionClaimed && !sockets.size && elapsedNow() - connectionClaimedAt > 6000)
       connectionClaimed = false;
     for (const socket of sockets) {
       if (!access.current(socket.data.identity)) {
         endSession();
         socket.close(1008, 'Device access expired or revoked');
-      } else if (now() - socket.data.lastHeartbeat > 6000) {
+      } else if (elapsedNow() - socket.data.lastHeartbeat > 6000) {
         coordinator.disconnect();
         socket.close(1001, 'Heartbeat timeout');
       }

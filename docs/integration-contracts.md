@@ -8,6 +8,8 @@ This is the small shared implementation reference for all four Codex workstreams
 
 ## Implemented transport baseline
 
+**Teach Lemmi branch increment:** `codex/teach-lemmi` implements conversation-mode teaching handlers and reviewed Alex prompts, a local scripted text client, active-time expiry and synthetic device/speech checks. [Exact interface changes and owner handoff](handoffs/lukas-teach-lemmi.md) include `TeachingSnapshot.prompt/topicLabel`, feedback actions, teaching wire events and the mock-only `conversation.submit` client. No fifth ActivityId or independent authority. Durable policy/journal observations, actual firmware/browser voice and shared deployment acceptance remain pending.
+
 **A18/A19 database/profile/assets increment:** optional PostgreSQL/private media now supports `profile.detail/update`, safe paired `profile.load`, approved-media creation/metadata and authenticated resource byte reads. [Exact fields/routes/setup/limits](handoffs/anay-database-profile-assets.md) cover credential persistence/restart, revision cancellation and shared clients. Legacy mock `profile.save/loadCaregiver/assets.resolve` do not become live by implication. Contact/policy tables are only storage foundations; A20–A25 workflows and production/counterpart/hardware verification remain pending.
 
 For the current executable interface inventory, use [backend_api.md](backend_api.md): public/private paths, client operation availability, device/text events, speech wire API, limits, credentials and unresolved production routes. Maintain it alongside schema/authority/client changes; proposed routes below are still not implementation claims.
@@ -20,7 +22,7 @@ For the current executable interface inventory, use [backend_api.md](backend_api
 
 `ServiceClients`, `createClients`, `createHttpTransport` and `createFixtureTransport` are exported from `@lemmi/contracts`. The local mock path uses POST `/v1/mock/<operation>` through SvelteKit to the loopback gateway’s internal adapter. These are development RPC endpoints, not replacements for the specified production resource routes. `/v1/live/<operation>` explicitly returns UNAVAILABLE; it never falls back to mocks. Browser subscriptions currently poll the same authority once per second and return an unsubscribe function; a production event stream remains Anay’s task.
 
-`DeviceEventSchema` and `ServerEventSchema` cover the initial fake-device hello/heartbeat/control/snapshot path. The fake client uses local `ws://` and a development-only token, not production pairing or TLS. Camera frame/health/control shapes and UI snapshots are preliminary schemas; media ingestion, camera authorization/streaming, teaching execution and learned-preference policy remain unavailable. Treat numeric media limits as proposed targets until measured. The web app uses SvelteKit 3: `vite.config.ts`, `#lib/*` imports and `$app/tsconfig`, not a new `svelte.config.js` or older aliases.
+`DeviceEventSchema` and `ServerEventSchema` cover the initial fake-device hello/heartbeat/control/snapshot path plus the branch increments above. The fake client uses local `ws://` and a development-only token, not production pairing or TLS. Camera frame/health/control shapes and UI snapshots are preliminary schemas; camera authorization/streaming and learned-preference storage remain unavailable. Treat numeric media limits as proposed targets until measured. The web app uses SvelteKit 3: `vite.config.ts`, `#lib/*` imports and `$app/tsconfig`, not a new `svelte.config.js` or older aliases.
 
 ## 1. One system, four ownership areas
 
@@ -172,6 +174,10 @@ Activity journal events: `activity_started`, `activity_ended`, `track_selected`,
 
 ## 5. Audio and device seam: Emilia ↔ Anay
 
+**Feature branch increment:** `anay/speech-pipeline` implements the backend voice seam; [exact protocol and handoff](handoffs/anay-speech-pipeline.md) and [API reference](backend_api.md#opt-in-voice-turns-and-playback) cover configuration, capabilities, current capture grant, indexed PCM/end, bounded output and consumed-playback receipts. Shared `speech*Fixture` exports contain fictional IDs/generated silence. Legacy hello remains audio-disabled without negotiated playback. Actual K151/browser integration and counterpart review are pending.
+
+The current engine accepts a bounded complete utterance after explicit `audio.end`; the technical-spec incremental-recognition target and silence-end detection are **not yet implemented**. One current explicit turn is limited to 20 seconds/640,000 input bytes; four output frames may be ahead of consumed receipts. All presets return capture-off waiting after completion. The computer player's receipts are simulated, not hardware proof.
+
 The robot's WebSocket connects to Anay's realtime gateway, not to a second app-owned backend. The SvelteKit app subscribes to the same session and can use the browser endpoint as fallback. Firmware never knows LLM keys, caregiver destinations, database credentials, or private guidance.
 
 Begin with the technical specification's protocol v1 and negotiate actual firmware-supported audio capabilities. Share a sample `device.hello`, control event, audio chunk, and server state response before writing both ends. Agree frame format, sample rate, channel count, endianness, queue limits, heartbeat, and TLS/pairing. The initial PCM proposal must be benchmarked; changes require both Emilia and Anay to update fixtures.
@@ -196,6 +202,10 @@ This table governs firmware, browser and server behavior. Local capture/output r
 | Get help | Stop capture and cancel pending turns | Stop/flush ordinary speech/music; only current fixed help-status output may run afterward | End camera locally and pause activity; initiate fixed contact routing | No automatic resume; request cancellation is separate |
 
 Disconnect/watchdog stops capture, output, camera and motion locally, invalidates stale work, and requires explicit continuation after reconciliation. Mic mute must not be used as a substitute for Pause/Stop or advertised as camera-off. If a capture turn caused pending model/TTS work, muting cancels that work; unrelated already-approved playback is governed by its own output token. Tests must distinguish these cases.
+
+### Fixed speech while interaction remains paused
+
+The opt-in speech implementation cancels a recognized concern/refusal input, pauses it, and creates fresh authority only for the application-owned fixed reply. The gateway publishes the paused generation immediately. Existing `response.text` (`source:'fixed'`), `response.start` and PCM events share a new turn ID/current generation/lease; receipts must use those identifiers. Ordinary output never gains permission to run while paused. A paused state alone cannot authorize playback. Local Stop/pause/watchdog always override this output; capture remains off and completion/failure/expiry leaves the interaction paused. Firmware/UI should track this bounded fixed playback independently from session phase. Backend software checks pass; physical enforcement and counterpart review remain pending. See [speech handoff](handoffs/anay-speech-pipeline.md#fixed-concernrefusal-output-after-pause).
 
 ## 6. Asset handoff: Kylie → Emilia/Lukas/Anay
 
@@ -244,6 +254,8 @@ Freeze fixtures for Alex’s functional profile and rejected example/unassigned 
 F17 Teach Lemmi is a conversation mode, not a new ActivityId/reducer. Keep the four activity IDs; add `ConversationMode = 'open' | 'teach_lemmi'` and an authorized current-session `TeachingSnapshot` with topic/entity ID, optional approved asset ID, presentation ID/revision, policy revision and ready/listening/processing/paused/unavailable phase. Runtime-validated `teaching.start`, `teaching.next`, `teaching.not_sure`, `teaching.finish` commands use the existing session-command transport and idempotency/revision checks. Starting/next selects a permitted catalog topic; clients cannot smuggle arbitrary content. Finish returns to ready with capture off, not automatic open conversation. Mode changes invalidate pending speech/capture and require normal explicit continuation.
 
 Anay owns selection/session authority/conversation execution; Lukas supplies reviewed teaching prompts/topic assets with canonical tags, no independent model service. Kylie owns a Teach Lemmi tile and the mode-specific panel in `/participant/conversation`; Emilia consumes the shared snapshot and emits supported actions. Reuse F15/F16 refusal/uncertainty policy and ensure camera pause/stop/help override teaching. Add fixtures for empty/sparse profile, explanation, change topic, Not sure, all-retired, stale response, failed model/policy save and explicit finish. Do not expose correctness flags or silently approve biography.
+
+The November 14 user-authorized branch adds Like/Avoid commands and a fifteen-minute active-time limit. It excludes paused/disconnected/unavailable waiting, cancels delayed generation/output at expiry and returns to ready with capture off; no participant countdown. Current snapshot prompt/label and all exact source/mock/live limits are in the [teaching handoff](handoffs/lukas-teach-lemmi.md). Existing four-activity contracts remain unchanged.
 
 Explore pictures is a photo pack variant (`collectionKind: 'album' | 'place_scenes'`) with existing approved captions/context/tags and navigation; it is not another game ID or a camera/map service. Content approval and shared eligibility remain mandatory.
 

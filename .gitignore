@@ -10,3 +10,6 @@ coverage/
 
 # Private local database/media working directories (never source assets).
 .data/
+.tools/
+__pycache__/
+*.pyc

@@ -8,6 +8,7 @@ import { DeviceEventSchema, ServerEventSchema, fail, type ServerEvent } from '@l
 import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
+import { localSpeechConfig, createLocalSpeechAdapters } from '@lemmi/server';
 function startMockGateway() {
   assertMockMode();
   const coordinator = new MockCoordinator();
@@ -73,7 +74,10 @@ function startMockGateway() {
         return Response.json(fail('VALIDATION_ERROR', 'Invalid JSON'), { status: 400 });
       }
       const operation = url.pathname.slice('/internal/mock/'.length);
-      const result = coordinator.handle(operation, body);
+      const result =
+        operation === 'conversation.submit'
+          ? await coordinator.submitText(body)
+          : coordinator.handle(operation, body);
       broadcast();
       return Response.json(result, {
         headers: { 'Cache-Control': 'no-store' },
@@ -145,7 +149,8 @@ function startMockGateway() {
             mode: 'simulation',
           });
         else if (
-          ['input.stop', 'input.pause', 'input.resume', 'input.mute'].includes(event.type) &&
+          (['input.stop', 'input.pause', 'input.resume', 'input.mute'].includes(event.type) ||
+            event.type.startsWith('input.teaching.')) &&
           current
         ) {
           const action =
@@ -173,6 +178,7 @@ function startMockGateway() {
   });
   // A separate deadline prevents endless non-heartbeating fake clients. No hardware watchdog is claimed.
   const check = setInterval(() => {
+    if (coordinator.sweepTeaching()) broadcast();
     for (const socket of sockets) {
       const ws = socket;
       if (Date.now() - ws.data.lastSeen > 6000) {
@@ -193,10 +199,23 @@ function startMockGateway() {
 }
 if (process.env.LEMMI_MODE === 'live') {
   const llm = openRouterConfig();
+  let speech;
+  if (process.env.LEMMI_SPEECH_ENABLED === '1') {
+    const selected = localSpeechConfig();
+    if (
+      !selected.ok ||
+      selected.data.sttBackend === 'disabled' ||
+      selected.data.ttsBackend === 'disabled'
+    )
+      throw new Error('Enable valid independent STT/TTS configuration before speech startup');
+    if (!llm.ok) throw new Error('Configure OpenRouter before enabling the speech pipeline');
+    speech = createLocalSpeechAdapters(selected.data);
+  }
   const config = dataConfig();
   const repository = config ? await openData(config) : undefined;
   const gateway = startControlGateway({
     repository,
+    speech,
     caregiverSubject: config?.subject,
     ...controlConfig(),
     port: Number(process.env.GATEWAY_PORT ?? 3001),

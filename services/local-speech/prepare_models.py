@@ -10,12 +10,13 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 
 
-def provision(directory):
+def provision(directory, stt_profile="base"):
     manifest = json.loads((HERE / "assets.json").read_text())
     hashes = {}
     for kind in ["stt", "tts"]:
-        asset = manifest[kind]
-        folder = directory / kind
+        selected = "stt-small" if kind == "stt" and stt_profile == "small" else kind
+        asset = manifest[selected]
+        folder = directory / selected
         folder.mkdir(parents=True, exist_ok=True)
         for entry in asset["files"]:
             target = folder / entry["name"]
@@ -50,7 +51,7 @@ def provision(directory):
     (directory / "verified-assets.json").write_text(json.dumps(hashes, indent=2) + "\n")
 
 
-def configure(directory):
+def configure(directory, stt_profile="base"):
     destination = HERE / ".env"
     if destination.exists():
         print("Private speech .env already exists; preserved existing settings", flush=True)
@@ -62,7 +63,7 @@ def configure(directory):
         "LEMMI_SPEECH_TOKEN=" + secrets.token_urlsafe(32),
         "LEMMI_SPEECH_PORT=8765", "LEMMI_SPEECH_TIMEOUT_MS=20000",
         "LEMMI_SPEECH_STT_ENGINE=faster-whisper", "LEMMI_SPEECH_TTS_ENGINE=piper",
-        "LEMMI_SPEECH_STT_MODEL_PATH=" + json.dumps(str(directory / "stt")),
+        "LEMMI_SPEECH_STT_MODEL_PATH=" + json.dumps(str(directory / ("stt-small" if stt_profile == "small" else "stt"))),
         "LEMMI_SPEECH_STT_DEVICE=cpu", "LEMMI_SPEECH_STT_COMPUTE=int8",
         "LEMMI_SPEECH_THREADS=4",
         "LEMMI_SPEECH_VOICE_EN=" + json.dumps(str(directory / "tts/en_US-ljspeech-medium.onnx")),
@@ -78,8 +79,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--directory", type=Path, default=HERE / ".models")
     parser.add_argument("--configure", action="store_true", help="Create private service .env only if absent")
+    parser.add_argument("--stt-profile", choices=["base", "small"], default="base",
+                        help="Explicit model profile; never silently switch a configured model")
     args = parser.parse_args()
     directory = args.directory.resolve()
-    provision(directory)
+    provision(directory, args.stt_profile)
     if args.configure:
-        configure(directory)
+        configure(directory, args.stt_profile)
