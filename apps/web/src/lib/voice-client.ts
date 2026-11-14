@@ -547,7 +547,7 @@ export class VoiceClient {
       await this.context.resume();
       if (!this.workletLoaded) {
         await this.context.audioWorklet.addModule(
-          new URL('../voice-capture.js', import.meta.url).href,
+          new URL('./voice-capture.js', import.meta.url).href,
         );
         this.workletLoaded = true;
       }
