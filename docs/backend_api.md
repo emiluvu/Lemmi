@@ -4,19 +4,21 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 
 **Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
 
+**Deployed baseline:** `04d050e` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
+
 ## 1. Availability and ownership
 
 | Surface | Current availability | Integration consumer |
 | --- | --- | --- |
 | Local mock HTTP RPC | Implemented; loopback-only, bounded in-memory state, no actual media/contact | Kylie/Lukas development, computer smoke tests |
-| Scoped device pairing/claim/revoke HTTP | Implemented with configurable caregiver-token verification; actual identity provider/LAN deployment still needs configuration/verification | Kylie caregiver setup; Emilia provisioning |
+| Scoped device pairing/claim/revoke HTTP | Implemented; real VoidAuth setup/introspection and public claim verified on deployed host. Public caregiver-bearer pairing/revoke requests have not been exercised in the live rehearsal | Kylie caregiver setup; Emilia provisioning |
 | Authenticated device WSS | Controls and optional **text** chat implemented through one coordinator; actual K151 network integration pending | Emilia; computer control harness |
-| OpenRouter chat | Server adapter/coordinator implemented and fixture-tested; requires private API key and explicit model; live provider quality/readiness unverified | Anay server only |
-| Local STT/TTS | Authenticated engine wrapper/adapters implemented; real English CPU synthetic TTS→STT checked | Anay server only |
+| OpenRouter chat | Configured on deployed host; actual fictional greeting and public WSS text turn passed. Broader conversational quality/readiness remains unverified | Anay server only |
+| Local STT/TTS | Authenticated wrapper/adapters running privately; prior synthetic check passed on another host, but deployed-host recognition is intermittent and its quality gate is incomplete | Anay server only |
 | Robot/browser microphone → STT → chat → TTS → playback | **Not implemented end to end**; no capture grant or media ingestion/output on the live gateway | Anay + Emilia + Kylie |
 | Photos/guessing/matching | State/pack/action/view/context/event contracts and fixtures exist; three reducers/catalog hosting remain unavailable | Lukas logic; Kylie rendering; Anay host |
 | Camera/health/teaching/preferences | Preliminary contracts/clients/fixtures; executable live integrations remain unavailable | All four owners at their assigned boundaries |
-| Production profile/assets REST | Optional PostgreSQL implementation; exact routes/limits below and in the data handoff | Kylie; Anay data backend |
+| Production profile/assets REST | PostgreSQL mode enabled on deployed host; scoped participant profile verified live. Caregiver edit/media checks used production fixture smokes; exact routes/limits below | Kylie; Anay data backend |
 | Journal/contact/overview REST | Still planned; no complete review/notification workflow | Kylie; Anay implements |
 | Database / durable jobs / real notifications | PostgreSQL/profile/media/device/session checkpoints implemented optionally; durable jobs and real notifications remain unimplemented | Anay |
 
@@ -30,32 +32,53 @@ Public additions: caregiver GET/PATCH `/v1/profiles/:id`, POST `/v1/profiles/:id
 
 Set production `BODY_SIZE_LIMIT=29M` and upload-proxy limits; handlers still bound profile JSON to 32 KiB, device control to 4 KiB and asset JSON to 28 MiB. Supported media is plain RGB/RGBA PNG (5 MiB/4096 dimensions/8 million pixels) or metadata-free PCM16 WAV (20 MiB/5 minutes); JPEG/SVG/MP3/range support is unavailable. Upload only approved static assets, not microphone/camera/generated-speech data. Authorized byte reads return actual media; metadata excludes storage paths and private discussion context. Caregiver context-changing edits cancel/pause the current session before COMMIT; support-only saves preserve its effective preset. Approved biography facts remain caregiver-provided; remembering/excerpt enablement is rejected pending its own workflows.
 
+### Implemented profile/media HTTP routes
+
+These routes are enabled on the current deployment and require the outer access key/cookie **and** the stated Bearer credential. Only `profile-alex` is assigned; asset IDs are UUIDs scoped and authorized by the backend. `assets`/`photos` accept validated JSON with bounded base64 data, not multipart uploads. Use the shared schemas for exact bodies.
+
+| Method / URL | Bearer identity | Result |
+| --- | --- | --- |
+| `GET /v1/profiles/profile-alex` | Assigned caregiver | `ProfileDetail` |
+| `PATCH /v1/profiles/profile-alex` | Assigned caregiver | Revision/command-checked update → `ProfileDetail` |
+| `POST /v1/profiles/profile-alex/photos` | Assigned caregiver | Approved PNG upload → `AssetMetadata` |
+| `POST /v1/profiles/profile-alex/assets` | Assigned caregiver | Approved PNG/PCM WAV upload → `AssetMetadata` |
+| `GET /v1/profiles/profile-alex/assets/:assetId` | Assigned caregiver | Authorized media bytes |
+| `GET /v1/participant/profiles/profile-alex` | Paired device | Safe `ParticipantProfile` |
+| `GET /v1/assets/:assetId` | Paired device | Authorized media bytes |
+| `GET /v1/assets/:assetId/metadata` | Paired device | Safe `AssetMetadata` |
+
+Profile/metadata/upload successes use the common `Result<T>` envelope; successful media reads return binary bytes. Do not parse binary media responses as JSON. No photo list, arbitrary storage path, external asset URL or profile creation/deletion route follows from this table.
+
 ## 2. Origins, processes and credentials
 
-Deployment tracking branch: `backend-deploy`. See [new-machine deployment and Cloudflare routing](backend-deploy.md) for setup, exposed paths, restart behavior and host acceptance checks. The domain/tunnel itself is not configured by this repository.
+Deployment tracking branch: `backend-deploy`. See [new-machine deployment and Cloudflare routing](backend-deploy.md) for setup, exposed paths, restart behavior and host acceptance checks. The current host has a configured, supervised Cloudflare Tunnel and loopback proxy. Templates are tracked under `deploy/`; private tunnel credentials/configuration remain host-local and are not provisioned automatically by a checkout.
 
 | Process/origin | Default / exposure | Credential |
 | --- | --- | --- |
 | Mock SvelteKit development app | `http://127.0.0.1:5173`; local only | Explicit mock convention; no caregiver security boundary |
 | Gateway, either mock or live mode | `127.0.0.1:3001`, configurable `GATEWAY_PORT` | Mock token **or** live internal/device credential, selected by startup mode |
 | Built SvelteKit app | Run `HOST=127.0.0.1 PORT=3000 bun run start:web` after build | Live resource handlers independently verify authorization |
-| Live public/LAN origin | Selected `LEMMI_PUBLIC_ORIGIN=https://<host-or-LAN-IP>[:port]`; proxy only supported routes | Managed caregiver token for enrollment/revocation; paired device token for WSS |
+| Live public/LAN origin | Current `https://lemmi.chaoswarrior.dev`; other hosts explicitly set `LEMMI_PUBLIC_ORIGIN`; proxy only supported routes | Outer access key/cookie plus caregiver Bearer for pair/revoke/profile edits, or scoped device Bearer for claim-following participant resources/WSS; claim itself uses its pairing code |
 | Local speech wrapper | `http://127.0.0.1:8765`; **never expose to robot/browser** | Independent `LEMMI_SPEECH_TOKEN` |
 | OpenRouter | Fixed `https://openrouter.ai/api/v1/chat/completions` outbound server request | Private `OPENROUTER_API_KEY`, never sent to a client/model context |
 
 `LEMMI_MODE` defaults to `mock`. `bun run dev` deliberately launches the local mock. For configured live mode, start web/gateway separately using the existing scripts; see [deployment instructions](handoffs/anay-control-foundation.md#runconfigure). The live gateway does not also run a mock coordinator.
 
-The trusted same-host HTTPS/WSS proxy must overwrite Host to the configured public host and `X-Forwarded-Proto: https`; backend ports stay loopback-only. The web adapter uses explicit `ORIGIN` matching `LEMMI_PUBLIC_ORIGIN`; leave forwarded-address overrides unset for the current trusted-peer checks. Proxy `/v1/device-stream` to the gateway and the three device-access resource routes to SvelteKit. Reject `/internal/*`, mock RPC/pages and other unfinished routes externally. Certificate chain, hostname/IP and validity verification remain enabled on clients; public DNS may wait during LAN testing. A plain LAN WebSocket with the development mock token is not the live interface.
+The trusted same-host HTTPS/WSS proxy must overwrite Host to the configured public host and `X-Forwarded-Proto: https`; backend ports stay loopback-only. The web adapter uses explicit `ORIGIN` matching `LEMMI_PUBLIC_ORIGIN`; leave forwarded-address overrides unset for the current trusted-peer checks. Proxy `/v1/device-stream` to the gateway and the implemented access, device and profile/asset resource routes to SvelteKit; see the allowlist in `deploy/nginx.conf.template`. Reject `/internal/*`, mock RPC/pages and other unfinished routes externally. Certificate chain, hostname/IP and validity verification remain enabled on clients; the deployed host now resolves its public hostname normally (the initial DNS failure has cleared). A plain LAN WebSocket with the development mock token is not the live interface.
 
 Credentials are **not interchangeable**:
 
-- Caregiver: externally verified short-lived Bearer access token with assigned subject. Current verifier uses configured HTTPS token introspection, issuer/audience/Bearer/expiry checks and the single `LEMMI_CAREGIVER_SUBJECT` assignment. Actual login UI/provider issuance is pending.
+- Caregiver: externally verified short-lived Bearer access token with assigned subject. Current verifier uses configured HTTPS token introspection, issuer/configured audience-or-client binding/Bearer/expiry checks and the single `LEMMI_CAREGIVER_SUBJECT` assignment. Actual VoidAuth issuance/introspection passed the one-time setup; production browser login UI remains pending.
 - Device: random expiring bearer credential returned once after pairing and local confirmation. Scope is derived server-side; no caller-selected profile/role grants access.
 - Internal control: separate `LEMMI_CONTROL_TOKEN`, at least 32 characters and not the mock token. Only SvelteKit→gateway; never firmware/browser.
 - Speech: independent service credential shared only by trusted backend/engine wrapper.
 - Mock: `LEMMI_MOCK_TOKEN` defaults to `local-mock-only`; development convention, not pairing/authentication for real users/data.
 
 No tokens, pairing codes, private media, provider errors, prompts or contact destinations belong in query strings/logs/source/fixtures. Pairing codes and active authority remain transient. With database mode, credential hashes and factual/session checkpoints persist, but startup explicitly revokes tokens and ends interrupted sessions; restart still requires re-pairing. Complete journal/deletion workflows remain pending.
+
+### Explicit VoidAuth token binding
+
+`LEMMI_AUTH_TOKEN_BINDING` defaults to `audience`, preserving the required `LEMMI_AUTH_AUDIENCE` check. For VoidAuth non-resource access tokens, explicitly select `client_id`; `client_id` must then equal the dedicated configured `LEMMI_AUTH_CLIENT_ID`. Missing/foreign clients are rejected. A present `aud` still must match `LEMMI_AUTH_AUDIENCE`; it is never ignored. Issuer, active status, Bearer type, one-hour expiry bound and configured caregiver subject checks remain enforced in both modes. This is a provider-specific integration choice, not automatic fallback or JWT-only verification. The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper obtains the actual subject using an explicitly authorized one-time code/PKCE login; see [host setup](host-setup.md). Production browser login UI remains pending.
 
 ### Private gateway routes — never proxy externally
 
@@ -66,6 +89,7 @@ No tokens, pairing codes, private media, provider errors, prompts or contact des
 | `POST /internal/control/pair` | Loopback plus independent internal token; `{actor,input:PairDeviceInput}` | Live control gateway only; SvelteKit derives actor from the verified caregiver, never trusts a browser-supplied actor |
 | `POST /internal/control/claim` | Same internal token; `ClaimDeviceInput` | Live control gateway only |
 | `POST /internal/control/revoke` | Same internal token; `{actor,input:RevokeDeviceInput}` | Live control gateway only |
+| `POST /internal/data` | Loopback plus independent internal token; operation and server-derived caregiver actor or scoped device credential | Live PostgreSQL-backed data adapter; never a client-facing URL |
 
 The current live gateway has no equivalent public health/readiness HTTP route. Missing/unconfigured services must be reported honestly; do not use mock health as production readiness or put an internal token into a device/browser to inspect it.
 
@@ -80,7 +104,7 @@ Set `LEMMI_ACCESS_KEY` (independent 32–256 visible characters) on web/gateway.
 | `POST /access/logout` | Same-origin only, clears current browser cookie; does not revoke other browser cookies |
 | Device/provisioning header | `X-Lemmi-Access-Key: <private key>`; WSS still requires `Authorization: Bearer <paired credential>` |
 
-Browser same-origin clients carry cookies; never bundle the shared key. The computer harness reads private `LEMMI_ACCESS_KEY`. Firmware header support and real domain/browser checks remain pending. Rotate the key and restart both processes to revoke gate cookies and active connections. No key is accepted in query strings. Cloudflare Access is optional and not required by this chosen gate. Self-hosted OIDC caregiver integration still requires compatible RFC 7662 introspection; a generic OIDC/JWKS adapter or sign-in UI is not implemented here.
+Browser same-origin clients carry cookies; never bundle the shared key. The computer harness reads private `LEMMI_ACCESS_KEY`. Public domain/gate cookie exchange/logout and computer WSS checks passed. Actual firmware header support and full production browser sign-in remain pending. Rotate the key and restart both processes to revoke gate cookies and active connections. No key is accepted in query strings. Cloudflare Access is optional and not required by this chosen gate. Self-hosted OIDC caregiver integration still requires compatible RFC 7662 introspection; a generic OIDC/JWKS adapter or sign-in UI is not implemented here.
 
 ## 3. Common contracts and error handling
 
@@ -164,7 +188,7 @@ The following table covers every current `operations` entry in [services.ts](../
 
 ## 5. Live enrollment, claim and revocation HTTP
 
-All are SvelteKit handlers on the configured HTTPS origin; JSON requests/responses ≤4 KiB and `Cache-Control:no-store`. Same Origin is checked when supplied; no URL query credentials. Mutations require POST; GET/link previews do not perform them.
+All are SvelteKit handlers on the configured HTTPS origin; JSON requests/responses ≤4 KiB and `Cache-Control:no-store`. Same Origin is checked when supplied; no URL query credentials. Mutations require POST; GET/link previews do not perform them. All three routes also require `X-Lemmi-Access-Key` or the signed access cookie. Include `Content-Type: application/json`; any supplied `Origin` must exactly match the configured public origin.
 
 | Method / URL | Authorization | Request body | Success `data` |
 | --- | --- | --- | --- |
@@ -177,6 +201,8 @@ Actual route pattern is `/v1/devices/[deviceId]/[action]`, but only Alex's confi
 The 24-character random code lasts five minutes and is single-use. Repeat pair ID/body returns the same still-pending code; after expiry/claim/revoke use a fresh command ID. Only one pending pairing/device credential is allowed; revoke before replacement. Claim returns the random device credential **once**, valid for one hour. A lost successful response cannot retrieve it again: revoke/re-pair explicitly. Claims are globally limited to 20/minute for this demo. `localConfirmed:true` is a firmware contract, not cryptographic proof of a physical button press or consent to microphone/camera access.
 
 Revocation clears pending enrollment/current credential, ends the session and closes an existing socket. Replaying an old revoke command cannot revoke a new pairing. Pairing/revoke command history is bounded to 256; new pairings fail at capacity while revocation remains available. Gateway restart clears all credentials/codes; device must not automatically capture/restart on reconnect.
+
+**Database ownership fence (`04d050e`):** pairing checks that the device row belongs to the current gateway boot; a stale authority returns `UNAVAILABLE`. Claim writes only when the row still has that same boot marker and never assigns/replaces ownership itself. If persistence/ownership checks fail, no usable credential is returned; explicitly re-pair against the current gateway. Regression coverage verifies stale claim/pair rejection, preservation of the replacement marker, and successful authentication by the current authority.
 
 **Path difference from the draft:** technical-spec's `/v1/devices/pair` and `DELETE /v1/devices/:id/pairing` are proposed older route names, not implemented aliases. Use the three POST routes above until the shared specs/consumers are deliberately migrated.
 
@@ -336,7 +362,8 @@ Templates: [root .env.example](../.env.example), [private speech template](../se
 | --- | --- |
 | Mode/gateway | `LEMMI_MODE`, `GATEWAY_PORT`, mock-only `LEMMI_MOCK_TOKEN` |
 | Authenticated origin/internal seam | `LEMMI_PUBLIC_ORIGIN`, `LEMMI_CONTROL_TOKEN`, `LEMMI_ACCESS_KEY`; web `HOST`, `PORT`, explicit `ORIGIN` |
-| Caregiver verifier | `LEMMI_AUTH_INTROSPECTION_URL`, `LEMMI_AUTH_ISSUER`, `LEMMI_AUTH_AUDIENCE`, `LEMMI_AUTH_CLIENT_ID`, `LEMMI_AUTH_CLIENT_SECRET`, `LEMMI_CAREGIVER_SUBJECT` |
+| Caregiver verifier | `LEMMI_AUTH_INTROSPECTION_URL`, `LEMMI_AUTH_ISSUER`, `LEMMI_AUTH_AUDIENCE`, `LEMMI_AUTH_TOKEN_BINDING`, `LEMMI_AUTH_CLIENT_ID`, `LEMMI_AUTH_CLIENT_SECRET`, `LEMMI_CAREGIVER_SUBJECT` |
+| Persistence/media | `LEMMI_DATABASE_URL`, `LEMMI_PRIVATE_MEDIA_DIR`, `BODY_SIZE_LIMIT`; setup uses `LEMMI_CAREGIVER_SUBJECT` and private PostgreSQL configuration |
 | Paired computer harness | `LEMMI_DEVICE_CREDENTIAL`, optional `LEMMI_DEVICE_CA_FILE`; these are not server admin credentials |
 | OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `LEMMI_LLM_TIMEOUT_MS`, `LEMMI_LLM_MAX_TOKENS`, client `LEMMI_CHAT_LANGUAGE` |
 | Speech adapters | `LEMMI_STT_BACKEND`, `LEMMI_TTS_BACKEND`, `LEMMI_STT_URL`, `LEMMI_TTS_URL`, `LEMMI_SPEECH_TOKEN`, `LEMMI_SPEECH_TIMEOUT_MS` |
@@ -378,12 +405,8 @@ Camera is default-off and requires current local Allow for each request; request
 For each backend integration increment:
 
 1. Update the actual shared runtime schema, typed client, authority and counterpart consumers together.
-2. Update this reference's availability row, route/event/field/limit/config/error and compatibility notes. Explicitly identify renamed/replaced shapes and current versus planned paths.
+2. Update this reference's availability row, route/event/field/limit/config/error and compatibility notes. Update [backend status](backend-status.md) in the same change with the deployed revision, services, actual observations, failures and remaining limits; distinguish code-ready from deployed and fixture from live. Explicitly identify renamed/replaced shapes and current versus planned paths.
 3. Add/reuse nonsecret fixtures and meaningful scope/revision/retry/cancellation/privacy checks; record actual commands/results and untested hardware/provider cases in the build plan.
 4. Link the focused handoff and next owner in [Anay's tasks](anay_tasks.md). A task/schema/fixture marked ready never implies hardware or real delivery acceptance.
 
 No OpenAPI document is generated yet. The `operations` registry covers the typed client seam, not every private/public route and not an implemented production REST catalog. Treat this file as the navigable integration inventory and import source schemas for exact executable validation.
-
-### Explicit VoidAuth token binding
-
-`LEMMI_AUTH_TOKEN_BINDING` defaults to `audience`, preserving the required `LEMMI_AUTH_AUDIENCE` check. For VoidAuth non-resource access tokens, explicitly select `client_id`; `client_id` must then equal the dedicated configured `LEMMI_AUTH_CLIENT_ID`. Missing/foreign clients are rejected. A present `aud` still must match `LEMMI_AUTH_AUDIENCE`; it is never ignored. Issuer, active status, Bearer type, one-hour expiry bound and configured caregiver subject checks remain enforced in both modes. This is a provider-specific integration choice, not automatic fallback or JWT-only verification. The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper obtains the actual subject using an explicitly authorized one-time code/PKCE login; see [host setup](host-setup.md). Production browser login UI remains pending.
