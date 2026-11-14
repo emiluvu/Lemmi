@@ -137,7 +137,13 @@ export const alexFavoriteSong = {
   // Performer/version are not independently established by the file metadata.
   metadataTitle: 'My Way (2008 Remastered)',
   durationSeconds: 276.257959,
-  permissionStatus: 'missing',
+  permissionStatus: 'user_attested',
+  approvalDate: '2026-11-14',
+  approvalSource: 'User confirmed source and permission approval in chat.',
+  uploadSource:
+    'User-supplied local file: My Way (2008 Remastered).mp3; converted full-length WAV.',
+  uploadPermission:
+    'User confirmed source/permission approval on 2026-11-14 for intended Lemmi demo playback. No GitHub redistribution authorized.',
 } as const;
 
 // Only use metadata returned after the existing authenticated approved upload.

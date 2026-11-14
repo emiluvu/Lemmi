@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "upload:alex-music": "bun scripts/upload-alex-music.ts",
     "dev": "bun scripts/dev.ts",
     "dev:web": "bun run --filter @lemmi/web dev",
     "dev:gateway": "bun --watch apps/realtime/src/index.ts",

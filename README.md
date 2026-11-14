@@ -20,6 +20,9 @@ An early hardware check will determine how much interaction can live on the avai
 
 Alex's updated fictional profile and supplied-media preparation are on `codex/alex-profile-assets`; see [content, private derivatives and integration limits](docs/handoffs/lukas-alex-profile.md). The deployed profile and supplied-media playback are not updated by these content changes.
 
+To sign in as the assigned caregiver and upload the approved song privately, use
+[the local music uploader](docs/upload-alex-music.md) (`bun run upload:alex-music --help`).
+
 **Shared mock starter implemented; product features remain in development.** The repository includes a pinned Bun/SvelteKit workspace, runtime-validated contracts, typed HTTP/fixture clients, a loopback mock session gateway, participant/caregiver development shells, a small pure music example and a fake-device connector. Optional authenticated controls, text-chat integration and local speech adapters are described below. See [Team start guide](docs/team-start.md) for clone/run commands, implemented seams, limitations and each person’s first task. Integrated firmware/media playback, caregiver sign-in UI, real notifications and camera streaming remain pending. External LLM configuration/live testing and deployment verification are unfinished. The broader specifications remain the target, not a claim of completed P0 behavior.
 
 Lemmi is an experimental prototype. It has not been clinically evaluated and does not diagnose, treat, assess cognitive decline, or replace caregivers or medical professionals. Use fictional profiles and team rehearsal. Lukas is also planning an optional supervised live demo with Grandma after private rehearsal and her agreement; her health status is unspecified, and a teammate fallback is always available. Testing with people living with dementia requires further care-professional review and participant involvement in the design.

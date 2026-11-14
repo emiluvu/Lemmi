@@ -72,11 +72,13 @@ full song is converted to metadata-free PCM16 mono 32 kHz WAV: 276.2579375 secon
 All seven derivatives passed the existing server `decodeMedia` validation.
 Original supplied files are unchanged. The utility makes no network requests.
 
-Every derivative remains `approved: false` in the private manifest because no
-source/license/playback/distribution permission was supplied. Required next input:
-source and permission covering the intended private demo/display/playback for each
-asset, plus separate permission for any GitHub redistribution. Stock watermarks
-do not establish a license. No supplied media or source PDF is committed.
+The initial conversion left every derivative `approved: false` in the private
+manifest. On November 14 the user explicitly attested that source and permission
+for the song are approved. `alexFavoriteSong` now records that attestation and
+the intended demo-playback scope; it does not invent a distributor, recording
+provenance or license document. Backend approval is recorded by the authenticated
+upload, not merely by this local attestation. The six photos still require their
+own source/permission review. No supplied media or source PDF is committed.
 
 ## Integration and testing
 
@@ -104,4 +106,15 @@ cancellation, UI or robot behavior is claimed or changed.
 Run `bun test tests/alex-profile.test.ts` for the content/update/binding tests and
 `bun run dev` for the existing mock shell with updated caregiver interests/guidance.
 That command does not turn on supplied-photo playback or the full approved biography.
-Verification results are recorded in build-plan section 17. Production build passed.
+Verification results are recorded in build-plan section 17. Production build passed
+for the initial profile content increment. See the uploader guide below for the
+subsequent login/upload verification.
+
+## Caregiver music uploader
+
+The user authorized a local caregiver authentication/upload utility. The new
+`bun run upload:alex-music` command consumes the existing API and typed clients;
+it changes no backend routes, auth rules, storage or caregiver assignment.
+See [run instructions](../upload-alex-music.md). No live sign-in or upload was
+performed from this checkout: registered client settings and private access key
+are not configured here. Fixture sign-in/upload is explicitly test-only.

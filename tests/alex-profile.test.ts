@@ -88,7 +88,7 @@ const photo: AssetMetadata = {
 test('missing media stays unavailable, never invents approval or asset IDs', () => {
   expect(buildAlexPhotoPack({})).toBeNull();
   expect(buildAlexMusicPack()).toBeNull();
-  expect(alexFavoriteSong.permissionStatus).toBe('missing');
+  expect(alexFavoriteSong.permissionStatus).toBe('user_attested');
 });
 test('approved returned photo metadata binds reviewed content and excludes cooking/family drafts', () => {
   const pack = buildAlexPhotoPack({

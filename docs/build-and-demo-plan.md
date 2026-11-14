@@ -2,6 +2,17 @@
 
 ## 17. Alex content preparation — November 14, 2026
 
+**Subsequent music approval/uploader:** the user explicitly attested song source
+and permission approval for demo playback. Lukas recorded that attestation and
+added a local browser-login/PKCE uploader consuming the existing authenticated
+profile/assets clients. No backend auth/routes/assignment/deployment changes.
+Five uploader tests plus six profile tests pass (72 combined assertions);
+type/Svelte and formatting pass. Full suite: 89 pass, 18 DB skips, the unchanged
+Windows POSIX-mode failure remains. Browser provider configuration/private access
+key are absent locally; no actual login/upload occurred. See
+[uploader instructions](upload-alex-music.md). Earlier missing-permission notes
+below describe the initial snapshot; photo permissions remain pending.
+
 On `codex/alex-profile-assets`, based on main `a6f7ff9`, Lukas prepared the supplied
 fictional Alex profile, caption/context drafts, favorite-song metadata, pure
 revision-aware profile-update preparation and existing-contract pack bindings.
