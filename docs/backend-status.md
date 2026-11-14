@@ -2,7 +2,13 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed web runtime revision: **`cb64621`** (designed caregiver landing and live conversation routes); gateway remains **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
+Deployed web runtime revision: **`eab2c35`** (main-based live UI alignment, with designed landing/conversation routes); gateway remains **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
+
+## Live UI alignment deployed — November 14, 2026
+
+User requested the newer UI branch; `codex/kylie-ui-refinements` was unchanged at `d8a6fe4`, while `codex/main-ui-alignment` had new checkpoint `a0a3797`. Integrated that checkpoint as `eab2c35` on top of the tested Photo Story source reconciliation. The live profile dialog now uses the reference sage portrait/five avatar cards/basic information/paper summary/empty trends design; private data/editing/upload/excerpt settings stay unavailable. Conversation uses the reference 440px maximum avatar, scene spacing, state-aware heading and responsive control bar. Connection/enrollment/speech/teaching handlers and authorization are unchanged by this UI checkpoint.
+
+Final combined type/Svelte check passed with zero errors/warnings and production build passed. The prior full 227-test database-enabled suite and participant/data/control/long speech fixture smokes cover the reconciled backend; subsequent changes are presentation only. Installed the combined web build and restarted only web, with prior build/manifest at `.data/live-ui-alignment-rollback-path`. Gateway PID/start time remained unchanged. Public HTTPS unlock, caregiver/conversation/profile-list and root redirect passed; fetched updated profile UI bundle byte-matched the installed file. Private profile read without caregiver token stayed 401; local Photo Story page/worklet stayed 404. No new actual browser/hardware acceptance or live session/model turn was performed. Source is published to both main and backend-deploy; gateway still runs `f5724a0` and Photo Story is not a live-site activity.
 
 ## Photo Story integration source — November 14, 2026
 

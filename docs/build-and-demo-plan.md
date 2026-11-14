@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+### Main-based live UI alignment — November 14, 2026
+
+Integrated `a0a3797` (`codex/main-ui-alignment`) with tested Photo Story source and installed web `eab2c35`. Live dialog/avatar/basic-information/empty summary/trends and conversation scene/control-bar refinements retain existing safe projections and handlers. Combined type/Svelte zero errors/warnings and build passed; reconciled backend had 227 tests / 4,163 expectations with no database skips and four production fixture smokes. Actual public unlock/caregiver/conversation/root/profile-list and updated UI bundle bytes passed; private profile still 401 and local photo page/worklet 404. Only web restarted; gateway PID/start time unchanged. Main/backend-deploy receive the same source. New real browser/hardware acceptance and production Photo Story hosting remain pending. See [backend status](backend-status.md#live-ui-alignment-deployed--november-14-2026).
+
 ### Photo Story backend reconciliation — November 14, 2026
 
 Integrated Lukas checkpoint `9dfc4b6` as local-only source alongside live multi-profile/teaching/design changes. Preserved teaching and private resource boundaries; isolated Alex rehearsal enablement, removed inferred biography, and corrected inherited live-mode/port and workspace Vite launch issues. Full isolated PostgreSQL suite: 227 passed / 4,163 expectations, no skips; type/Svelte/build and production participant/data/control/long-output speech fixture smokes passed. Actual loopback launcher and typed photo flow/skip/factual events/Stop passed without speech and using reviewed-demo chat. No shared gateway restart or production photo hosting. Live scoped pack/media/activity transport, actual microphone/voice quality and counterpart review remain pending; no clinical/retention/provider/hardware acceptance follows. See [backend status](backend-status.md#photo-story-integration-source--november-14-2026).

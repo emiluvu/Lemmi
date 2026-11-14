@@ -45,3 +45,7 @@ live setup/teaching/audio boundaries are preserved. Rehearse the live profile
 open/close, explicit conversation Start, text, Teach Lemmi, Pause/Resume/Stop,
 reconnect and endpoint handoff on a configured review host. Real browser speech
 and K151 remain separate gates. Merge into main and deployment await user review.
+
+## Integration/deployment follow-up — November 14, 2026
+
+User explicitly requested merge into main and deployment. `a0a3797` was merged with the tested backend/Photo Story local-rehearsal source as web runtime `eab2c35`. Retained component controller/authorization behavior and empty/unavailable private-data states. Combined type/Svelte/build passed; updated profile bundle fetched over the actual public gate matched installed bytes, and caregiver/conversation/profile-list/root/private/local-only route checks passed. Only web restarted; gateway and current connections remained running. Published source to main and backend-deploy. The prior author Chrome fixture review remains distinct from deployment HTTP checks; no new actual browser audio or K151 acceptance was performed.
