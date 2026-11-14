@@ -81,7 +81,7 @@ export class DataRepository {
       if (!member.length) throw new DataError('FORBIDDEN', 'Caregiver is not assigned');
     } else {
       const device =
-        await tx`SELECT 1 FROM lemmi.devices WHERE id=${principal.deviceId} AND profile_id=${id} AND credential_id=${principal.credentialId}::uuid AND boot_id=${principal.bootId}::uuid AND revoked_at IS NULL AND credential_expires_at>now() FOR SHARE`;
+        await tx`SELECT 1 FROM lemmi.devices WHERE id=${principal.deviceId} AND profile_id=${id} AND credential_id=${principal.credentialId}::uuid AND boot_id=${principal.bootId}::uuid AND revoked_at IS NULL AND (credential_persistent OR credential_expires_at>now()) FOR SHARE`;
       if (!device.length) throw new DataError('FORBIDDEN', 'Device access has ended');
     }
     return rows[0];
@@ -271,9 +271,24 @@ export class DataRepository {
       return { metadata, bytes, revision: profile.revision };
     });
   }
+  async deviceMutation<T>(
+    subject: string,
+    bootId: string,
+    work: (tx: TransactionSQL) => Promise<T>,
+  ) {
+    return this.sql.begin(async (tx) => {
+      await this.scoped(
+        tx,
+        { kind: 'caregiver', subject, profileId: 'profile-alex', bootId },
+        'profile-alex',
+      );
+      await tx`SELECT 1 FROM lemmi.devices WHERE id='stackchan-alex' FOR UPDATE`;
+      return work(tx);
+    }) as Promise<T>;
+  }
   async restart(bootId: string) {
     await this.sql.begin(async (tx) => {
-      await tx`UPDATE lemmi.devices SET credential_id=NULL,credential_hash=NULL,credential_expires_at=NULL,revoked_at=now(),boot_id=${bootId}::uuid`;
+      await tx`UPDATE lemmi.devices SET credential_id=CASE WHEN credential_persistent THEN credential_id END,credential_hash=CASE WHEN credential_persistent THEN credential_hash END,credential_expires_at=NULL,revoked_at=CASE WHEN credential_persistent THEN revoked_at ELSE now() END,boot_id=${bootId}::uuid`;
       await tx`UPDATE lemmi.sessions SET phase='ended',generation=generation+1,ended_at=now() WHERE phase<>'ended'`;
     });
     const linked = await this.sql`SELECT storage_key FROM lemmi.media_assets`;

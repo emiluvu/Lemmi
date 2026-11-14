@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { database, migrate, PrivateMedia, DataRepository } from '@lemmi/server';
 import { startControlGateway } from '../apps/realtime/src/control';
 
+const persistent = process.argv.includes('--persistent');
 const url = process.env.LEMMI_TEST_DATABASE_URL;
 if (!url || !new URL(url).pathname.endsWith('_test'))
   throw new Error('Use a dedicated PostgreSQL database ending in _test');
@@ -204,6 +205,7 @@ try {
     'Invalid managed token accepted',
   );
   const pairResponse = await request('/v1/devices/stackchan-alex/pairings', 'POST', {
+    ...(persistent ? { credentialMode: 'persistent' } : {}),
     deviceId: 'stackchan-alex',
     profileId: 'profile-alex',
     commandId: crypto.randomUUID(),
@@ -216,7 +218,12 @@ try {
     localConfirmed: true,
   });
   check(claim.status === 200, 'Claim failed');
-  const credential = ((await claim.json()) as any).data.credential;
+  const claimed = ((await claim.json()) as any).data;
+  check(
+    persistent ? claimed.expiresAt === null : typeof claimed.expiresAt === 'string',
+    'Credential expiry mode mismatch',
+  );
+  const credential = claimed.credential;
   const safe = await request('/v1/participant/profiles/profile-alex', 'GET', undefined, credential);
   check(safe.status === 200, 'Participant profile failed');
   const text = await safe.text();
@@ -296,7 +303,8 @@ try {
     'Revoked participant credential accepted',
   );
   console.info(
-    'PASS: production SvelteKit → authenticated gateway → real PostgreSQL profile read/edit/retry/conflict; approved photo upload/read, scoped participant projection, preview denial and committed device revocation. TLS verified; identity is a fixture.',
+    'PASS: production SvelteKit → authenticated gateway → real PostgreSQL profile read/edit/retry/conflict; approved photo upload/read, scoped participant projection, preview denial and committed device revocation. TLS verified; identity is a fixture. Credential mode: ' +
+      (persistent ? 'persistent' : 'short-lived'),
   );
 } catch {
   console.error(

@@ -10,6 +10,10 @@ Maintain this deployment/acceptance record alongside the [backend API reference]
 
 **Media collections deployed:** migration `002_media_collections.sql` has been applied to the existing host database after a private backup. It adds corrected album/playlist metadata only; collection APIs, reviewed-pack hosting and deferred consent/journal/help/jobs/deletion/camera workflows remain unavailable. See [schema review](handoffs/anay-app-data-schema-review.md).
 
+## Undeployed persistent-key branch
+
+`anay/persistent-device-credentials` adds caregiver-selected persistent enrollment for `stackchan-alex` / fictional Alex in PostgreSQL mode. Keys remain valid until revoked and only their hashes persist across gateway restarts; codes/sessions/capture/output do not resume. Default one-hour credentials retain their previous behavior. Migration `003_persistent_device_credentials.sql` and a one-time `python3 scripts/pair-stackchan.py --persistent` enrollment are required after an authorized deployment. Revocation retries persist safely across restarts. Emilia owns firmware storage and nullable `expiresAt` / `credentialExpiresAt` handling. Observed locally: 130 Bun tests / 2,533 expectations, five Python helper tests, type/build/format and production data/control fixture smokes passed; the data smoke also passed explicit persistent enrollment. This branch does not change the deployed runtime above, its private configuration or running services. [Exact contract, checks and handoff](handoffs/anay-persistent-device-credentials.md).
+
 ## Deployment
 
 Public origin: **https://lemmi.chaoswarrior.dev**. Open **[/access](https://lemmi.chaoswarrior.dev/access)** to unlock the outer domain gate. `/` intentionally returns 404. The shared access key is stored privately in the host's root `.env`; it does not replace caregiver authentication or device pairing.

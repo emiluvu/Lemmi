@@ -31,6 +31,7 @@ beforeAll(async () => {
     );
     await tx`INSERT INTO public.lemmi_migrations (name,sha256) VALUES ('001_foundation.sql',${digest(foundation)})`;
     await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset) VALUES ('profile-alex','Alex','lemming','guided')`;
+    await tx`INSERT INTO lemmi.devices (id,profile_id,credential_id,credential_hash,credential_expires_at) VALUES ('stackchan-alex','profile-alex',${randomUUID()}::uuid,${'a'.repeat(64)},now()+interval '1 hour')`;
   });
 });
 afterAll(async () => {
@@ -69,12 +70,21 @@ dbtest(
       (await sql`SELECT name FROM public.lemmi_migrations ORDER BY name`).map(
         (r: { name: string }) => r.name,
       ),
-    ).toEqual(['001_foundation.sql', '002_media_collections.sql']);
+    ).toEqual([
+      '001_foundation.sql',
+      '002_media_collections.sql',
+      '003_persistent_device_credentials.sql',
+    ]);
     expect(
       (await sql`SELECT sha256 FROM public.lemmi_migrations WHERE name='001_foundation.sql'`)[0]
         .sha256,
     ).toBe(before);
     expect((await sql`SELECT count(*)::int AS n FROM lemmi.media_assets`)[0].n).toBe(3);
+    expect(
+      (
+        await sql`SELECT credential_persistent,credential_expires_at IS NOT NULL AS has_expiry FROM lemmi.devices`
+      )[0],
+    ).toMatchObject({ credential_persistent: false, has_expiry: true });
     expect(
       (await sql`SELECT excerpt_saving_enabled,remembering_enabled FROM lemmi.profiles`)[0],
     ).toMatchObject({ excerpt_saving_enabled: false, remembering_enabled: false });
