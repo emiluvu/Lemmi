@@ -5,8 +5,9 @@ import {
   MOCK_TOKEN,
 } from '@lemmi/server';
 import { DeviceEventSchema, ServerEventSchema, fail, type ServerEvent } from '@lemmi/contracts';
-import { controlConfig } from '@lemmi/server';
+import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
 import { startControlGateway } from './control';
+import { dataConfig, openData } from '@lemmi/server';
 function startMockGateway() {
   assertMockMode();
   const coordinator = new MockCoordinator();
@@ -191,12 +192,31 @@ function startMockGateway() {
   console.info(`Lemmi MOCK gateway: http://127.0.0.1:${server.port} (no live services)`);
 }
 if (process.env.LEMMI_MODE === 'live') {
+  const llm = openRouterConfig();
+  const config = dataConfig();
+  const repository = config ? await openData(config) : undefined;
   const gateway = startControlGateway({
+    repository,
+    caregiverSubject: config?.subject,
     ...controlConfig(),
     port: Number(process.env.GATEWAY_PORT ?? 3001),
+    ...(llm.ok ? { chatAdapter: createOpenRouterAdapter(llm.data) } : {}),
   });
-  const shutdown = () => {
+  try {
+    await gateway.ready;
+  } catch {
     gateway.stop();
+    await repository?.sql.close();
+    console.error('Persistent data startup failed; check private setup/migrations.');
+    process.exit(1);
+  }
+  const shutdown = async () => {
+    gateway.stop();
+    if (gateway.data) {
+      await gateway.flush().catch(() => {});
+      await gateway.data.close().catch(() => {});
+      await repository?.sql.close();
+    }
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

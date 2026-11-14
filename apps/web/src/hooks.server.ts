@@ -1,5 +1,11 @@
 import type { Handle } from '@sveltejs/kit/hooks';
-import { isLoopbackHost, controlConfig } from '@lemmi/server';
+import {
+  isLoopbackHost,
+  controlConfig,
+  hasPrivateAccess,
+  createPrivateAccessHandler,
+} from '@lemmi/server';
+const accessHandler = createPrivateAccessHandler();
 // Mock pages stay local. Live mode exposes only the narrowly scoped device resource routes
 // through the trusted local TLS proxy; each route independently verifies its authorization.
 export const handle: Handle = async ({ event, resolve }) => {
@@ -12,7 +18,12 @@ export const handle: Handle = async ({ event, resolve }) => {
   const deviceRoute = /^\/v1\/(devices\/[^/]+\/(pairings|revoke)|device-pairings\/claim)$/.test(
     event.url.pathname,
   );
-  if (process.env.LEMMI_MODE === 'live' && deviceRoute) {
+  const dataRoute =
+    /^\/v1\/(profiles\/[^/]+(?:\/(photos|assets)(?:\/[^/]+)?)?|participant\/profiles\/[^/]+|assets\/[^/]+(?:\/metadata)?)$/.test(
+      event.url.pathname,
+    );
+  const accessRoute = event.url.pathname === '/access' || event.url.pathname === '/access/logout';
+  if (process.env.LEMMI_MODE === 'live' && (deviceRoute || dataRoute || accessRoute)) {
     try {
       const config = controlConfig();
       if (
@@ -22,6 +33,12 @@ export const handle: Handle = async ({ event, resolve }) => {
         event.request.headers.get('x-forwarded-proto') !== 'https'
       )
         return new Response('Trusted HTTPS proxy required', { status: 403 });
+      if (accessRoute) return accessHandler(event.request, config.accessKey, config.publicOrigin);
+      if (!hasPrivateAccess(event.request, config.accessKey))
+        return Response.json(
+          { ok: false, error: { code: 'UNAUTHORIZED', message: 'Private access key required' } },
+          { status: 401, headers: { 'Cache-Control': 'no-store' } },
+        );
       const response = await resolve(event);
       response.headers.set('Cache-Control', 'no-store');
       return response;

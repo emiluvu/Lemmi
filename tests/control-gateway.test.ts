@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { startControlGateway } from '../apps/realtime/src/control';
 import { handleDeviceHttp, DEVICE_TTL_MS } from '@lemmi/server';
-import { ServerEventSchema, type ServerEvent, type SessionSnapshot } from '@lemmi/contracts';
+import { ServerEventSchema, ok, type ServerEvent, type SessionSnapshot } from '@lemmi/contracts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,8 +20,23 @@ const auth = {
 let now = Date.now();
 let gateway: ReturnType<typeof startControlGateway>;
 let base = '';
+let delayedChat: { finish: (result: any) => void; signal: AbortSignal } | null = null;
 beforeAll(() => {
-  gateway = startControlGateway({ publicOrigin, internalToken, port: 0, now: () => now });
+  gateway = startControlGateway({
+    publicOrigin,
+    internalToken,
+    port: 0,
+    now: () => now,
+    chatAdapter: {
+      async complete(input, signal) {
+        if (input.text === 'pending fictional fixture')
+          return new Promise((resolve) => {
+            delayedChat = { finish: resolve, signal };
+          });
+        return ok({ text: 'Hello. We can take our time.', language: input.language });
+      },
+    },
+  });
   base = `http://127.0.0.1:${gateway.server.port}`;
 });
 afterAll(() => gateway?.stop());
@@ -55,7 +70,7 @@ async function http(
       body: JSON.stringify(input),
     }),
     { action, ...(action === 'claim' ? {} : { deviceId }) },
-    { publicOrigin, internalToken, gatewayPort: gateway.server.port!, auth },
+    { publicOrigin, internalToken, accessKey: null, gatewayPort: gateway.server.port!, auth },
     providerFetch,
   );
 }
@@ -458,6 +473,57 @@ test('concurrent authenticated upgrades cannot claim two device connections', as
     first.socket.close();
     second.socket.close();
     await winner.closed;
+    await http('revoke', { deviceId: 'stackchan-alex', commandId: crypto.randomUUID() });
+  }
+});
+
+test('authenticated text replies deduplicate and never block heartbeat or Stop', async () => {
+  const credential = await issue();
+  const client = socketClient(credential);
+  try {
+    await client.hello();
+    const ready = client.messages.find((e) => e.type === 'device.ready');
+    expect(ready?.type === 'device.ready' && ready.payload.textChat).toBe(true);
+    const session = (await client.command('input.start', null))!;
+    const id = client.send('input.text', session, { text: 'Hello', language: 'en' });
+    const reply = await client.wait((e) => e.type === 'response.text' && e.payload.turnId === id);
+    expect(reply.type === 'response.text' && reply.payload.text).toBe(
+      'Hello. We can take our time.',
+    );
+    const replayFrom = client.messages.length;
+    client.send('input.text', session, { text: 'Hello', language: 'en' }, id);
+    client.send('heartbeat', session);
+    await client.wait((e) => client.messages.indexOf(e) >= replayFrom && e.type === 'heartbeat');
+    expect(
+      client.messages.filter((e) => e.type === 'response.text' && e.payload.turnId === id),
+    ).toHaveLength(1);
+    const pendingFrom = client.messages.length;
+    const pendingId = client.send('input.text', session, {
+      text: 'pending fictional fixture',
+      language: 'en',
+    });
+    await client.wait(
+      (e) =>
+        client.messages.indexOf(e) >= pendingFrom &&
+        e.type === 'state.changed' &&
+        e.payload.session?.phase === 'processing',
+    );
+    const beatFrom = client.messages.length;
+    client.send('heartbeat', session);
+    await client.wait((e) => client.messages.indexOf(e) >= beatFrom && e.type === 'heartbeat');
+    const ended = await client.command('input.stop', session);
+    expect(ended?.phase).toBe('ended');
+    expect(delayedChat?.signal.aborted).toBe(true);
+    delayedChat?.finish(ok({ text: 'late output must be discarded', language: 'en' }));
+    const doneFrom = client.messages.length;
+    client.send('heartbeat', ended);
+    await client.wait((e) => client.messages.indexOf(e) >= doneFrom && e.type === 'heartbeat');
+    expect(
+      client.messages.some((e) => e.type === 'response.text' && e.payload.turnId === pendingId),
+    ).toBe(false);
+  } finally {
+    client.socket.close();
+    await client.closed;
     await http('revoke', { deviceId: 'stackchan-alex', commandId: crypto.randomUUID() });
   }
 });

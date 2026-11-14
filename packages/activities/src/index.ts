@@ -3,6 +3,11 @@ import {
   ActivityContextSchema,
   ApprovedPackSchema,
   ActivityViewSchema,
+  ActivityActionSchema,
+  ActivitySystemInputSchema,
+  ActivityTransitionSchema,
+  ActivityEventSchema,
+  StartActivityInputSchema,
   type StartActivityInput,
   type ApprovedPack,
   type ActivityState,
@@ -34,15 +39,41 @@ export function createActivity(
   pack: ApprovedPack,
   ctx: ActivityContext,
 ): ActivityState {
+  StartActivityInputSchema.parse(input);
   ApprovedPackSchema.parse(pack);
   ActivityContextSchema.parse(ctx);
-  if (pack.activityId !== 'music_playlist')
-    return {
-      activityId: pack.activityId,
-      instanceId: input.instanceId,
-      revision: 0,
-      phase: 'unavailable',
-    };
+  // Shape-only unavailable stubs. Lukas supplies these activities' actual rules.
+  const base = { instanceId: input.instanceId, revision: 0, phase: 'unavailable' as const };
+  switch (pack.activityId) {
+    case 'twenty_questions':
+      return ActivityStateSchema.parse({
+        ...base,
+        activityId: pack.activityId,
+        roundId: null,
+        questionId: null,
+        guessCandidateId: null,
+        roundPhase: 'ready',
+        questionsAsked: 0,
+      });
+    case 'photo_album':
+      return ActivityStateSchema.parse({
+        ...base,
+        activityId: pack.activityId,
+        currentPhotoId: null,
+        position: null,
+        viewingMode: 'just_look',
+      });
+    case 'object_matching':
+      return ActivityStateSchema.parse({
+        ...base,
+        activityId: pack.activityId,
+        sampleCardId: null,
+        choiceIds: [],
+        selectedChoiceId: null,
+        pairShown: false,
+        presentation: null,
+      });
+  }
   const track = tracks(pack, ctx)[0];
   return {
     activityId: 'music_playlist',
@@ -60,6 +91,7 @@ export function reduceActivity(
   ctx: ActivityContext,
 ): ActivityTransition {
   checked(state, pack, ctx);
+  ActivityActionSchema.parse(action);
   if (
     state.activityId !== 'music_playlist' ||
     state.phase === 'ended' ||
@@ -84,6 +116,7 @@ export function reduceActivity(
       next.playback = 'paused';
       next.phase = 'ready';
       effects.push({ type: 'stop_media' });
+      events.push({ type: 'track_pause_requested', itemId: current.id });
       break;
     case 'track.select':
     case 'track.next': {
@@ -108,7 +141,7 @@ export function reduceActivity(
     default:
       throw new Error('Unsupported action for activity');
   }
-  return { nextState: next, events, effects };
+  return ActivityTransitionSchema.parse({ nextState: next, events, effects });
 }
 export function applyActivitySystemInput(
   state: ActivityState,
@@ -117,24 +150,32 @@ export function applyActivitySystemInput(
   ctx: ActivityContext,
 ): ActivityTransition {
   checked(state, pack, ctx);
-  if (state.activityId !== 'music_playlist') return { nextState: state, events: [], effects: [] };
-  if (state.phase === 'ended') return { nextState: state, events: [], effects: [] };
+  ActivitySystemInputSchema.parse(input);
+  if (state.activityId !== 'music_playlist' || state.phase === 'ended')
+    return ActivityTransitionSchema.parse({ nextState: state, events: [], effects: [] });
   const next = { ...state, revision: state.revision + 1 };
   const effects: ActivityTransition['effects'] = [];
+  const events: ActivityTransition['events'] = [];
   switch (input.type) {
     case 'system.pause':
       next.phase = 'paused';
       next.playback = 'stopped';
+      events.push({ type: 'activity_paused', reason: input.reason });
+      effects.push({ type: 'stop_media' });
       break;
     case 'system.resume':
       if (state.phase !== 'paused') throw new Error('Not paused');
       next.phase = tracks(pack, ctx).length ? 'ready' : 'unavailable';
+      events.push({ type: 'activity_resumed' });
       break;
     case 'system.end':
       next.phase = 'ended';
       next.playback = 'stopped';
+      events.push({ type: 'activity_ended' });
+      effects.push({ type: 'stop_media' });
       break;
     case 'system.eligibility_changed':
+      events.push({ type: 'eligibility_changed', policyRevision: ctx.eligibility.policyRevision });
       if (!tracks(pack, ctx).some((t) => t.id === state.currentTrackId)) {
         next.currentTrackId = null;
         next.playback = 'stopped';
@@ -143,12 +184,29 @@ export function applyActivitySystemInput(
       }
       break;
     case 'system.playback_receipt':
-      if (state.phase !== 'active' || input.receipt.instanceId !== state.instanceId)
-        return { nextState: state, events: [], effects: [] };
+      if (
+        state.phase !== 'active' ||
+        input.receipt.instanceId !== state.instanceId ||
+        !tracks(pack, ctx).some((track) => track.id === state.currentTrackId)
+      )
+        return ActivityTransitionSchema.parse({ nextState: state, events: [], effects: [] });
       next.playback = input.receipt.status === 'ended' ? 'stopped' : input.receipt.status;
+      if (input.receipt.status !== 'playing') next.phase = 'ready';
+      events.push(
+        ActivityEventSchema.parse({
+          type: {
+            playing: 'track_played',
+            paused: 'track_paused',
+            ended: 'track_ended',
+            failed: 'media_failed',
+          }[input.receipt.status],
+          itemId: state.currentTrackId,
+          receipt: input.receipt,
+        }),
+      );
       break;
   }
-  return { nextState: next, events: [], effects };
+  return ActivityTransitionSchema.parse({ nextState: next, events, effects });
 }
 export function projectActivity(
   state: ActivityState,

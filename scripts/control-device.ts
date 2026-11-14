@@ -11,8 +11,16 @@ export async function runControlDevice() {
   )
     throw new Error('A configured HTTPS origin and paired device credential are required');
   const caFile = process.env.LEMMI_DEVICE_CA_FILE;
+  const language = process.env.LEMMI_CHAT_LANGUAGE || 'en';
+  if (language !== 'en' && language !== 'de')
+    throw new Error('Select English (en) or German (de) explicitly');
   const socket = new WebSocket(`wss://${origin.host}/v1/device-stream`, {
-    headers: { Authorization: `Bearer ${credential}` },
+    headers: {
+      Authorization: `Bearer ${credential}`,
+      ...(process.env.LEMMI_ACCESS_KEY
+        ? { 'X-Lemmi-Access-Key': process.env.LEMMI_ACCESS_KEY }
+        : {}),
+    },
     ...(caFile ? { tls: { ca: await Bun.file(caFile).text() } } : {}),
   });
   let sequence = 0;
@@ -65,7 +73,7 @@ export async function runControlDevice() {
     if (value.type === 'device.ready') {
       ready = true;
       console.info(
-        'Authenticated computer harness. No capture/output. Commands: start, pause, resume, stop, mute, unmute, help, quit',
+        'Authenticated computer harness. No audio capture/output. Commands: start, pause, resume, stop, mute, unmute, help, chat <text>, quit',
       );
     }
     if (value.type === 'heartbeat') lastHeartbeat = Date.now();
@@ -80,6 +88,8 @@ export async function runControlDevice() {
       );
     }
     if (value.type === 'error') console.info(value.payload.code, value.payload.message);
+    // Interactive participant output only, never server/worker logs. Use fictional demo text.
+    if (value.type === 'response.text') console.info('Lemmi:', value.payload.text);
   };
   socket.onerror = () =>
     console.error('Authenticated control connection failed; check pairing and certificate trust');
@@ -110,6 +120,8 @@ export async function runControlDevice() {
         continue;
       }
       if (command === 'start') send('input.start', {}, true);
+      else if (command.startsWith('chat '))
+        send('input.text', { text: command.slice(5), language });
       else if (command === 'mute' || command === 'unmute')
         send('input.mute', { muted: command === 'mute' });
       else if (['pause', 'resume', 'stop', 'help'].includes(command)) send(`input.${command}`);

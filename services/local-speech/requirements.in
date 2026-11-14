@@ -1,0 +1,4 @@
+# Ubuntu 22 / Python 3.10 CPU baseline. Model/voice assets are provisioned separately.
+faster-whisper==1.2.1
+piper-tts==1.8.0
+numpy==2.2.6
