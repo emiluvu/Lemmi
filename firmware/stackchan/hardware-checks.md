@@ -22,3 +22,18 @@ Date: November 13, 2026 (America/Los_Angeles). Work remains on `emilia/firmware-
 Private flash images and diagnostic/upload logs are under ignored `backups/`, protected by directory permissions. Do not commit them or include their contents in public logs; they may contain saved network settings. The local manifest identifies the valid full backup; earlier failed/partial reads are not restore images. No real participant data or provider credentials were added to the firmware.
 
 Recovery uses the private manifest’s original image and the verified ESP32-S3/16 MB identity, with the tested device tooling. Retain that backup before any later firmware experiment. M5Burner factory restoration is the vendor-documented alternate route, not a rehearsed settings restore.
+
+## Offline feasibility follow-up (0.2)
+
+A separate sketch and test procedure are in [feasibility-checks.md](feasibility-checks.md).
+Pinned compile and host control-gate checks passed; backup-integrity upload dry-run
+passed. The agent's real upload attempt was denied at serial open (`Operation not
+permitted`), before firmware writes. Emilia then uploaded in local Terminal:
+all four images hash-verified, and the private manifest application hash matches
+this build. Emilia confirms the startup screen shows **Lemmi offline test** and
+**Camera / microphone off**, with control boxes. Receive-only serial confirmed
+`firmware=lemmi-feasibility/0.2 display=320x240 capture=off camera=off` at
+2026-11-14 03:39:50 UTC. Tapping Camera test displayed the permission prompt while
+still showing camera/mic off; Allow has not been confirmed. Active camera/audio,
+decline/expiry, runtime memory and Stop latency remain pending.
+All hardware rows above remain scoped to the previously verified foundation test.

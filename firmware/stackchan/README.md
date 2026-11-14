@@ -4,6 +4,16 @@ Switching accounts or resuming? Read [Emilia’s restart handoff](../../docs/han
 
 The `emilia/firmware-foundation` branch contains an initial standalone display/touch test. It is not a connected Lemmi client. It has now been uploaded and hash-verified on the connected device after a complete verified private backup. Serial output confirms the foundation firmware boots and reports a 320×240 display, including after a separate controlled reboot. Emilia confirms the visible screen and Stop → Unmute → Ready behavior; readability at intended distance, controls under load and audio/camera/network failure checks remain pending; see `hardware-checks.md`. The pinned setup and compile scripts passed on the development Mac; the explicit target build reports 549,947 bytes of program storage and 26,036 bytes of static globals. These are compiler figures, not measured runtime memory or control latency.
 
+## Offline feasibility milestone
+
+A separate `lemmi_feasibility/` sketch now implements local Allow/Stop/expiry camera
+preview and separate tone/mic tests. It is compile-checked and locally uploaded
+with all four image hashes verified. Emilia confirms the startup screen shows camera
+and microphone off; active camera/audio results remain pending. Read [feasibility checks](feasibility-checks.md) for architecture, exact
+commands, measured-versus-proposed limits and the local test procedure. The agent's
+upload attempt was blocked by macOS serial access before any firmware write;
+Emilia subsequently completed the upload from local Terminal. The original foundation sketch and verified private backup are preserved.
+
 ## First test
 
 `lemmi_foundation/lemmi_foundation.ino` shows Ready, Stop and a separate microphone mute setting. Stop latches until an explicit Ready action. Both Ready and Unmute leave capture off. Microphone/speaker initialization is disabled, and camera/network/motion APIs are not initialized. This proves no actual capture/output cancellation until a later audio-enabled hardware test; a software setting is not a physical microphone disconnect.

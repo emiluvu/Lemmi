@@ -9,11 +9,44 @@ Updated November 13, 2026. This is a restart handoff for a new ChatGPT/Codex acc
 - Read `AGENTS.md`, `firmware/stackchan/README.md`, `firmware/stackchan/hardware-checks.md`, `docs/robot-capabilities-spec.md` and `docs/integration-contracts.md`.
 - Keep firmware implementation on this branch. Anay owns backend/contracts, Kylie UI/art, Lukas activity logic/content. Anay’s separate handoff is already on main: `docs/handoffs/anay-device-integration.md` (`236768d`). Do not recreate the scaffold or move firmware onto main as part of resuming.
 
+## Current session continuation (offline feasibility)
+
+This firmware branch now contains `lemmi-feasibility/0.2`, in a separate sketch;
+foundation source and the private original backup are preserved. Read
+[feasibility checks](../../firmware/stackchan/feasibility-checks.md) before continuing.
+That document contains the implementation architecture, exact build/upload/monitor
+commands, pending local procedure and the limits of each diagnostic.
+
+Final compile: 635,075 program bytes / 74,140 static-global bytes, PSRAM disabled.
+Host gate tests and linker-map SCCB ownership checks passed. No tools were installed.
+The agent upload attempt was blocked by macOS `Operation not permitted` at USB
+serial open, before any firmware write. The 16 MB backup integrity dry-run passed;
+original backup/evidence was untouched. New transfer diagnostics go under ignored
+`firmware/stackchan/backups/runs/`, rather than overwriting original evidence.
+Emilia subsequently ran the helper in local Terminal successfully: all four flash
+images hash-verified. The saved private upload manifest matches the current build.
+Emilia confirms the visible 0.2 startup screen says **Lemmi offline test** and
+**Camera / microphone off**, with control boxes. The receive-only monitor confirmed
+`firmware=lemmi-feasibility/0.2 display=320x240 capture=off camera=off` at
+2026-11-14 03:39:50 UTC. Emilia tapped Camera test and saw **Preview on this screen**
+with camera/mic still off. Allow has not been confirmed. Not now was instructed,
+but its result is unreported; the request may since have expired. Next: resume the
+local procedure with Emilia one action at a time, restarting the bounded monitor
+if needed. Decline/expiry, active camera/mic/tone and Stop-latency checks are pending.
+
+The new sketch requires local Allow for a 15-second RGB565 preview, a separate
+local tone action, and Unmute plus a separate 5-second mic test action. No network,
+recording, raw payload logging or movement is implemented. Camera uses an
+application SCCB adapter through M5's bus and a single worker with a pinned internal
+HAL timeout API; review those details before changing SDK versions. Stop/expiry,
+real peripheral coexistence and actual latency still need the local procedure.
+F13/F14 acceptance remains pending.
+
 ## What is running and verified
 
 Stackchan is connected to this Mac at **`/dev/cu.usbmodem2101`**; recheck the port before using it. It is an ESP32-S3 revision v0.2 with 16 MB flash. Secure Boot and flash encryption reported disabled; no eFuses were changed.
 
-The device currently runs **`lemmi-foundation/0.1`** from `firmware/stackchan/lemmi_foundation/lemmi_foundation.ino`:
+Before the successful 0.2 feasibility upload above, the device ran **`lemmi-foundation/0.1`** from `firmware/stackchan/lemmi_foundation/lemmi_foundation.ino`:
 
 - A 320×240 local screen with Ready, Stop and a separate microphone mute setting.
 - No camera/network/motion initialization; microphone/speaker initialization is disabled.
@@ -51,11 +84,11 @@ It contains **esptool 4.12.0 / pyserial 3.5**. Bundled esptool **5.3.0 failed du
 - `tools/monitor.py --port PORT --seconds 30` uses pyserial, sends no commands and prints only allowlisted status lines. Do not run it concurrently with a transfer. Extend its allowlist deliberately for new diagnostics; never print raw image/audio data.
 - Build artifacts, tools, backups and secrets stay ignored. Code and observed results are pushed on the firmware branch.
 
-## Next milestone — requested, research only so far
+## Original next-milestone research (superseded by continuation above)
 
 Emilia said **“continue with the next milestone.”** Agreed direction: an **offline, locally approved camera preview**, with persistent Camera on notice, local Stop and bounded expiry, followed by **separate** speaker and microphone checks. Camera and mic default off; local buttons explicitly activate each test. No recording, raw sample/frame logging, network transmission, vision inference, servo work or simultaneous audio/camera. This is hardware feasibility, not an authenticated caregiver check-in or proof F13 is complete. Secure F13 integration must precede F14 petting/motion polish.
 
-**No code/build/upload for this next milestone has been made.** Only the following source research was completed:
+**At restart commit a7ae270, no milestone code/build/upload existed.** The following was the research baseline; the continuation above records current implementation and check status:
 
 1. The official Stackchan camera example identifies **GC0308**, uses **RGB565**, camera pins D0..D7 = 39,40,41,42,15,16,48,47; VSYNC 46, HREF 38, PCLK 45; SCCB SDA 12/SCL 11; XCLK/PWDN/RESET -1. Verify against the pinned headers and actual sensor. Do not assume native JPEG; Anay’s preliminary frame schema currently permits JPEG only. Any conversion/transport limits need measurement and a contract handoff.
 2. The vendor example calls `M5.In_I2C.release()` before camera init. **Do not copy that blindly:** camera and touch share I²C, and losing touch would lose local Stop. The pinned camera SDK uses the new I²C driver, supports `pin_sccb_sda=-1` with `sccb_i2c_port` to reuse an existing bus, and GC0308 support is enabled. Validate ownership/arbitration and teardown, not just successful init.
@@ -68,3 +101,12 @@ Emilia said **“continue with the next milestone.”** Agreed direction: an **o
 Useful official references: [camera](https://docs.m5stack.com/en/arduino/stackchan/camera), [mic](https://docs.m5stack.com/en/arduino/stackchan/mic), [speaker](https://docs.m5stack.com/en/arduino/stackchan/speaker), [ESP32 camera driver](https://github.com/espressif/esp32-camera), [StackChan BSP](https://github.com/m5stack/StackChan-BSP).
 
 Anay still needs to supply scoped reachable WSS/pairing and complete audio/camera contracts. The starter gateway binds to 127.0.0.1 and is mock-only; changing its hostname or using its fixed mock token is not real device integration. No provider keys or caregiver/private data go into firmware.
+
+## If the next chat cannot access local files
+
+Provide the
+[current branch handoff](https://github.com/emiluvu/Lemmi/blob/emilia/firmware-foundation/docs/handoffs/emilia-resume.md)
+and [feasibility checks](https://github.com/emiluvu/Lemmi/blob/emilia/firmware-foundation/firmware/stackchan/feasibility-checks.md),
+or paste their contents. The original restart baseline is
+[emilia-resume.md at a7ae270](https://github.com/emiluvu/Lemmi/blob/a7ae270/docs/handoffs/emilia-resume.md);
+that immutable link predates the offline feasibility implementation.

@@ -2,7 +2,23 @@
 
 **Updated:** November 13, 2026. Read with `AGENTS.md`, [team start](../team-start.md), [integration contracts](../integration-contracts.md) and [robot capabilities](../robot-capabilities-spec.md).
 
-## Current status
+## Firmware continuation — November 13
+
+The original foundation inventory below predates hardware uploads. Current evidence
+is in [Emilia's resume handoff](emilia-resume.md) and
+[offline feasibility checks](../../firmware/stackchan/feasibility-checks.md).
+Foundation 0.1 was hardware-verified; offline feasibility 0.2 is now uploaded with
+all four images hash-verified, and serial/screen confirm camera/mic off at startup.
+The local camera permission prompt was observed, but active preview/audio and
+Stop/expiry under capture remain untested. No network firmware is implemented.
+
+Shared protocol v1 is a mock baseline to extend together, not a frozen live device
+protocol. The missing live WSS/pairing, capability negotiation, grants/receipts and
+camera control/media contracts below remain unresolved. The offline experiment
+configures RGB565; the shared frame schema accepts JPEG only. Do not freeze that
+encoding or claim hardware camera support before measuring and agreeing the path.
+
+## Original foundation inventory
 
 The shared mock starter is on main (`429225e`). Emilia’s first firmware source is on [emilia/firmware-foundation](https://github.com/emiluvu/Lemmi/tree/emilia/firmware-foundation), initially committed as [`a9b4ae7`](https://github.com/emiluvu/Lemmi/commit/a9b4ae7). It is not merged into main by this handoff.
 

@@ -23,7 +23,14 @@ allowed = {
     "event=mic_unmuted capture=off",
     "event=ready capture=off",
 }
-boot = re.compile(r"firmware=lemmi-foundation/0\.1 display=\d{2,4}x\d{2,4} capture=off camera=off")
+boot = re.compile(r"firmware=(?:lemmi-foundation/0\.1|lemmi-feasibility/0\.2) display=\d{2,4}x\d{2,4} capture=off camera=off")
+diagnostics = re.compile(
+    r"(?:event=camera_allowed local_only=1 limit_ms=15000|"
+    r"event=audio_start kind=(?:mic|tone) ok=[01]|"
+    r"event=test_stop reason=(?:local|expired|declined|mute|audio_error|camera_done|start_timeout) cleanup_ms=\d{1,10} camera_pending=[01]|"
+    r"event=camera_result code=-?\d{1,10} frames=\d{1,10} max_wait_ms=\d{1,10} heap_before=\d{1,10} heap_after=\d{1,10}|"
+    r"event=camera_closed stop_to_closed_ms=\d{1,10} max_loop_gap_ms=\d{1,10})"
+)
 connection = serial.Serial(port=None, baudrate=115200, timeout=0.2, exclusive=True)
 # Set before open to avoid requesting an automatic bootloader/reset transition.
 connection.dtr = False
@@ -40,7 +47,7 @@ try:
         while b"\n" in pending:
             raw, pending = pending.split(b"\n", 1)
             line = raw.decode("ascii", errors="ignore").strip()
-            if line in allowed or boot.fullmatch(line):
+            if line in allowed or boot.fullmatch(line) or diagnostics.fullmatch(line):
                 event = {"time": datetime.now(timezone.utc).isoformat(), "status": line}
                 events.append(event)
                 print(json.dumps(event), flush=True)
