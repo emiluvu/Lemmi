@@ -135,6 +135,17 @@
 
 <h1>Ready when you are{profile ? `, ${profile.preferredName}` : ''}</h1>
 <p>Microphone off. Camera off. Commands below exercise mock state only.</p>
+<section id="conversation" class="card">
+  <h2>Talk with Lemmi</h2>
+  <p>
+    Voice conversation is not connected in this starter. Start a mock session below to try the
+    shared controls; no microphone audio is captured.
+  </p>
+  {#if session && session.phase !== 'ended'}<button
+      onclick={() => command({ type: 'speak' })}
+      disabled={busy || session.phase === 'paused'}>Start conversation</button
+    >{/if}
+</section>
 {#if !session || session.phase === 'ended'}<button onclick={start} disabled={busy || !profile}
     >Start mock session</button
   >{/if}
