@@ -4,6 +4,8 @@ Observed November 13, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
 Deployed backend revision: **`04d050e`**, following the [merge verification handoff](handoffs/anay-backend-deploy-verification.md).
 
+**Undeployed teaching increment, November 14:** `codex/teach-lemmi` adds user-authorized Teach Lemmi handlers to the existing coordinator, reviewed Alex topics, session-only feedback, a fifteen-minute active-time limit and a playable scripted local text demo. Existing OpenRouter/STT/TTS adapters and scoped device controls are reused; no new auth/database/deployment configuration. Local checks: type/Svelte and build passed; 132 automated tests passed, 18 database checks skipped, one existing Windows POSIX-file-permission assertion failed. Browser flow and synthetic device/speech checks passed; actual provider/hardware, durable teaching preference/journal observation and counterpart review remain pending. [Integration handoff](handoffs/lukas-teach-lemmi.md) and [tester manual](teach-lemmi-tester-manual.md) name exact interfaces/limits. This source branch does not alter the deployed revision above.
+
 The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictional Alex integration deployment, not completed P0 scope or readiness for unattended care.
 
 Maintain this deployment/acceptance record alongside the [backend API reference](backend_api.md) whenever backend behavior, configuration, availability or observed checks change. Do not promote unrun checks to passed or treat a new source commit as deployed.
@@ -11,6 +13,8 @@ Maintain this deployment/acceptance record alongside the [backend API reference]
 **Undeployed increment, November 14:** `anay/app-data-schema` reviews Emilia's `4e8993f` draft and promotes only corrected album/playlist metadata in migration `002_media_collections.sql`. PostgreSQL 14.24 upgrade/rollback and existing backend tests pass locally; no public API or shared/deployed database changed. Consent/journal/help/jobs/deletion/camera tables remain proposal-only. See [review, checks and next handoff](handoffs/anay-app-data-schema-review.md). The schema increment is now merged into `main` (`a6f7ff9`) and incorporated into `anay/speech-pipeline`; neither source merge changes the deployed revision recorded above.
 
 ## Deployment
+
+For the undeployed teaching increment, changed-code formatting and whitespace checks passed; repository-wide formatting still reports 83 unchanged files. The deployed services below remain unchanged.
 
 Public origin: **https://lemmi.chaoswarrior.dev**. Open **[/access](https://lemmi.chaoswarrior.dev/access)** to unlock the outer domain gate. `/` intentionally returns 404. The shared access key is stored privately in the host's root `.env`; it does not replace caregiver authentication or device pairing.
 

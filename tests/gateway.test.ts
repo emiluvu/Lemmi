@@ -118,4 +118,31 @@ test('real WebSocket fake-device exchange uses validated snapshots and disconnec
   expect(current.data.phase).toBe('paused');
   expect(current.data.generation).toBeGreaterThan(session.generation);
   expect(current.data.captureGrant).toBeNull();
+  const command = async (type: string) => {
+    const latest = ((await (await call('session.get', { sessionId: session.id })).json()) as any)
+      .data;
+    const response = await call('session.command', {
+      sessionId: latest.id,
+      expectedGeneration: latest.generation,
+      commandId: crypto.randomUUID(),
+      action: { type },
+    });
+    expect(response.status).toBe(200);
+    return ((await response.json()) as any).data;
+  };
+  await command('resume');
+  const teaching = await command('teaching.start');
+  const reply = await call('conversation.submit', {
+    sessionId: session.id,
+    expectedGeneration: teaching.generation,
+    commandId: crypto.randomUUID(),
+    text: 'I like growing roses',
+    language: 'en',
+  });
+  expect(reply.status).toBe(200);
+  expect(reply.headers.get('cache-control')).toBe('no-store');
+  expect(((await reply.json()) as any).data.reply.source).toBe('scripted');
+  const journal = await (await call('journal.load', { profileId: 'profile-alex' })).json();
+  expect(JSON.stringify(journal)).not.toContain('I like growing roses');
+  await command('stop');
 });

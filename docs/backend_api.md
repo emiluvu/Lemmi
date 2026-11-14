@@ -8,6 +8,8 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 
 **Deployed baseline:** `04d050e` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
 
+**Undeployed teaching increment (`codex/teach-lemmi`, November 14):** user-authorized teaching handlers now execute in the existing coordinator. See [the exact integration handoff](handoffs/lukas-teach-lemmi.md) and [tester manual](teach-lemmi-tester-manual.md). Existing authenticated device scope/pairing and mock isolation are unchanged. This branch is for Anay to review, merge and deploy.
+
 ## 1. Availability and ownership
 
 | Surface | Current availability | Integration consumer |
@@ -19,7 +21,8 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 | Local STT/TTS | Private wrapper/adapters implemented; English CPU synthetic checks including a repeated voice run passed locally, but host/human quality remains imperfect | Anay server only |
 | Robot/browser microphone → STT → chat → TTS → playback | Backend capture/STT/chat/TTS/PCM output implemented opt-in and tested with synthetic input/simulated receipts; actual hardware/browser flow pending | Anay + Emilia + Kylie |
 | Photos/guessing/matching | State/pack/action/view/context/event contracts and fixtures exist; three reducers/catalog hosting remain unavailable | Lukas logic; Kylie rendering; Anay host |
-| Camera/health/teaching/preferences | Preliminary contracts/clients/fixtures; executable live integrations remain unavailable | All four owners at their assigned boundaries |
+| Teach Lemmi | Branch-only conversation handlers, reviewed English prompts, active-time expiry, scripted local text demo and synthetic speech/device verification; durable policy/journal observation and hardware acceptance pending | Anay integration; Lukas content; Kylie views; Emilia controls |
+| Camera/health/preferences | Preliminary contracts/clients/fixtures; executable live integrations remain unavailable | All four owners at their assigned boundaries |
 | Production profile/assets REST | PostgreSQL mode enabled on deployed host; scoped participant profile verified live. Caregiver edit/media checks used production fixture smokes; exact routes/limits below | Kylie; Anay data backend |
 | Journal/contact/overview REST | Still planned; no complete review/notification workflow | Kylie; Anay implements |
 | Database / durable jobs / real notifications | PostgreSQL/profile/media/device/session checkpoints implemented optionally; durable jobs and real notifications remain unimplemented | Anay |
@@ -164,7 +167,8 @@ The following table covers every current `operations` entry in [services.ts](../
 | `profile.previews` | `{}` | Preview profile array | Static `Example profile — preview only` cards; no live operations |
 | `session.start` | `profileId, commandId, endpoint` | `SessionSnapshot` | Starts mock session; live start currently WSS only |
 | `session.get` | `sessionId` | `SessionSnapshot` | Reads current mock session; live browser read seam pending |
-| `session.command` | `SessionCommand` below | `SessionSnapshot` | Mock controls/handoff; speak/turn_end/teaching unavailable; live controls WSS below |
+| `session.command` | `SessionCommand` below | `SessionSnapshot` | Mock controls/handoff/teaching; speak/turn_end unavailable; live controls/teaching WSS below |
+| `conversation.submit` | `ConversationTextCommand` | `ConversationTextResult` | Local mock teaching only, scripted replies; never caches text through generic dispatch; live text remains WSS |
 | `activities.list` | `profileId` | `{activityId,packId,packVersion,implemented}[]` | Four mock catalog entries; only music implemented; live catalog pending |
 | `activities.start` | `sessionId,commandId,activityId,packId,packVersion` | `ActivityView` | Only `music_playlist` / `music-demo` / version 1; no real playback |
 | `activities.view` | `sessionId,instanceId` | `ActivityView` | Current mock music view; other reducers/live host pending |
@@ -261,7 +265,7 @@ Session-bound controls require the latest generation and assigned active session
 | `command.ack` | `{mode:'mock'|'live',commandId,applied:boolean}`; receipt of an applied control, **not** proof audio played/contact arrived |
 | `heartbeat` | `{mode:'mock'|'live'}` |
 | `error` | `{code,message,commandId?}`; sanitized stable error |
-| `response.text` | `{turnId,text,language:'en'|'de',source:'model'|'fixed'}`; envelope `turn_id` matches reply turn |
+| `response.text` | `{turnId,text,language:'en'|'de',source:'model'|'fixed'|'scripted'}`; envelope `turn_id` matches reply turn; `scripted` is local mock only |
 
 Socket maximum payload 4,096 bytes; maximum 60 capture frames plus 30 other messages/second (90 total); output backpressure limit 16 KiB. Heartbeat timeout is six seconds, checked every 500 ms (other controls do not substitute for heartbeat). Disconnect/watchdog pauses and clears pending turns; reconnect never resumes capture/media. Credential expiry/revoke ends session and closes access. Firmware must independently stop capture/playback/camera/motion under local Stop/watchdog even when no server acknowledgment can arrive; that hardware behavior is not established by a fake-device test.
 
@@ -313,7 +317,7 @@ The original 20-second post-capture inference deadline also bounds fixed TTS; fr
 
 ### Defined but not executable device events
 
-Camera allow/decline/started/ended and device.health schemas remain preliminary; the gateway does not execute them. Production activity event streaming, robot teaching commands and expression rendering remain pending. Never infer camera or activity permission from negotiated audio.
+Camera allow/decline/started/ended and device.health schemas remain preliminary; the gateway does not execute them. Production activity event streaming, physical robot teaching integration and expression rendering remain pending. On this branch, `input.teaching.start|next|not_sure|finish|prefer|avoid` use empty payloads and existing scoped session/generation/sequence checks. `device.ready.teaching:true` advertises these handlers. Start/Next/Not sure/Avoid request reviewed opening TTS only for a negotiated endpoint; normal consumed-playback receipts apply. Never infer camera or activity permission from negotiated audio.
 
 ## 7. Session, activity and data projections
 
@@ -321,7 +325,9 @@ Camera allow/decline/started/ended and device.health schemas remain preliminary;
 
 `SessionSnapshot` includes `id,profileId,generation,profileRevision,privacyRevision,policyRevision,phase,endpoint,leaseId,micMuted,captureGrant,communicationSupport,conversationMode,teaching,mode`. Endpoint is `browser|robot`; phase enum is `ready|listening|processing|speaking|waiting|paused|unavailable|ended`. Not all schema phases are reachable in the current transport. A nonnull capture grant is legal only while current/unmuted/listening with matching generation/lease; this feature branch grants one only through explicit negotiated `input.speak`; deployment/hardware acceptance remains separate.
 
-`SessionCommand = {commandId,sessionId,expectedGeneration,action}`. Runtime actions: `pause`, `resume`, `stop`, `{type:'mute',muted}`, `{type:'handoff',endpoint}`. Schema additionally defines `speak`, `turn_end` and teaching actions, but they return unavailable. Mock HTTP supports handoff; the live device event union has no handoff event yet. Resume is explicit and capture-off, Stop is terminal, and initiated help requests have their own lifecycle.
+`SessionCommand = {commandId,sessionId,expectedGeneration,action}`. Runtime actions: `pause`, `resume`, `stop`, `{type:'mute',muted}`, `{type:'handoff',endpoint}`, `teaching.start`, `teaching.next`, `teaching.not_sure`, `teaching.finish`, `teaching.prefer`, `teaching.avoid`. `speak` and `turn_end` remain unavailable through this generic command path; negotiated speech uses its dedicated wire events. Mock HTTP supports handoff; the live device event union has no handoff event yet. Resume is explicit and capture-off, Stop is terminal, and initiated help requests have their own lifecycle.
+
+Teaching snapshots require nullable `topicLabel` and `prompt` in addition to their existing fields. English reviewed topics are selected from eligible caregiver interests, with no images in this increment. Finish or fifteen active minutes returns to open/ready/capture-off; topic changes do not reset time. Pauses, disconnects and no-eligible-topic waiting exclude elapsed time. Feedback and uncertainty are session-only here; no durable preference/retirement/journal observation commits. Authoritative policy updates use the internal `applyTeachingEligibility` hook and pause/cancel obsolete work; clients cannot call it. See the [teaching handoff](handoffs/lukas-teach-lemmi.md) for revision rules and voice-topic-change limitations.
 
 ### Activity integration: Lukas → coordinator → Kylie
 
@@ -429,7 +435,7 @@ The following come from the technical/integration/robot/personalization specs an
 | Contacts/help/jobs | Verified contacts/test, `/v1/help-requests` plus status/acknowledge/cancel/resolve, signed notification callbacks and durable jobs | Anay A21/A22; real opted-in team tests |
 | Preferences | Profile preference load/edit/forget/remembering and presentation-bound signals | Anay A24/A25; Lukas eligibility/effects; Kylie controls |
 | Camera | Device check-in request, `/v1/check-ins/:id` status/end, nonce-bound control and separate bounded media relay | Anay A28–A32; Emilia/Kylie; F13 before F14 |
-| Teaching/scene/overview refinements | Session teaching actions/prompt selection, approved photo scene packs and source-linked highlights | Anay A26/A27; reuse conversation/four-activity seams |
+| Teaching/scene/overview refinements | Teaching handlers now branch-implemented; durable policy/journal observations, physical integration, approved photo scene packs and source-linked highlights remain | Anay A26/A27; reuse conversation/four-activity seams |
 | Device health | Freshness/validated measured telemetry after secure F13 gate | Anay A33 + Emilia/Kylie |
 
 Camera is default-off and requires current local Allow for each request; request/relay/state/expiry are not made functional by preliminary headers. End video leaves activities paused; mic mute is not camera-off. Raw frame data never enters models/journal/jobs. Matching retirement and remembered preferences need separate consent/storage/late-write protection; schemas alone do not implement policy. No automatic biography/support-preset writes, clinical scoring or model-chosen actions/contact destinations are part of the API.

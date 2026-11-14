@@ -435,6 +435,7 @@ export function startControlGateway(options: Options) {
               : false,
             camera: false,
             textChat: !!options.chatAdapter,
+            teaching: true,
             controls: [
               'start',
               'stop',
@@ -623,7 +624,8 @@ export function startControlGateway(options: Options) {
           });
         } else if (
           current &&
-          ['input.stop', 'input.pause', 'input.resume', 'input.mute'].includes(event.type)
+          (['input.stop', 'input.pause', 'input.resume', 'input.mute'].includes(event.type) ||
+            event.type.startsWith('input.teaching.'))
         ) {
           const action =
             event.type === 'input.mute' && 'muted' in event.payload
@@ -642,6 +644,39 @@ export function startControlGateway(options: Options) {
           );
         emit(ws, 'command.ack', { mode: 'live', commandId: event.event_id, applied: result.ok });
         if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
+        if (
+          result.ok &&
+          ws.data.playbackRates.length &&
+          [
+            'input.teaching.start',
+            'input.teaching.next',
+            'input.teaching.not_sure',
+            'input.teaching.avoid',
+          ].includes(event.type)
+        ) {
+          const selected = coordinator.snapshot()!;
+          if (selected.teaching?.prompt)
+            void coordinator
+              .speakTeachingPrompt(
+                {
+                  sessionId: selected.id,
+                  expectedGeneration: selected.generation,
+                  commandId: event.event_id,
+                  language: 'en',
+                },
+                ws.data.playbackRates,
+              )
+              .then((spoken) => {
+                if (!spoken.ok && sockets.has(ws))
+                  error(ws, spoken.error.code, spoken.error.message, event.event_id);
+                broadcast();
+              })
+              .catch(() => {
+                if (sockets.has(ws))
+                  error(ws, 'UNAVAILABLE', 'Teaching prompt playback unavailable', event.event_id);
+                broadcast();
+              });
+        }
         broadcast();
       },
       close(ws) {
@@ -654,6 +689,7 @@ export function startControlGateway(options: Options) {
   });
   let checkingDatabase = false;
   const watchdog = setInterval(() => {
+    if (coordinator.sweepTeaching()) broadcast();
     if (coordinator.sweepSpeech()) {
       for (const socket of sockets)
         if (socket.data.playbackRates.length)

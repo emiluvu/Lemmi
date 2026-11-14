@@ -335,6 +335,8 @@ Show one approved, policy-eligible object/topic, with optional image and supplie
 
 Persistent choices: Speak now, Different topic, Not sure, Finish and shared Pause/Stop/Get help. A refusal changes topic without persuasion; object-specific uncertainty uses the existing first-occasion/session-hide and later retirement policy. Generic silence/STT failure is not a negative preference or inability signal. No automatic rephrasing/retest loop. While policy saves, output cancels or service fails, show the actual pending/paused/unavailable state; never silently repeat an excluded topic. No eligible topics offers music, just look or finish. Camera/pause/stop/profile changes invalidate the prompt and pending answer.
 
+The requested teaching limit is fifteen minutes of active conversation, including waiting, generation and output; pause/disconnect and no-eligible-topic waiting do not accrue time. Do not display a countdown. At the limit finish teaching, cancel pending capture/generation/output and return to ready with capture off. Different topic does not reset elapsed time. The current local text demo and source implementation limits are described in the [tester manual](teach-lemmi-tester-manual.md); durable observations and later-session retirement are still integration work.
+
 ### First visit and growing familiarity
 
 Start with a short greeting and neutral approved choices when profile context is sparse. Ask one optional general interest question rather than a biography questionnaire. Later suggestions use permitted explicit/tentative preferences, rotate topics and honor avoid/retired policy. Never fill missing profile fields from model guesses or claim recall of an unretained conversation.

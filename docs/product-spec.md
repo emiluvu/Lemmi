@@ -144,6 +144,8 @@ Use **Conversation support**, not a clinical “dementia scale”: Conversationa
 
 Lemmi selects a simple approved and currently eligible object/topic and invites the participant to teach it: “Here is a watering can. Would you like to tell me how someone uses it?” Keep the object/name visible if helpful; never require identification or a correct answer. Accept an optional explanation with a brief acknowledgment, at most one gentle follow-up, and Change topic / Not sure / Finish. No explanation is graded, challenged, stored as verified biography or used as evidence of ability. Refusal/uncertainty follows F15/F16 eligibility/retirement; move on without probing. Use existing conversation, privacy, help and cancellation services.
 
+End teaching after fifteen minutes of active conversation without a visible countdown, excluding pauses and unavailable-topic waiting. A clear Stop request ends the session immediately through the existing controls. Silence, short answers and uncertain recognition never imply disinterest or negative preference. Retain only explicitly permitted data through existing consent/storage services; missing retention support means no teaching-content save.
+
 ### F4 — Photo album talk
 
 - Select an approved album and move next/previous without inventing captions or relationships.

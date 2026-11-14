@@ -18,6 +18,7 @@ import {
   type Result,
 } from './common';
 import { SessionSnapshotSchema, SessionCommandSchema, EndpointSchema } from './session';
+import { ConversationTextCommandSchema, ConversationTextResultSchema } from './conversation';
 import {
   ActivityIdSchema,
   ActivityViewSchema,
@@ -81,6 +82,7 @@ const operation = <I extends z.ZodType, O extends z.ZodType>(input: I, output: O
   output,
 });
 export const operations = {
+  'conversation.submit': operation(ConversationTextCommandSchema, ConversationTextResultSchema),
   'device.pair': operation(PairDeviceInputSchema, PairDeviceResultSchema),
   'device.claim': operation(ClaimDeviceInputSchema, ClaimDeviceResultSchema),
   'device.revoke': operation(RevokeDeviceInputSchema, RevokeDeviceResultSchema),
@@ -210,6 +212,9 @@ export function createClients(transport: ServiceTransport) {
     listener: (value: Result<OperationOutput<K>>) => void,
   ) => subscribeOperation(transport, op, input, listener);
   return {
+    conversation: {
+      submit: (input: OperationInput<'conversation.submit'>) => call('conversation.submit', input),
+    },
     device: {
       pair: (input: OperationInput<'device.pair'>) => call('device.pair', input),
       claim: (input: OperationInput<'device.claim'>) => call('device.claim', input),

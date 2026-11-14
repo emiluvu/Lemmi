@@ -18,7 +18,7 @@ export function routeParticipantText(text: string): InputRoute {
     .replace(/[.!?…]+$/u, '')
     .replace(/\s+/g, ' ');
   if (
-    /^(stop|please stop|stop please|stop talking|i (?:do not|don't) want to (?:talk|play)|stopp|bitte stopp|hör auf|bitte hör auf|hoer auf|ich möchte aufhören|ich will nicht spielen)$/.test(
+    /^(stop|please stop|stop (?:please|now|talking)|stop (?:the )?(?:game|activity)|i (?:do not|don't|dont) want to (?:talk|play)(?: (?:this|this game|the game|this activity))?(?: anymore| any more)?|i (?:want|would like) to stop|can we stop|let's stop|i(?:'m| am) done|finish|stopp|bitte stopp|hör auf|bitte hör auf|hoer auf|ich möchte aufhören|ich will nicht spielen)$/.test(
       value,
     )
   )

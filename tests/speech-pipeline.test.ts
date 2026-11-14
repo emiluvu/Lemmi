@@ -121,6 +121,66 @@ const tick = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };
 
+test('teaching deadline cancels queued prompt audio and an in-flight prompt synthesis', async () => {
+  const queued = setup();
+  queued.control({ type: 'teaching.start' });
+  const s = queued.coordinator.snapshot()!;
+  expect(
+    (
+      await queued.coordinator.speakTeachingPrompt(
+        {
+          sessionId: s.id,
+          expectedGeneration: s.generation,
+          commandId: 'read-prompt',
+          language: 'en',
+        },
+        [22050],
+      )
+    ).ok,
+  ).toBe(true);
+  expect(queued.coordinator.speechOutputInfo()).not.toBeNull();
+  queued.advance(15 * 60_000);
+  expect(queued.coordinator.sweepTeaching()).toBe(true);
+  expect(queued.coordinator.speechOutputInfo()).toBeNull();
+  expect(queued.output.every((byte) => byte === 0)).toBe(true);
+  expect(queued.coordinator.snapshot()?.captureGrant).toBeNull();
+
+  let finish!: (value: any) => void, canceled!: AbortSignal;
+  const late = setup({
+    tts: {
+      synthesize(_input, signal) {
+        canceled = signal;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    },
+  });
+  late.control({ type: 'teaching.start' });
+  const t = late.coordinator.snapshot()!;
+  const pending = late.coordinator.speakTeachingPrompt(
+    {
+      sessionId: t.id,
+      expectedGeneration: t.generation,
+      commandId: 'pending-prompt',
+      language: 'en',
+    },
+    [22050],
+  );
+  await tick();
+  late.control({ type: 'mute', muted: true });
+  expect(canceled.aborted).toBe(false); // mic mute does not cancel unrelated approved output
+  late.advance(15 * 60_000);
+  late.coordinator.sweepTeaching();
+  expect(canceled.aborted).toBe(true);
+  const pcm = new Uint8Array(882).fill(9);
+  finish(ok({ pcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }));
+  expect((await pending).ok).toBe(false);
+  await tick();
+  expect(pcm.every((byte) => byte === 0)).toBe(true);
+  expect(late.coordinator.snapshot()?.teaching).toBeNull();
+});
+
 test('speech deadlines retain epoch shape but follow elapsed time despite wall-clock corrections', () => {
   let wall = 1_800_000_000_000,
     elapsed = 100;
