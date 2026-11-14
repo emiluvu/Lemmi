@@ -9,6 +9,7 @@
     "check": "bun --bun svelte-kit sync && bun --bun svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "@echogarden/fvad-wasm": "0.2.0",
     "@lemmi/contracts": "workspace:*",
     "@lemmi/server": "workspace:*",
     "svelte": "5.57.3"

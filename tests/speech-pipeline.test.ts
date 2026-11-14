@@ -36,6 +36,7 @@ function setup(overrides: Partial<SpeechAdapters> & { chat?: ChatAdapter } = {})
       },
     },
     {
+      onTiming: overrides.onTiming,
       stt: overrides.stt ?? {
         async transcribe(input, signal) {
           seen.input = input.pcm;
@@ -386,6 +387,64 @@ test('STT → chat → TTS is transient, output waits for truthful receipts and 
   expect(f.output.every((x) => x === 0)).toBe(true);
   expect(receipt('completed', 12).ok).toBe(false);
   expect(JSON.stringify(c.persistenceSnapshot())).not.toContain('garden');
+});
+
+test('speech timings contain only stage durations, and observer failure cannot break a turn', async () => {
+  const timings: unknown[] = [];
+  let f: ReturnType<typeof setup>;
+  f = setup({
+    onTiming: (timing) => {
+      timings.push(timing);
+      throw new Error('Observer unavailable');
+    },
+    stt: {
+      async transcribe() {
+        f.advance(120);
+        return ok({ text: 'A fictional garden greeting', language: 'en' });
+      },
+    },
+    chat: {
+      async complete() {
+        f.advance(230);
+        return ok({ text: 'We can enjoy the garden.', language: 'en' });
+      },
+    },
+    tts: {
+      async synthesize() {
+        f.advance(340);
+        return ok({
+          pcm: new Uint8Array(882),
+          sampleRate: 22050,
+          channels: 1,
+          encoding: 'pcm_s16le',
+          language: 'en',
+        });
+      },
+    },
+  });
+  ready(f);
+  f.advance(4000); // Capture/waiting are excluded from backend response duration.
+  expect(f.chunk().ok).toBe(true);
+  const scope = f.scope();
+  expect((await f.end()).ok).toBe(true);
+  const output = f.coordinator.drainSpeechOutput()!;
+  f.advance(50);
+  expect(
+    f.coordinator.playbackReceipt({
+      ...scope,
+      streamId: output.metadata.streamId,
+      status: 'started',
+      playedChunks: 0,
+    }).ok,
+  ).toBe(true);
+  expect(timings).toEqual([
+    { stage: 'stt', durationMs: 120 },
+    { stage: 'reply', durationMs: 230 },
+    { stage: 'tts', durationMs: 340 },
+    { stage: 'turn_end_to_playback_receipt', durationMs: 740 },
+  ]);
+  f.control({ type: 'stop' });
+  expect(f.coordinator.speechOutputInfo()).toBeNull();
 });
 
 test('capture gaps, backlog, incomplete end, expiration and frame bounds invalidate capture', async () => {

@@ -128,6 +128,8 @@ In Quiet companionship, completion of speech returns to capture-off `waiting`; n
 
 ### Proposed timing defaults
 
+Undeployed implementation note: [browser turn ending](handoffs/natural-speech-turns.md) implements the four-second post-speech default with local WebRTC detection and retains **Finish speaking**. Initial silence uses the existing **paused** cancellation path and visible Resume invitation rather than the waiting target below. No silence is submitted to the model or automatic continuation added. Physical microphone/room acceptance remains pending.
+
 - Allow 15 seconds of initial silence during a listening turn before moving to waiting. Show one gentle invitation to tap **Speak now**; do not repeat it automatically.
 - After detected speech, allow 4 seconds of silence before completing the turn. **I'm finished** allows earlier submission. Tune this with the selected speech service during rehearsal; do not present it as a validated dementia setting.
 - If no usable transcript is returned, offer one gentle retry. Repeated failure leaves **Try speaking again**, **Type instead**, and **Stop** available without repeatedly prompting aloud.

@@ -1,5 +1,7 @@
 # Lemmi backend integration reference
 
+**Undeployed speech candidate:** `anay/natural-speech-turns` adds optional `LEMMI_SPEECH_DIAGNOSTICS=1` gateway stage/duration records without content/identifiers. Internal `SpeechAdapters.onTiming` survives scheduling. Browser ending sends existing authorized `audio.end`; no-speech uses existing `input.pause`. HTTP/WSS schemas, access rules and deployed endpoints are unchanged. [Browser configuration, timing definitions and limitations](handoffs/natural-speech-turns.md).
+
 This is the current implementation reference for **Kylie's frontend, Emilia's firmware, Lukas's activities and Anay's speech/services**. Update it whenever a backend-facing route, schema, event, authorization rule, configuration key or availability changes. Runtime schemas/source remain authoritative; a proposed interface is not permission to invent a parallel backend.
 
 **Runtime scope:** the speech pipeline and fixed concern-response correction are deployed in `17a8522`, including persistent-key and chat/support squash commits `c402edc`/`430269f`. The host’s public speech opt-in remains disabled; implementation/fixture readiness does not authorize microphone capture or prove hardware acceptance. See [backend status](backend-status.md).

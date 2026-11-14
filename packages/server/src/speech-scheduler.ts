@@ -66,6 +66,7 @@ export function createScheduledSpeechAdapters(
     });
   }
   return {
+    onTiming: adapters.onTiming,
     stt: {
       transcribe: (input, signal) => schedule(signal, () => adapters.stt.transcribe(input, signal)),
     },

@@ -1,5 +1,7 @@
 # Lemmi backend status
 
+**Undeployed speech candidate — `anay/natural-speech-turns`:** optional content-free stage/receipt timings (`LEMMI_SPEECH_DIAGNOSTICS=1`) through the existing coordinator/scheduler, with browser turn ending on integration base `a7d5528`. No API/schema/database/voice/firmware replacement. The deployed revision below is unchanged. [Behavior, configuration and observed limits](handoffs/natural-speech-turns.md); final checks are in the build plan.
+
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
 Deployed backend runtime revision: **`17a8522`**, integrating `anay/multi-profile-endpoints` (`284dcb7`) with the later persistent-key/chat-support compatibility fixes. Later documentation-only commits do not require a runtime restart.

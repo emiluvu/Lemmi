@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { BrowserAudio } from './browser-audio.ts';
+  import {
+    PUBLIC_LEMMI_AUTO_TURN_END,
+    PUBLIC_LEMMI_END_SILENCE_MS,
+    PUBLIC_LEMMI_SPEECH_DIAGNOSTICS,
+  } from '$app/env/public';
   import AvatarArt from './AvatarArt.svelte';
   import TeachingChoices from './TeachingChoices.svelte';
   import { mayPresentReply } from '#lib/participant-presentation.ts';
@@ -172,6 +177,13 @@
       (value) => {
         message = value;
       },
+      {
+        automatic: PUBLIC_LEMMI_AUTO_TURN_END,
+        silenceMs: PUBLIC_LEMMI_END_SILENCE_MS,
+        onTiming: PUBLIC_LEMMI_SPEECH_DIAGNOSTICS
+          ? (timing) => console.info('Lemmi browser speech timing', JSON.stringify(timing))
+          : undefined,
+      },
     );
     connection.connect();
   }
@@ -289,7 +301,9 @@
   </header>
   <p>
     Fictional participant demo. {listening
-      ? 'Microphone listening — tap Finish speaking when ready.'
+      ? PUBLIC_LEMMI_AUTO_TURN_END
+        ? 'Microphone listening — listening ends after a pause in your speech. You can also tap Finish speaking.'
+        : 'Microphone listening — tap Finish speaking when ready.'
       : 'Microphone off.'} Camera off.
   </p>
   {#if assignment}

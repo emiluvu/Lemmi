@@ -209,7 +209,15 @@ if (process.env.LEMMI_MODE === 'live') {
     )
       throw new Error('Enable valid independent STT/TTS configuration before speech startup');
     if (!llm.ok) throw new Error('Configure OpenRouter before enabling the speech pipeline');
-    speech = createLocalSpeechAdapters(selected.data);
+    speech = {
+      ...createLocalSpeechAdapters(selected.data),
+      ...(process.env.LEMMI_SPEECH_DIAGNOSTICS === '1'
+        ? {
+            onTiming: (timing: import('@lemmi/server').SpeechTiming) =>
+              console.info('Lemmi speech timing', JSON.stringify(timing)),
+          }
+        : {}),
+    };
   }
   const config = dataConfig();
   const repository = config ? await openData(config) : undefined;

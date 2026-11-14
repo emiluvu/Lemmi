@@ -1,5 +1,20 @@
 import type { ServerEvent, SessionSnapshot, SpeechOutputStart } from '@lemmi/contracts';
 import type { ParticipantConnection } from '@lemmi/contracts';
+import { TurnEnd } from './turn-end';
+import { loadVoiceDetector, type VoiceDetector } from './webrtc-vad';
+
+export type BrowserSpeechTiming = {
+  stage: 'capture' | 'turn_end_to_scheduled_playback' | 'playback_gap';
+  durationMs: number;
+  reason?: 'manual' | 'silence' | 'limit';
+};
+export interface BrowserAudioOptions {
+  automatic?: boolean;
+  silenceMs?: number;
+  loadDetector?: () => Promise<VoiceDetector>;
+  now?: () => number;
+  onTiming?: (timing: BrowserSpeechTiming) => void;
+}
 
 // Transient browser PCM only. Every capture begins with a user gesture and a server grant.
 export class BrowserAudio {
@@ -8,11 +23,17 @@ export class BrowserAudio {
   private processor: ScriptProcessorNode | null = null;
   private input: MediaStreamAudioSourceNode | null = null;
   private grant: SessionSnapshot['captureGrant'] = null;
+  private captureToken: SessionSnapshot | null = null;
   private samples: number[] = [];
   private position = 0;
   private chunks = 0;
   private deadline: ReturnType<typeof setTimeout> | null = null;
+  private initialSilence: ReturnType<typeof setTimeout> | null = null;
   private epoch = 0;
+  private detector: VoiceDetector | null = null;
+  private turnEnd: TurnEnd | null = null;
+  private captureBegan = 0;
+  private submitted: { turnId: string; at: number } | null = null;
   // Paused playback requires an application-owned fixed text reply at the exact
   // current authority snapshot. Pause alone never grants permission for audio.
   private fixedReply: { token: SessionSnapshot; turnId: string } | null = null;
@@ -25,18 +46,66 @@ export class BrowserAudio {
     started: boolean;
     next: number;
     nodes: Set<AudioBufferSourceNode>;
+    submittedAt?: number;
   } | null = null;
   constructor(
     private readonly connection: ParticipantConnection,
     private readonly state: (listening: boolean) => void,
     private readonly error: (message: string) => void,
+    private readonly options: BrowserAudioOptions = {},
   ) {}
+  private now() {
+    return this.options.now?.() ?? performance.now();
+  }
+  private timing(timing: BrowserSpeechTiming) {
+    // Diagnostics are optional, content-free, and cannot interrupt controls.
+    try {
+      this.options.onTiming?.(timing);
+    } catch {}
+  }
   async speak() {
     this.cancelInput();
     const epoch = this.epoch;
     try {
       this.context ??= new AudioContext();
       await this.context.resume();
+      if (this.options.automatic !== false) {
+        let expired = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const loading = (this.options.loadDetector ?? loadVoiceDetector)().then((detector) => {
+            if (expired || epoch !== this.epoch) {
+              detector.destroy();
+              return null;
+            }
+            return detector;
+          });
+          const detector = await Promise.race([
+            loading,
+            new Promise<null>((resolve) => {
+              timer = setTimeout(() => {
+                expired = true;
+                resolve(null);
+              }, 3000);
+            }),
+          ]);
+          if (epoch !== this.epoch) {
+            detector?.destroy();
+            return;
+          }
+          this.detector = detector;
+          if (!detector) throw new Error('Detector timed out');
+          this.turnEnd = new TurnEnd(this.options.silenceMs);
+        } catch {
+          if (epoch !== this.epoch) return;
+          this.detector?.destroy();
+          this.detector = null;
+          this.error('Automatic turn ending is unavailable. Tap Finish speaking when ready.');
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+      if (epoch !== this.epoch) return;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true },
         video: false,
@@ -63,22 +132,24 @@ export class BrowserAudio {
       }
     }
   }
-  private begin(grant: NonNullable<SessionSnapshot['captureGrant']>) {
+  private begin(grant: NonNullable<SessionSnapshot['captureGrant']>, session: SessionSnapshot) {
     if (!this.stream || !this.context) return;
     if (this.deadline) clearTimeout(this.deadline);
     this.stream.getAudioTracks().forEach((track) => {
       track.enabled = true;
     });
     this.grant = grant;
+    this.captureToken = { ...session };
     this.chunks = 0;
     this.samples = [];
     this.position = 0;
+    this.captureBegan = this.now();
     this.input = this.context.createMediaStreamSource(this.stream);
     this.processor = this.context.createScriptProcessor(2048, 1, 1);
     this.input.connect(this.processor);
     this.processor.connect(this.context.destination);
     this.processor.onaudioprocess = (event) => {
-      if (!this.grant || !this.context) return;
+      if (this.grant !== grant || !this.context) return;
       const input = event.inputBuffer.getChannelData(0);
       this.samples.push(...input);
       const ratio = this.context.sampleRate / 16000;
@@ -94,6 +165,16 @@ export class BrowserAudio {
           this.position += ratio;
         }
         const data = btoa(String.fromCharCode(...pcm));
+        let decision: 'continue' | 'finished' | 'no_speech' = 'continue';
+        try {
+          if (this.detector && this.turnEnd)
+            decision = this.turnEnd.push(this.detector.process(pcm));
+        } catch {
+          this.detector?.destroy();
+          this.detector = null;
+          this.turnEnd = null;
+          this.error('Automatic turn ending stopped. Tap Finish speaking when ready.');
+        }
         pcm.fill(0);
         if (
           !this.connection.send(
@@ -112,34 +193,63 @@ export class BrowserAudio {
           this.cancelInput();
           return;
         }
-        if (this.chunks >= 1000) {
-          this.finish();
+        if (decision === 'no_speech') {
+          this.noSpeech();
+          return;
+        }
+        if (decision === 'finished' || this.chunks >= 975) {
+          this.finish(decision === 'finished' ? 'silence' : 'limit');
           return;
         }
       }
       const consumed = Math.floor(this.position);
+      this.samples.fill(0, 0, consumed);
       this.samples.splice(0, consumed);
       this.position -= consumed;
     };
     this.state(true);
-    this.deadline = setTimeout(() => this.finish(), 19500);
+    if (this.turnEnd)
+      this.initialSilence = setTimeout(() => {
+        if (this.grant === grant && this.turnEnd && !this.turnEnd.heardSpeech) this.noSpeech();
+      }, 15000);
+    this.deadline = setTimeout(() => {
+      if (this.turnEnd && !this.turnEnd.heardSpeech) this.noSpeech();
+      else this.finish('limit');
+    }, 19500);
   }
-  finish() {
+  private noSpeech() {
+    this.cancelInput();
+    // Reuse the existing explicit pause path: no empty recognition/model request.
+    this.connection.send('input.pause');
+    this.error('No speech detected. Listening is paused. Resume when you are ready.');
+  }
+  finish(reason: 'manual' | 'silence' | 'limit' = 'manual') {
     const grant = this.grant;
     const count = this.chunks;
+    const durationMs = Math.max(0, Math.round(this.now() - this.captureBegan));
     this.cancelInput();
-    if (grant && count)
-      this.connection.send(
+    if (grant && count) {
+      const sent = this.connection.send(
         'audio.end',
         { leaseId: grant.leaseId, streamId: grant.streamId, chunkCount: count },
         false,
         grant.turnId,
       );
-    else if (grant) this.connection.send('input.pause');
+      if (sent) {
+        this.submitted = { turnId: grant.turnId, at: this.now() };
+        this.timing({ stage: 'capture', durationMs, reason });
+      } else this.error('Connection unavailable. Your speech was not submitted.');
+    } else if (grant) this.connection.send('input.pause');
   }
   cancelInput() {
     this.epoch++;
+    this.submitted = null;
+    this.detector?.destroy();
+    this.detector = null;
+    this.turnEnd = null;
     if (this.deadline) clearTimeout(this.deadline);
+    if (this.initialSilence) clearTimeout(this.initialSilence);
+    this.initialSilence = null;
     this.deadline = null;
     if (this.processor) {
       this.processor.onaudioprocess = null;
@@ -154,6 +264,7 @@ export class BrowserAudio {
     this.samples = [];
     this.position = 0;
     this.grant = null;
+    this.captureToken = null;
     this.chunks = 0;
     this.state(false);
   }
@@ -238,8 +349,15 @@ export class BrowserAudio {
         return;
       }
       if (session.phase !== 'paused') this.fixedReply = null;
+      if (
+        this.captureToken &&
+        (!this.sameAuthority(this.captureToken, session) ||
+          session.captureGrant?.turnId !== this.grant?.turnId ||
+          session.captureGrant?.streamId !== this.grant?.streamId)
+      )
+        this.cancelInput();
       if (session.captureGrant && !session.micMuted && session.phase === 'listening') {
-        if (!this.grant && this.stream) this.begin(session.captureGrant);
+        if (!this.grant && this.stream) this.begin(session.captureGrant, session);
       } else if (this.grant) this.cancelInput();
       if (
         this.output &&
@@ -266,6 +384,7 @@ export class BrowserAudio {
       )
         return;
       const fixedReply = this.fixedReply;
+      const submitted = this.submitted;
       this.cancel();
       this.fixedReply = fixedReply;
       if (!this.context || this.context.state !== 'running') {
@@ -292,6 +411,7 @@ export class BrowserAudio {
         started: false,
         next: this.context.currentTime + 0.03,
         nodes: new Set(),
+        submittedAt: submitted?.turnId === event.payload.turnId ? submitted.at : undefined,
       };
     }
     if (event.type === 'audio.chunk' || event.type === 'audio.end') {
@@ -346,6 +466,19 @@ export class BrowserAudio {
       output.nodes.add(source);
       output.received++;
       const playAt = Math.max(output.next, context.currentTime);
+      if (output.received === 1 && output.submittedAt !== undefined)
+        this.timing({
+          stage: 'turn_end_to_scheduled_playback',
+          durationMs: Math.max(
+            0,
+            Math.round(this.now() - output.submittedAt + (playAt - context.currentTime) * 1000),
+          ),
+        });
+      if (output.received > 1 && context.currentTime > output.next)
+        this.timing({
+          stage: 'playback_gap',
+          durationMs: Math.round((context.currentTime - output.next) * 1000),
+        });
       output.next = playAt + buffer.duration;
       source.onended = () => {
         if (this.output !== output) return;

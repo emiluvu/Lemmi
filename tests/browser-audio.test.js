@@ -1,8 +1,12 @@
 import { test, expect } from 'bun:test';
 import { BrowserAudio } from '../apps/web/src/lib/features/browser-audio.ts';
-function fixture() {
+function fixture(options = {}) {
   const sent = [];
   const listeners = [];
+  const processors = [];
+  const errors = [];
+  const timings = [];
+  let now = 0;
   const track = {
     enabled: true,
     stopped: false,
@@ -22,7 +26,9 @@ function fixture() {
       return { connect() {}, disconnect() {} };
     }
     createScriptProcessor() {
-      return { connect() {}, disconnect() {}, onaudioprocess: null };
+      const processor = { connect() {}, disconnect() {}, onaudioprocess: null };
+      processors.push(processor);
+      return processor;
     }
     createBuffer(_channels, count) {
       const data = new Float32Array(count);
@@ -71,7 +77,8 @@ function fixture() {
   const audio = new BrowserAudio(
     connection,
     (value) => states.push(value),
-    () => {},
+    (error) => errors.push(error),
+    { automatic: false, now: () => now, onTiming: (timing) => timings.push(timing), ...options },
   );
   return {
     audio,
@@ -80,6 +87,28 @@ function fixture() {
     listeners,
     session,
     states,
+    errors,
+    timings,
+    processors,
+    advance(ms) {
+      now += ms;
+    },
+    grant() {
+      session.phase = 'listening';
+      session.captureGrant = { turnId: 'turn', leaseId: 'lease', streamId: 'input', generation: 1 };
+      audio.receive(event('state.changed', { session: { ...session } }), 'browser');
+      processors
+        .at(-1)
+        .onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(1) } });
+    },
+    frames(voice, count) {
+      for (let i = 0; i < count; i++) {
+        now += 20;
+        processors.at(-1).onaudioprocess?.({
+          inputBuffer: { getChannelData: () => new Float32Array(960).fill(voice ? 0.2 : 0) },
+        });
+      }
+    },
     restore() {
       audio.close();
       globalThis.AudioContext = original;
@@ -123,6 +152,233 @@ test('browser microphone remains disabled until grant and Stop closes tracks', a
     f.audio.cancel();
     expect(f.track.stopped).toBe(true);
     expect(f.states.at(-1)).toBe(false);
+  } finally {
+    f.restore();
+  }
+});
+
+function automatic(overrides = {}) {
+  const detector = {
+    closed: false,
+    process: (pcm) => new DataView(pcm.buffer).getInt16(20, true) !== 0,
+    destroy() {
+      this.closed = true;
+    },
+  };
+  return {
+    detector,
+    ...fixture({ automatic: true, loadDetector: async () => detector, ...overrides }),
+  };
+}
+
+test('automatic turn ending tolerates thinking pauses and resumed speech, then submits exactly once', async () => {
+  const f = automatic();
+  try {
+    await f.audio.speak();
+    expect(f.track.enabled).toBe(false);
+    f.grant();
+    f.frames(true, 15);
+    f.frames(false, 180); // 3.6 seconds is still a thinking pause.
+    expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(0);
+    f.frames(true, 10);
+    f.frames(false, 199);
+    expect(f.track.stopped).toBe(false);
+    f.frames(false, 1);
+    expect(f.track.stopped).toBe(true);
+    expect(f.detector.closed).toBe(true);
+    const end = f.sent.filter(([type]) => type === 'audio.end');
+    expect(end).toHaveLength(1);
+    expect(end[0][1].chunkCount).toBe(f.sent.filter(([type]) => type === 'audio.chunk').length);
+    f.audio.finish();
+    expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(1);
+    expect(f.timings.at(-1).reason).toBe('silence');
+  } finally {
+    f.restore();
+  }
+});
+
+test('initial silence and a brief noise burst pause locally without submitting recognition', async () => {
+  const f = automatic();
+  try {
+    await f.audio.speak();
+    f.grant();
+    f.frames(true, 2);
+    f.frames(false, 748);
+    expect(f.track.stopped).toBe(true);
+    expect(f.sent.at(-1)[0]).toBe('input.pause');
+    expect(f.sent.some(([type]) => type === 'audio.end')).toBe(false);
+    expect(f.errors.at(-1)).toContain('No speech detected');
+  } finally {
+    f.restore();
+  }
+});
+
+test('manual finish works with detection unavailable and late initialization is disposed after Stop', async () => {
+  const f = automatic({
+    loadDetector: async () => {
+      throw new Error('No WASM');
+    },
+  });
+  try {
+    await f.audio.speak();
+    f.grant();
+    f.frames(true, 10);
+    f.audio.finish();
+    expect(f.errors[0]).toContain('Tap Finish speaking');
+    expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(1);
+    expect(f.timings.at(-1).reason).toBe('manual');
+  } finally {
+    f.restore();
+  }
+
+  let resolve;
+  const late = automatic({
+    loadDetector: () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  });
+  try {
+    const work = late.audio.speak();
+    await Promise.resolve();
+    late.audio.cancel();
+    resolve(late.detector);
+    await work;
+    expect(late.detector.closed).toBe(true);
+    expect(late.sent).toHaveLength(0);
+  } finally {
+    late.restore();
+  }
+});
+
+test('a stalled detector falls back to manual control and its late result is destroyed', async () => {
+  let resolve;
+  const f = automatic({
+    loadDetector: () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  });
+  try {
+    await f.audio.speak(); // Three-second bounded initialization, no open mic yet.
+    expect(f.errors[0]).toContain('Automatic turn ending is unavailable');
+    expect(f.track.enabled).toBe(false);
+    resolve(f.detector);
+    await Promise.resolve();
+    expect(f.detector.closed).toBe(true);
+    f.grant();
+    f.frames(true, 10);
+    f.audio.finish();
+    expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(1);
+  } finally {
+    f.restore();
+  }
+});
+
+test('a detector error during speech preserves manual submission without restarting capture', async () => {
+  let fail = false;
+  const detector = {
+    process: () => {
+      if (fail) throw new Error('WASM failed');
+      return true;
+    },
+    destroy() {},
+  };
+  const f = automatic({ loadDetector: async () => detector });
+  try {
+    await f.audio.speak();
+    f.grant();
+    f.frames(true, 10);
+    fail = true;
+    f.frames(true, 1);
+    expect(f.errors.at(-1)).toContain('Tap Finish speaking');
+    expect(f.track.stopped).toBe(false);
+    f.audio.finish();
+    expect(f.track.stopped).toBe(true);
+    expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(1);
+    expect(f.sent.filter(([type]) => type === 'input.speak')).toHaveLength(1);
+  } finally {
+    f.restore();
+  }
+});
+
+test('cancellation and authority changes retire voice detection and queued capture callbacks', async () => {
+  for (const change of [
+    { phase: 'paused', captureGrant: null },
+    { micMuted: true, captureGrant: null },
+    { generation: 2 },
+    { privacyRevision: 2 },
+    { policyRevision: 2 },
+    { profileRevision: 2 },
+    { activeEndpointId: 'robot' },
+  ]) {
+    const f = automatic();
+    try {
+      await f.audio.speak();
+      f.grant();
+      f.frames(true, 10);
+      const late = f.processors[0].onaudioprocess;
+      Object.assign(f.session, change);
+      f.audio.receive(event('state.changed', { session: { ...f.session } }), 'browser');
+      expect(f.detector.closed).toBe(true);
+      expect(f.track.stopped).toBe(true);
+      const count = f.sent.length;
+      late({ inputBuffer: { getChannelData: () => new Float32Array(960) } });
+      expect(f.sent).toHaveLength(count);
+      expect(f.sent.some(([type]) => type === 'audio.end')).toBe(false);
+    } finally {
+      f.restore();
+    }
+  }
+});
+
+test('manual mode remains available and capture never exceeds the existing bounded turn', async () => {
+  const f = automatic();
+  try {
+    await f.audio.speak();
+    f.grant();
+    f.frames(true, 975);
+    expect(f.sent.filter(([type]) => type === 'audio.chunk')).toHaveLength(975);
+    expect(f.sent.at(-1)[0]).toBe('audio.end');
+    expect(f.timings.at(-1).reason).toBe('limit');
+    expect(f.track.stopped).toBe(true);
+  } finally {
+    f.restore();
+  }
+});
+
+test('browser diagnostics measure scheduled start and playback gaps without content or identifiers', async () => {
+  const f = automatic();
+  try {
+    await f.audio.speak();
+    f.grant();
+    f.frames(true, 10);
+    f.audio.finish();
+    f.session.phase = 'processing';
+    f.session.captureGrant = null;
+    f.advance(500);
+    f.audio.receive(
+      event('response.start', { ...meta, chunkCount: 2, byteLength: 1764 }),
+      'browser',
+    );
+    const chunk = (index) =>
+      f.audio.receive(
+        event('audio.chunk', {
+          leaseId: 'lease',
+          streamId: 'output',
+          chunkIndex: index,
+          encoding: 'pcm_s16le',
+          data: btoa('\0'.repeat(882)),
+        }),
+        'browser',
+      );
+    chunk(0);
+    expect(f.timings.at(-1)).toEqual({ stage: 'turn_end_to_scheduled_playback', durationMs: 530 });
+    f.audio.context.currentTime = 0.2;
+    chunk(1);
+    expect(f.timings.at(-1)).toEqual({ stage: 'playback_gap', durationMs: 150 });
+    expect(JSON.stringify(f.timings)).not.toContain('turnId');
+    expect(JSON.stringify(f.timings)).not.toContain('lease');
   } finally {
     f.restore();
   }
