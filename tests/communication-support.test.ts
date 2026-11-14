@@ -409,6 +409,19 @@ dbtest(
         undefined,
       );
       await reachedPause;
+      // A blocked configuration write cannot grow an unbounded caregiver queue.
+      const queued = Array.from({ length: 33 }, () =>
+        data
+          .handle(
+            { operation: 'support.read', profileId: 'profile-alex' },
+            'fixture-caregiver',
+            undefined,
+          )
+          .then(
+            () => true,
+            () => false,
+          ),
+      );
       expect(control(c, 'resume').ok).toBe(false);
       expect(control(c, 'stop').ok).toBe(true);
       expect(
@@ -421,6 +434,7 @@ dbtest(
       expect(c.snapshot()?.phase).toBe('ended');
       await blocker`SELECT pg_advisory_unlock(1437236199)`;
       await work;
+      expect((await Promise.all(queued)).filter((ok) => !ok)).toHaveLength(2);
       expect(start(c).profileRevision).toBe(1);
     } finally {
       await blocker`SELECT pg_advisory_unlock_all()`;
@@ -543,6 +557,101 @@ dbtest(
       release();
       if (work) await work.catch(() => {});
       repo.saveSession = original;
+      await data.close();
+    }
+  },
+);
+
+dbtest(
+  'a lost profile COMMIT reply is reconciled before explicit continuation uses the current profile',
+  async () => {
+    const { c, data } = await persistent();
+    const original = repo.update;
+    try {
+      repo.update = async (...args: Parameters<DataRepository['update']>) => {
+        await original.apply(repo, args);
+        throw new Error('Fixture lost COMMIT response');
+      };
+      await expect(
+        data.handle(
+          {
+            operation: 'profile.update',
+            input: {
+              profileId: 'profile-alex',
+              expectedRevision: 0,
+              commandId: crypto.randomUUID(),
+              patch: { preferredName: 'Committed Fictional Name' },
+            },
+          },
+          'fixture-caregiver',
+          undefined,
+        ),
+      ).rejects.toThrow();
+      expect(c.snapshot()).toMatchObject({
+        phase: 'paused',
+        profileRevision: 1,
+        captureGrant: null,
+      });
+      expect(control(c, 'resume').ok).toBe(true);
+      expect(c.snapshot()?.profileRevision).toBe(1);
+      expect(
+        (
+          await repo.profile(
+            { kind: 'caregiver', profileId: 'profile-alex', subject: 'fixture-caregiver' },
+            'profile-alex',
+            true,
+          )
+        ).preferredName,
+      ).toBe('Committed Fictional Name');
+    } finally {
+      repo.update = original;
+      await data.close();
+    }
+  },
+);
+
+dbtest(
+  'an unreconciled profile outcome blocks continuation until restart while Stop still works',
+  async () => {
+    const { c, data } = await persistent();
+    const originalUpdate = repo.update,
+      originalRead = repo.profile;
+    try {
+      repo.update = async (...args: Parameters<DataRepository['update']>) => {
+        await originalUpdate.apply(repo, args);
+        throw new Error('Fixture unknown outcome');
+      };
+      repo.profile = async () => {
+        throw new Error('Fixture unavailable read');
+      };
+      await expect(
+        data.handle(
+          {
+            operation: 'profile.update',
+            input: {
+              profileId: 'profile-alex',
+              expectedRevision: 0,
+              commandId: crypto.randomUUID(),
+              patch: { preferredName: 'Fictional pending outcome' },
+            },
+          },
+          'fixture-caregiver',
+          undefined,
+        ),
+      ).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+      expect(c.snapshot()).toMatchObject({ phase: 'paused', captureGrant: null });
+      expect(control(c, 'resume').ok).toBe(false);
+      expect(control(c, 'stop').ok).toBe(true);
+      expect(
+        c.handle('session.start', {
+          profileId: 'profile-alex',
+          endpoint: 'robot',
+          commandId: crypto.randomUUID(),
+        }).ok,
+      ).toBe(false);
+    } finally {
+      repo.update = originalUpdate;
+      repo.profile = originalRead;
       await data.close();
     }
   },

@@ -108,8 +108,16 @@ export class PersistentData {
   }
   private uploadBusy = false;
   private profileWork = Promise.resolve();
+  private profilePending = 0;
   private changeProfile<T>(work: () => Promise<T>): Promise<T> {
-    const result = this.profileWork.then(work);
+    if (this.profilePending >= 32)
+      return Promise.reject(
+        new DataError('UNAVAILABLE', 'Profile configuration queue is full; retry explicitly'),
+      );
+    this.profilePending++;
+    const result = this.profileWork.then(work).finally(() => {
+      this.profilePending--;
+    });
     this.profileWork = result.then(
       () => {},
       () => {},
@@ -142,16 +150,41 @@ export class PersistentData {
         const input = request.data.input;
         return this.changeProfile(async () => {
           let release: () => unknown = () => {};
+          let began = false;
+          const contextChanged = Object.keys(input.patch).some(
+            (key) => key !== 'communicationSupport',
+          );
           try {
             const profile = await this.repository.update(principal, input, () => {
+              began = true;
               release = this.coordinator.beginProfileUpdate(input.patch);
               this.changed();
             });
-            this.coordinator.acceptPersistentProfile(
-              profile,
-              Object.keys(input.patch).some((key) => key !== 'communicationSupport'),
-            );
+            this.coordinator.acceptPersistentProfile(profile, contextChanged);
             return ok(profile);
+          } catch (error) {
+            if (began) {
+              // A lost COMMIT response is not proof of rollback. Reconcile the
+              // actual authorized row before allowing any explicit continuation.
+              try {
+                const actual = await this.repository.profile(principal, input.profileId, true);
+                this.coordinator.acceptPersistentProfile(
+                  actual as import('@lemmi/contracts').ProfileDetail,
+                  contextChanged,
+                );
+              } catch {
+                // This fence intentionally lasts until gateway restart. Keeping
+                // Stop/help available is safer than resuming unknown biography.
+                this.coordinator.holdConfiguration();
+                this.coordinator.disconnect();
+                this.changed();
+                throw new DataError(
+                  'UNAVAILABLE',
+                  'Profile outcome could not be reconciled; restart the gateway after database recovery',
+                );
+              }
+            }
+            throw error;
           } finally {
             release();
           }

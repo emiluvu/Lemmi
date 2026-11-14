@@ -2,7 +2,7 @@
 
 Scope: Anay's current implementation work. Teammate names identify who needs our output or reviews a shared boundary. Check tasks off after the stated result is verified; record the commit/checks and handoff. Keep existing IDs stable.
 
-Current task branch: `anay/chat-support-hardening`, based on `anay/speech-pipeline` at `151ebc3`. The existing speech/schema branches and old shared checkout are preserved while server merge checks run separately. This work made no deployment changes. See [chat/support handoff](handoffs/anay-chat-support-hardening.md), [speech protocol](handoffs/anay-speech-pipeline.md), [backend API](backend_api.md) and [last verified deployed status](backend-status.md).
+Current task branch: `anay/chat-support-hardening`, initially based on speech `151ebc3`, now including spoken-concern fix `3fb561d` and main `a6f7ff9`. The existing speech/schema branches and old shared checkout are preserved while server merge checks run separately. This work made no deployment changes. See [chat/support handoff](handoffs/anay-chat-support-hardening.md), [speech protocol](handoffs/anay-speech-pipeline.md), [backend API](backend_api.md) and [last verified deployed status](backend-status.md).
 
 ## First: unblock Lukas and the activity UI
 
