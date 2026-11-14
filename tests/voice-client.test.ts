@@ -595,3 +595,60 @@ test('teaching avatar opens only inside local speaker playback and closes immedi
     d.client.close();
   }
 });
+
+test('deployed photoStory capability does not prevent the teaching handshake', async () => {
+  const d = await setup();
+  try {
+    const payload = {
+      mode: 'live',
+      deviceId: 'stackchan-alex',
+      profileId: 'profile-alex',
+      credentialExpiresAt: null,
+      audio: false,
+      camera: false,
+      teaching: true,
+      photoStory: true,
+      controls: ['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak', 'handoff'],
+    };
+    d.emit('device.ready', payload);
+    expect(d.state().connected).toBe(true);
+    expect(d.state().ready).toBe(true);
+    expect(d.state().teaching).toBe(true);
+    expect(d.state().message).not.toContain('Invalid audio');
+    const { ServerEventSchema } = await import('@lemmi/contracts');
+    const envelope = {
+      protocol_version: 1,
+      event_id: 'fixture-capability',
+      session_id: null,
+      turn_id: null,
+      generation: 0,
+      sequence: 0,
+      type: 'device.ready',
+      payload,
+    };
+    expect(ServerEventSchema.safeParse(envelope).success).toBe(true);
+    expect(
+      ServerEventSchema.safeParse({ ...envelope, payload: { ...payload, photoStory: 'true' } })
+        .success,
+    ).toBe(false);
+    expect(
+      ServerEventSchema.safeParse({
+        ...envelope,
+        payload: { ...payload, arbitraryCapability: true },
+      }).success,
+    ).toBe(false);
+  } finally {
+    d.client.close();
+  }
+});
+
+test('backend persistence failures are explained without automatic reconnect or capture', async () => {
+  const d = await setup();
+  d.ws.onclose!({ code: 1011, reason: 'Persistent data unavailable' });
+  expect(d.state().message).toContain('Backend storage is unavailable');
+  expect(d.state().connected).toBe(false);
+  expect(d.state().listening).toBe(false);
+  expect(d.state().playing).toBe(false);
+  expect(d.ws.sent.some((e) => e.type === 'input.start' || e.type === 'input.speak')).toBe(false);
+  d.client.close();
+});

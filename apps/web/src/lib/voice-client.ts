@@ -243,6 +243,10 @@ export class VoiceClient {
       this.ws.onclose = (event) => {
         const reasons: Record<string, string> = {
           'Heartbeat timeout': 'The backend heartbeat timed out.',
+          'Persistent data unavailable':
+            'Backend storage is unavailable. Ask the deployment owner to check persistence before retrying.',
+          'Persistent checkpoint capacity':
+            'Backend storage cannot accept more session checkpoints. Ask the deployment owner to check persistence.',
           'Control rate limit': 'The backend control rate limit was reached.',
           'Control backpressure': 'The backend connection was too slow.',
           'Device access expired or revoked': 'The device pairing expired or was revoked.',

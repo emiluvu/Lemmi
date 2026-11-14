@@ -477,3 +477,10 @@ form on these voice surfaces. Full suite: 181 pass, 20 database-dependent skippe
 0 fail; type/Svelte and production build pass. Chrome confirmed entry and truthful
 unconfigured-voice state. Real voice, deployment and counterpart speech-boundary
 review remain pending; see the updated voice UI handoff. No P0/F17 completion claim.
+
+November 14 live voice rehearsal blocker: fixed device.ready rejection of the
+backend's optional boolean photoStory capability; microphone-off live handshake
+now validates. Backend immediately closes with 1011 “Persistent data unavailable.”
+UI now reports the storage outage explicitly. Fourteen client tests, type/Svelte
+and build pass; real voice acceptance remains blocked pending deployment-owner
+persistence repair. No model/capture requests or deployment changes in this probe.

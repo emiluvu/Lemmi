@@ -60,3 +60,24 @@ rehearsal, backend deployment, database acceptance or hardware check was perform
 Anay reviews the new speech authority boundary before deployment; Kylie reviews
 visual/keyboard flow. Configure a separately assigned Alex demo endpoint privately
 before real voice rehearsal; do not share the robot's active credential.
+
+## Live handshake compatibility and blocked rehearsal — November 14
+
+User reported “Invalid audio or backend message.” A microphone-off probe through
+the configured local voice proxy reproduced rejection of device.ready: the
+backend includes optional boolean photoStory, absent from this checkout's strict
+schema. Added that exact optional boolean; unknown fields and wrong types remain
+rejected. The live ready/ack/snapshot handshake then validated successfully.
+No session start, capture, speech or model request was sent by these probes.
+
+A separate live blocker was observed immediately after handshake: WebSocket
+close 1011, exact allowlisted reason “Persistent data unavailable.” VoiceClient
+now explains backend storage unavailability rather than only a close number.
+Deployment owner must investigate persistence/checkpoint failure; no host/database
+restart, migration or credential change was attempted. No real voice acceptance
+is implied. Fourteen voice-client tests passed, including deployed capability
+validation and storage failure without reconnect/capture; type/Svelte and build
+passed. Local server restarted with forced dependency refresh for retest after
+backend recovery. Existing Alex credential was used only after user explicitly
+confirmed Stackchan disconnected and authorized temporary reuse; only its path
+is in ignored local configuration.

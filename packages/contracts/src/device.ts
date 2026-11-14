@@ -196,6 +196,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       camera: z.literal(false),
       textChat: z.boolean().optional(),
       teaching: z.boolean().optional(),
+      photoStory: z.boolean().optional(),
       controls: z
         .array(
           z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak', 'handoff']),
