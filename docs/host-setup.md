@@ -1,5 +1,7 @@
 # Backend on mobrob-Precision-3680
 
+Current public UI: `/access` → `/caregiver` landing/Profiles dashboard → `/participant/conversation` for the designed live companion. Exact demo pages require the shared gate and fictional-demo switch; private APIs still require independent authorization. Earlier root-404/local-only page observations below are historical. Web-only `cb64621` and proxy allowlist are installed; gateway remains `f5724a0`. See current backend status.
+
 Observed November 13, 2026 (local time). Checkout: `/home/anayn/project/Lemmi`, branch `backend-deploy`. Public hostname selected by Anay: `lemmi.chaoswarrior.dev`. Current deployment summary: [backend status](backend-status.md). This setup does not configure automatic publication or deployment updates.
 
 ## Running services

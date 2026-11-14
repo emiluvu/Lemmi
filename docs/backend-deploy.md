@@ -143,7 +143,7 @@ Your updater should run from the dedicated deployment checkout, serialize update
 
 Once domain and host setup are available, record actual observations in the build plan:
 
-1. Check local listeners and the two process supervisors without printing secrets. A public `/` returns 404 by design; there is no public live health endpoint yet.
+1. Check local listeners and the two process supervisors without printing secrets. A public `/` redirects to the access page when locked and `/caregiver` when unlocked; there is no public live health endpoint yet.
 2. Verify HTTPS certificate/hostname and public denial of `/internal/*`, mock routes and unlisted paths; verify a missing domain key/cookie is denied and the shared key alone cannot create a pairing and bad device credentials cannot upgrade WSS.
 3. With the actual managed caregiver token, pair/claim using the [API reference](backend_api.md), then connect the computer harness to the configured origin with the returned scoped credential.
 4. Check start, heartbeat, pause, explicit resume, Stop, disconnect and revoke. Capture/audio/camera remain unavailable.
@@ -160,6 +160,6 @@ Persistent credentials require `003_persistent_device_credentials.sql`; communic
 
 ## Current fictional multi-profile host
 
-Runtime `17a8522` enables `LEMMI_DEMO_ENROLLMENT=1` for fictional profiles only. Keep the checked-in `deploy/nginx.conf.template` aligned with the actual proxy: `/participant`, `/_app/*`, four `/v1/demo/*` operations, scoped device/profile/media/support routes and WSS are allowed; internal, caregiver mock pages and inference/database remain blocked. Retain applied migration checksums; add `002_multi_profile_endpoints.sql` and `004_endpoint_revocations.sql` to the deployed schema. The compatibility migration retains old revoke receipts and existing persistent hashes; do not run the original conflicting branch `003_device_revocation_receipts.sql`.
+Runtime `17a8522` enables `LEMMI_DEMO_ENROLLMENT=1` for fictional profiles only. Keep the checked-in `deploy/nginx.conf.template` aligned with the actual proxy: `/participant`, `/_app/*`, four `/v1/demo/*` operations, scoped device/profile/media/support routes and WSS are allowed; internal/mock operations and inference/database remain blocked. The current explicit template also permits gate-protected `/caregiver` demo pages and `/participant/conversation`; private caregiver API authorization remains separate. Retain applied migration checksums; add `002_multi_profile_endpoints.sql` and `004_endpoint_revocations.sql` to the deployed schema. The compatibility migration retains old revoke receipts and existing persistent hashes; do not run the original conflicting branch `003_device_revocation_receipts.sql`.
 
 Each profile has an independent coordinator within the one gateway. Distinct enrolled endpoint identities may connect concurrently; one profile has one active audio owner with explicit handoff and Resume. A shared device token still names one endpoint. Demo enrollments have 30-day finite expiry; existing indefinite persistent tokens retain null expiry. Restart preserves unexpired/active enrollment hashes and ends sessions/grants/output. Preserve backups and use reviewed rollback procedures because old code cannot consume the new receipt/gateway-epoch schema unchanged.

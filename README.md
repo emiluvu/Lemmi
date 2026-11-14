@@ -1,5 +1,7 @@
 # Lemmi
 
+Public fictional demo: unlock [Lemmi](https://lemmi.chaoswarrior.dev/access), then open the [caregiver workspace](https://lemmi.chaoswarrior.dev/caregiver). `/` opens that workspace; its profile Conversation links open the designed [live companion screen](https://lemmi.chaoswarrior.dev/participant/conversation). Profile listing/creation and conversation/Teach Lemmi use the live backend; games are labeled previews, and camera/journals/private profile editing remain unavailable in this browser. The shared key does not authorize private caregiver APIs. See [current deployment and checks](docs/backend-status.md).
+
 Local UI/browser integration preparation: [combined frontend/backend handoff](docs/handoffs/frontend-backend-integration.md) — includes the copied uncommitted UI, Teach Lemmi/Alex content, browser client wiring, observed checks and remaining deployment gates.
 
 Backend checklist: [Anay's tasks](docs/anay_tasks.md) — teammate blockers, backend work and agent claims.
