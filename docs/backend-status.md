@@ -2,7 +2,13 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed backend runtime revision: **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
+Deployed web runtime revision: **`7ad2de1`** (browser access-form fix); gateway remains **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
+
+## Browser unlock repair — November 14, 2026
+
+Emilia reported Chrome failing after Unlock. The access page sent `Referrer-Policy: no-referrer`, which makes native browser form navigations serialize Origin as `null`; the required same-origin POST check then rejected them. The earlier manually supplied-Origin HTTP check missed this browser behavior. Changed the page policy to `same-origin`, retaining rejection of missing/null/foreign origins and suppressing cross-origin referrers. Existing keys/cookies, API authorization, database and gateway are unchanged.
+
+Deployed the isolated production build from `7ad2de1` and restarted only `lemmi-web`; all four services remain active. Previous web build/manifest retained privately under `.data/releases`, with pointer `.data/access-fix-rollback-path`. Five access security tests / 39 expectations, type/Svelte checks, focused formatting and production build passed. Initial sandbox-only attempts could not open the test socket/build worker; reruns with those permissions passed. Public HTTPS verified the new header, unlock/cookie, participant and profile-list 200, logout/cookie clearing, and null-Origin rejection 403. Actual Chrome retry/counterpart acceptance remains pending; no hardware/provider/session test was implied.
 
 The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictional multi-profile integration deployment, not completed P0 scope or readiness for unattended care.
 
