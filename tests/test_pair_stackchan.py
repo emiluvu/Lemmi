@@ -1,7 +1,8 @@
-"""Local fixtures only: no live provider, production pairing or token persistence."""
+"""Local fixtures only: no live provider or production pairing; credential files use temporary directories."""
 import base64
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -26,6 +27,30 @@ class PairingHelper(unittest.TestCase):
                        'LEMMI_AUTH_CLIENT_ID': 'fixture-client',
                        'LEMMI_AUTH_CLIENT_SECRET': 'fixture-secret'}
 
+    def test_http_diagnostics_close_and_never_echo_provider_body(self):
+        body = io.BytesIO(b'private-provider-token-and-pairing-code')
+        error = HTTPError('https://lemmi.invalid', 409, 'private-provider-error', {}, body)
+        with patch.object(helper, 'build_opener') as opener:
+            opener.return_value.open.side_effect = error
+            with self.assertRaises(helper.PairingError) as failure:
+                helper.request_json('https://lemmi.invalid')
+        self.assertIn('HTTP 409', str(failure.exception))
+        self.assertIn('pending', str(failure.exception))
+        self.assertNotIn('private-provider', str(failure.exception))
+        self.assertTrue(body.closed)
+
+    def test_cli_shows_safe_pairing_stage_without_token(self):
+        stderr = io.StringIO()
+        with patch('sys.argv', ['pair-stackchan.py', '--token', '--pair-only']), \
+             patch.object(helper, 'settings', return_value=self.config), \
+             patch.object(helper.getpass, 'getpass', return_value='private-fixture-token'), \
+             patch.object(helper, 'request_json', side_effect=helper.PairingError('HTTP 401: check sign-in')), \
+             patch('sys.stderr', stderr):
+            with self.assertRaises(SystemExit):
+                helper.main()
+        self.assertIn('Backend pairing request: HTTP 401', stderr.getvalue())
+        self.assertNotIn('private-fixture-token', stderr.getvalue())
+
     def test_pair_uses_public_auth_and_fresh_commands_without_claiming(self):
         fixture = {'ok': True, 'data': {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex',
                    'pairingId': 'fixture-pairing', 'code': 'fixture-code', 'expiresAt': 'fixture-time'}}
@@ -45,6 +70,49 @@ class PairingHelper(unittest.TestCase):
             commands.append(json.loads(body)['commandId'])
         self.assertNotEqual(*commands)
 
+    def test_default_cli_claims_and_saves_one_scoped_private_bundle(self):
+        pair = {'ok': True, 'data': {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex',
+                'pairingId': 'fixture-pairing', 'code': 'fixture-code', 'expiresAt': 'fixture-time'}}
+        device = {'ok': True, 'data': {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex',
+                  'credential': 'private-device-' + 'x' * 43, 'expiresAt': None}}
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'team.json'
+            with patch('sys.argv', ['pair-stackchan.py', '--token', '--output', str(output)]), \
+                 patch.object(helper, 'settings', return_value=self.config), \
+                 patch.object(helper.getpass, 'getpass', return_value='private-caregiver-token'), \
+                 patch.object(helper, 'request_json', side_effect=[pair, device]) as request, \
+                 patch('builtins.print') as printed:
+                helper.main()
+            self.assertEqual(len(request.call_args_list), 2)
+            claim = request.call_args_list[1]
+            self.assertEqual(claim.args[0], 'https://lemmi.invalid/v1/device-pairings/claim')
+            self.assertTrue(json.loads(claim.args[1])['localConfirmed'])
+            self.assertNotIn('Authorization', claim.args[2])  # No caregiver token on claim.
+            bundle = json.loads(output.read_text())
+            self.assertEqual(bundle['credential'], device['data']['credential'])
+            self.assertEqual(bundle['headers']['X-Lemmi-Access-Key'], 'fixture-key')
+            self.assertEqual(bundle['headers']['Authorization'], 'Bearer ' + device['data']['credential'])
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            for secret in ['private-caregiver-token', 'fixture-secret', 'fixture-code']:
+                self.assertNotIn(secret, output.read_text())
+            self.assertNotIn(device['data']['credential'], str(printed.call_args_list))
+            with patch.object(helper, 'login') as login, patch('sys.argv', ['pair-stackchan.py', '--output', str(output)]), patch('sys.stderr'):
+                with self.assertRaises(SystemExit):
+                    helper.main()
+                login.assert_not_called()
+            self.assertEqual(json.loads(output.read_text()), bundle)
+
+    def test_failed_pairing_removes_empty_reserved_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'team.json'
+            with patch('sys.argv', ['pair-stackchan.py', '--token', '--output', str(output)]), \
+                 patch.object(helper, 'settings', return_value=self.config), \
+                 patch.object(helper.getpass, 'getpass', return_value='private-caregiver-token'), \
+                 patch.object(helper, 'request_json', side_effect=helper.PairingError('HTTP 409')), patch('sys.stderr'):
+                with self.assertRaises(SystemExit):
+                    helper.main()
+            self.assertFalse(output.exists())
+
     def test_persistent_is_explicit_and_does_not_claim_or_save_the_key(self):
         fixture = {'ok': True, 'data': {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex',
                    'pairingId': 'fixture-pairing', 'code': 'fixture-code', 'expiresAt': 'fixture-time'}}
@@ -57,7 +125,7 @@ class PairingHelper(unittest.TestCase):
         fixture = {'ok': True, 'data': {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex',
                    'pairingId': 'fixture-pairing', 'code': 'fixture-code', 'expiresAt': 'fixture-time'}}
         for flags, persistent in [([], True), (['--persistent'], True), (['--short-lived'], False)]:
-            with self.subTest(flags=flags), patch('sys.argv', ['pair-stackchan.py', '--token', *flags]), patch.object(helper, 'settings', return_value=self.config), patch.object(helper.getpass, 'getpass', return_value='fixture-token'), patch.object(helper, 'request_json', return_value=fixture) as request, patch('builtins.print'):
+            with self.subTest(flags=flags), patch('sys.argv', ['pair-stackchan.py', '--token', '--pair-only', *flags]), patch.object(helper, 'settings', return_value=self.config), patch.object(helper.getpass, 'getpass', return_value='fixture-token'), patch.object(helper, 'request_json', return_value=fixture) as request, patch('builtins.print'):
                 helper.main()
                 body = json.loads(request.call_args.args[1])
                 self.assertEqual(body.get('credentialMode') == 'persistent', persistent)
