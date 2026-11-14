@@ -113,6 +113,8 @@ def engine_process(connection, config):
         samples = audio = pcm = segments = segment = info = text = chunk = None
         try:
             job = connection.recv()
+            if job is None:
+                break  # Idle shutdown allows native/Python resource finalizers to run.
             if job["kind"] == "stt":
                 if stt is None:
                     raise ValueError("STT disabled")
@@ -196,13 +198,21 @@ class Worker:
         self.dispose()
         raise RuntimeError("Speech engines unavailable")
 
-    def dispose(self):
+    def dispose(self, graceful=False):
         if self.process:
-            self.process.terminate()
-            self.process.join(timeout=1)
+            if graceful and self.active is None and self.process.is_alive():
+                try:
+                    self.connection.send(None)
+                    self.process.join(timeout=1)
+                except (BrokenPipeError, EOFError, OSError):
+                    pass
+            if self.process.is_alive():
+                self.process.terminate()
+                self.process.join(timeout=1)
             if self.process.is_alive():
                 self.process.kill()
                 self.process.join(timeout=1)
+            self.process.close()
         if self.connection:
             self.connection.close()
         self.process = self.connection = self.capabilities = None
@@ -393,7 +403,7 @@ def main():
         if server:
             server.server_close()
         if worker:
-            worker.dispose()
+            worker.dispose(graceful=True)
 
 
 if __name__ == "__main__":

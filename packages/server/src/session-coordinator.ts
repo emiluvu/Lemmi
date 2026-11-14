@@ -40,12 +40,73 @@ import { createHash } from 'node:crypto';
 import { companionInput } from './adapters/companion-prompt';
 import { fixedInputReply, routeParticipantText } from './adapters/input-routing';
 import type { ChatAdapter, ChatMessage } from './adapters/types';
+import { SpeechTurns, type SpeechAdapters } from './speech-turns';
 // One in-memory authority. Live mode currently exposes controls only, with no media/retention.
 export class SessionCoordinator {
   constructor(
     private readonly mode: 'mock' | 'live' = 'mock',
     private readonly chatAdapter?: ChatAdapter,
-  ) {}
+    speech?: SpeechAdapters,
+    now: () => number = Date.now,
+    private readonly onFixedReply: () => void = () => {},
+  ) {
+    if (mode === 'live' && chatAdapter && speech)
+      this.speech = new SpeechTurns(
+        speech,
+        () => this.snapshot(),
+        (phase, captureGrant) => {
+          if (this.session) this.session = { ...this.session, phase, captureGrant };
+        },
+        (raw, owner) => this.submitTextInternal(raw, owner),
+        now,
+        (turnId) => {
+          if (this.pendingChat?.commandId === turnId) {
+            this.pendingChat.controller.abort();
+            this.pendingChat = null;
+          }
+          if (
+            this.lastChat?.commandId === turnId ||
+            (this.lastChat?.result.ok &&
+              this.lastChat.result.data.kind === 'reply' &&
+              this.lastChat.result.data.reply.turnId === turnId)
+          ) {
+            this.lastChat = null;
+            this.dialogue = [];
+          }
+        },
+      );
+  }
+  private readonly speech?: SpeechTurns;
+  speechConfigured() {
+    return !!this.speech;
+  }
+  requestCapture(raw: unknown, rates: number[]) {
+    if (this.activity && this.activity.phase !== 'ended')
+      return fail('REVISION_CONFLICT', 'Leave the activity before speaking');
+    if (this.pendingChat) return fail('REVISION_CONFLICT', 'A text turn is pending');
+    const result =
+      this.speech?.start(raw, rates) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
+    if (result.ok) this.lastChat = null;
+    return result;
+  }
+  acceptCaptureChunk(raw: unknown) {
+    return this.speech?.chunk(raw) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
+  }
+  async finishCapture(raw: unknown): Promise<Result<ConversationTextResult>> {
+    return this.speech?.end(raw) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
+  }
+  playbackReceipt(raw: unknown) {
+    return this.speech?.receipt(raw) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
+  }
+  speechOutputInfo() {
+    return this.speech?.outputInfo() ?? null;
+  }
+  drainSpeechOutput() {
+    return this.speech?.drain() ?? null;
+  }
+  sweepSpeech() {
+    return this.speech?.sweep() ?? false;
+  }
   private dialogue: ChatMessage[] = [];
   private chatIds = new Map<string, string>();
   private lastChat: { commandId: string; result: Result<ConversationTextResult> } | null = null;
@@ -93,20 +154,29 @@ export class SessionCoordinator {
     // A result can have resolved before an interrupt, with its socket callback still queued.
     // Clear-on-interrupt receipt ownership closes that race even when mute keeps generation.
     return (
-      this.lastChat?.commandId === turnId &&
-      this.lastChat.result.ok &&
-      this.lastChat.result.data.kind === 'reply'
+      this.speech?.replyCurrent(turnId) ||
+      (this.lastChat?.commandId === turnId &&
+        this.lastChat.result.ok &&
+        this.lastChat.result.data.kind === 'reply' &&
+        this.lastChat.result.data.reply.turnId === turnId)
     );
   }
-  private cancelChat() {
+  private cancelChat(inputOnly = false, preserveSpeech?: object) {
     this.pendingChat?.controller.abort();
     this.pendingChat = null;
     this.dialogue = [];
     this.lastChat = null;
+    this.speech?.interrupt(inputOnly, preserveSpeech);
   }
   // Async text uses its own bounded transient receipt path: the generic command cache must
   // never retain raw participant utterances/results after Stop, pause, mute or disconnect.
   async submitText(raw: unknown): Promise<Result<ConversationTextResult>> {
+    return this.submitTextInternal(raw);
+  }
+  private async submitTextInternal(
+    raw: unknown,
+    speechOwner?: object,
+  ): Promise<Result<ConversationTextResult>> {
     const parsed = ConversationTextCommandSchema.safeParse(raw);
     if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid participant text command');
     const input = parsed.data;
@@ -151,23 +221,38 @@ export class SessionCoordinator {
         mode: 'real',
       }) as Result<ConversationTextResult>;
     const fixed = fixedInputReply(route, input.language);
+    if (
+      this.speech?.busy() &&
+      !this.speech.owns(speechOwner) &&
+      !['urgent', 'unwell', 'topic_refusal'].includes(route)
+    )
+      return fail('REVISION_CONFLICT', 'Finish or interrupt the current speech turn first');
     if (fixed) {
       if (route === 'incomplete_need' && this.pendingChat)
         return fail('REVISION_CONFLICT', 'A conversation turn is pending');
       if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
-      this.cancelChat();
-      if (route === 'unwell' || route === 'urgent' || route === 'topic_refusal')
-        this.interrupt({
-          type: 'system.pause',
-          reason: route === 'topic_refusal' ? 'participant' : 'help',
-        });
-      else this.session = { ...session, phase: 'waiting', captureGrant: null };
+      this.cancelChat(false, speechOwner);
+      let replyTurnId = input.commandId;
+      if (route === 'unwell' || route === 'urgent' || route === 'topic_refusal') {
+        const pause = () =>
+          this.interrupt({
+            type: 'system.pause',
+            reason: route === 'topic_refusal' ? 'participant' : 'help',
+          });
+        if (speechOwner) {
+          const fixedTurn = this.speech?.replaceForFixedReply(speechOwner, pause);
+          if (!fixedTurn) return fail('REVISION_CONFLICT', 'Speech turn canceled');
+          replyTurnId = fixedTurn;
+        } else pause();
+      } else this.session = { ...session, phase: 'waiting', captureGrant: null };
       const result = ok<ConversationTextResult>({
         kind: 'reply',
-        reply: { turnId: input.commandId, text: fixed, language: input.language, source: 'fixed' },
+        reply: { turnId: replyTurnId, text: fixed, language: input.language, source: 'fixed' },
         session: this.snapshot()!,
       });
       this.lastChat = { commandId: input.commandId, result };
+      // Publish the new paused generation before awaiting its fixed TTS.
+      if (speechOwner && replyTurnId !== input.commandId) this.onFixedReply();
       return structuredClone(result);
     }
     if (
@@ -401,6 +486,7 @@ export class SessionCoordinator {
         if (this.journal.sessions.length >= 100)
           return fail('UNAVAILABLE', 'Mock session capacity reached; restart gateway');
         this.cancelChat();
+        this.speech?.reset();
         this.chatIds.clear();
         this.session = SessionSnapshotSchema.parse({
           id: this.mode === 'live' ? `session-${crypto.randomUUID()}` : `session-${++this.count}`,
@@ -445,6 +531,7 @@ export class SessionCoordinator {
           case 'resume':
             if (this.session.phase !== 'paused')
               return fail('REVISION_CONFLICT', 'Session is not paused');
+            this.cancelChat();
             this.system({ type: 'system.resume' });
             this.session = {
               ...this.session,
@@ -455,10 +542,11 @@ export class SessionCoordinator {
             };
             break;
           case 'mute':
-            if (action.muted) {
-              const pending = this.pendingChat !== null;
-              this.cancelChat();
-              if (pending) this.session = { ...this.session, phase: 'waiting' };
+            if (action.muted || this.session.captureGrant !== null) {
+              const pending = this.pendingChat !== null || this.speech?.inputPending();
+              this.cancelChat(true);
+              if (pending && this.session.phase !== 'paused')
+                this.session = { ...this.session, phase: 'waiting' };
             }
             this.session = {
               ...this.session,

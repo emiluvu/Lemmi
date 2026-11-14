@@ -15,6 +15,9 @@ export const CaptureGrantSchema = z.strictObject({
   turnId: IdSchema,
   generation: RevisionSchema,
   leaseId: IdSchema,
+  streamId: IdSchema,
+  language: z.enum(['en', 'de']),
+  expiresAt: z.string().datetime(),
 });
 export const TeachingSnapshotSchema = z.strictObject({
   mode: z.literal('teach_lemmi'),

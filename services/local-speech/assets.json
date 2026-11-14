@@ -5,9 +5,18 @@
     "model": "base (multilingual)",
     "permissionNote": "Whisper/faster-whisper model source: https://huggingface.co/Systran/faster-whisper-base ; engine/model terms must accompany any redistribution.",
     "files": [
-      { "name": "config.json", "size": 2309 },
-      { "name": "tokenizer.json", "size": 2203239 },
-      { "name": "vocabulary.txt", "size": 459861 },
+      {
+        "name": "config.json",
+        "size": 2309
+      },
+      {
+        "name": "tokenizer.json",
+        "size": 2203239
+      },
+      {
+        "name": "vocabulary.txt",
+        "size": 459861
+      },
       {
         "name": "model.bin",
         "size": 145217532,
@@ -23,12 +32,43 @@
     "sampleRate": 22050,
     "permissionNote": "Pinned MODEL_CARD identifies the LJ Speech dataset as public domain and links training details. Piper engine is GPL-3.0; retain engine/voice source and license notes when distributing. No weights/audio are committed here.",
     "files": [
-      { "name": "MODEL_CARD", "size": 517 },
-      { "name": "en_US-ljspeech-medium.onnx.json", "size": 4972 },
+      {
+        "name": "MODEL_CARD",
+        "size": 517
+      },
+      {
+        "name": "en_US-ljspeech-medium.onnx.json",
+        "size": 4972
+      },
       {
         "name": "en_US-ljspeech-medium.onnx",
         "size": 63531379,
         "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+      }
+    ]
+  },
+  "stt-small": {
+    "repository": "Systran/faster-whisper-small",
+    "revision": "536b0662742c02347bc0e980a01041f333bce120",
+    "model": "small (multilingual)",
+    "permissionNote": "Explicit optional higher-quality model profile. Source: https://huggingface.co/Systran/faster-whisper-small ; preserve model/engine licensing on redistribution. No automatic fallback or weights in Git.",
+    "files": [
+      {
+        "name": "config.json",
+        "size": 2370
+      },
+      {
+        "name": "tokenizer.json",
+        "size": 2203239
+      },
+      {
+        "name": "vocabulary.txt",
+        "size": 459861
+      },
+      {
+        "name": "model.bin",
+        "size": 483546902,
+        "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"
       }
     ]
   }

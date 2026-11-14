@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { IdSchema, RevisionSchema, ErrorCodeSchema } from './common';
 import { SessionSnapshotSchema } from './session';
 import { ConversationReplySchema } from './conversation';
+import {
+  PlaybackCapabilitySchema,
+  PlaybackReceiptPayloadSchema,
+  SpeechOutputStartSchema,
+  SpeechOutputChunkSchema,
+} from './speech';
 export const CheckInStateSchema = z.enum([
   'off',
   'requested',
@@ -71,6 +77,7 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
       firmwareVersion: z.string().max(80),
       cameraSupported: z.boolean(),
       pettingSupported: z.boolean(),
+      playback: PlaybackCapabilitySchema.optional(),
       audio: z.union([
         z.strictObject({ supported: z.literal(false) }),
         z.strictObject({
@@ -104,6 +111,25 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     ...base,
+    type: z.literal('input.speak'),
+    payload: z.strictObject({ language: z.enum(['en', 'de']) }),
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('audio.end'),
+    payload: z.strictObject({
+      leaseId: IdSchema,
+      streamId: IdSchema,
+      chunkCount: z.number().int().positive().max(1000),
+    }),
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('audio.receipt'),
+    payload: PlaybackReceiptPayloadSchema,
+  }),
+  z.strictObject({
+    ...base,
     type: z.literal('input.mute'),
     payload: z.strictObject({ muted: z.boolean() }),
   }),
@@ -118,6 +144,7 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
     payload: z.strictObject({
       leaseId: IdSchema,
       streamId: IdSchema,
+      chunkIndex: RevisionSchema.optional(),
       encoding: z.literal('pcm_s16le'),
       data: z
         .string()
@@ -146,12 +173,51 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       deviceId: IdSchema,
       profileId: IdSchema,
       credentialExpiresAt: z.string().datetime(),
-      audio: z.literal(false),
+      audio: z.union([
+        z.literal(false),
+        z.strictObject({
+          encoding: z.literal('pcm_s16le'),
+          sampleRate: z.literal(16000),
+          channels: z.literal(1),
+          frameMs: z.literal(20),
+          maxCaptureMs: z.literal(20000),
+          playback: PlaybackCapabilitySchema,
+          outputWindowChunks: z.literal(4),
+        }),
+      ]),
       camera: z.literal(false),
       textChat: z.boolean().optional(),
       controls: z
-        .array(z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text']))
-        .max(7),
+        .array(z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak']))
+        .max(8),
+    }),
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('response.start'),
+    payload: SpeechOutputStartSchema,
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('audio.chunk'),
+    payload: SpeechOutputChunkSchema,
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('audio.end'),
+    payload: z.strictObject({
+      leaseId: IdSchema,
+      streamId: IdSchema,
+      chunkCount: z.number().int().positive().max(1501),
+    }),
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('response.cancel'),
+    payload: z.strictObject({
+      leaseId: IdSchema,
+      streamId: IdSchema,
+      reason: z.literal('interrupted'),
     }),
   }),
   z.strictObject({

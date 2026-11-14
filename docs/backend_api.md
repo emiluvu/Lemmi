@@ -2,21 +2,25 @@
 
 This is the current implementation reference for **Kylie's frontend, Emilia's firmware, Lukas's activities and Anay's speech/services**. Update it whenever a backend-facing route, schema, event, authorization rule, configuration key or availability changes. Runtime schemas/source remain authoritative; a proposed interface is not permission to invent a parallel backend.
 
+**Feature-branch scope:** `anay/speech-pipeline` adds opt-in voice transport described below. These additions have not been deployed; [deployed host status](backend-status.md) remains separate.
+
 **Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
+
+**Deployed baseline:** `04d050e` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
 
 ## 1. Availability and ownership
 
 | Surface | Current availability | Integration consumer |
 | --- | --- | --- |
 | Local mock HTTP RPC | Implemented; loopback-only, bounded in-memory state, no actual media/contact | Kylie/Lukas development, computer smoke tests |
-| Scoped device pairing/claim/revoke HTTP | Implemented with configurable caregiver-token verification; actual identity provider/LAN deployment still needs configuration/verification | Kylie caregiver setup; Emilia provisioning |
-| Authenticated device WSS | Controls and optional **text** chat implemented through one coordinator; actual K151 network integration pending | Emilia; computer control harness |
-| OpenRouter chat | Server adapter/coordinator implemented and fixture-tested; requires private API key and explicit model; live provider quality/readiness unverified | Anay server only |
-| Local STT/TTS | Authenticated engine wrapper/adapters implemented; real English CPU synthetic TTS→STT checked | Anay server only |
-| Robot/browser microphone → STT → chat → TTS → playback | **Not implemented end to end**; no capture grant or media ingestion/output on the live gateway | Anay + Emilia + Kylie |
+| Scoped device pairing/claim/revoke HTTP | Implemented; real VoidAuth setup/introspection and public claim verified on deployed host. Public caregiver-bearer pairing/revoke requests have not been exercised in the live rehearsal | Kylie caregiver setup; Emilia provisioning |
+| Authenticated device WSS | Controls/text plus opt-in capture/audio output on this feature branch; physical K151 integration pending | Emilia; computer control harness |
+| OpenRouter chat | Deployed text greeting/public WSS passed; feature branch also passed a real isolated 20-turn synthetic voice rehearsal. Broader conversational/human quality remains unverified | Anay server only |
+| Local STT/TTS | Private wrapper/adapters implemented; English CPU synthetic checks including a repeated voice run passed locally, but host/human quality remains imperfect | Anay server only |
+| Robot/browser microphone → STT → chat → TTS → playback | Backend capture/STT/chat/TTS/PCM output implemented opt-in and tested with synthetic input/simulated receipts; actual hardware/browser flow pending | Anay + Emilia + Kylie |
 | Photos/guessing/matching | State/pack/action/view/context/event contracts and fixtures exist; three reducers/catalog hosting remain unavailable | Lukas logic; Kylie rendering; Anay host |
 | Camera/health/teaching/preferences | Preliminary contracts/clients/fixtures; executable live integrations remain unavailable | All four owners at their assigned boundaries |
-| Production profile/assets REST | Optional PostgreSQL implementation; exact routes/limits below and in the data handoff | Kylie; Anay data backend |
+| Production profile/assets REST | PostgreSQL mode enabled on deployed host; scoped participant profile verified live. Caregiver edit/media checks used production fixture smokes; exact routes/limits below | Kylie; Anay data backend |
 | Journal/contact/overview REST | Still planned; no complete review/notification workflow | Kylie; Anay implements |
 | Database / durable jobs / real notifications | PostgreSQL/profile/media/device/session checkpoints implemented optionally; durable jobs and real notifications remain unimplemented | Anay |
 
@@ -24,38 +28,61 @@ Anay edits canonical backend/contracts. Kylie renders safe projections and submi
 
 ### A18/A19 profile/private-media increment
 
+**Undeployed schema review (`anay/app-data-schema`, merged into `main` at `a6f7ff9`):** migration `002_media_collections.sql` adds album/playlist metadata with stable membership IDs and scoped image/music references. No HTTP, client, protocol or authorization surface changes; collection CRUD and reviewed-pack hosting remain A05. Journal/consent/contact/jobs/deletion/camera portions of Emilia's full draft remain inactive. See [review and verification](handoffs/anay-app-data-schema-review.md) and [database setup](../db/README.md). The deployed availability table above is unchanged.
+
 [Database/profile/assets handoff](handoffs/anay-database-profile-assets.md) and [database setup](../db/README.md) define the current exact fields, permissions, format limits and restart behavior. PostgreSQL is opt-in via private `LEMMI_DATABASE_URL`/`LEMMI_PRIVATE_MEDIA_DIR` plus the configured caregiver subject. `bun run db:migrate` / `db:bootstrap` prepare only fictional Alex. One gateway owns the database; boot checks reject stale writes. Credential hashes and bounded session/factual-event checkpoints are persisted; restart deliberately revokes pairing credentials and ends old sessions. Full contact/policy/journal/deletion workflows remain pending despite schema foundations.
 
 Public additions: caregiver GET/PATCH `/v1/profiles/:id`, POST `/v1/profiles/:id/photos` or `/assets`, GET `/v1/profiles/:id/assets/:assetId`; paired-device GET `/v1/participant/profiles/:id`, `/v1/assets/:assetId`, `/v1/assets/:assetId/metadata`. All reject example/unassigned scope, verify credentials server-side and disable caching. Device tokens never go to managed-identity introspection. Private `POST /internal/data` is solely the authenticated SvelteKit → existing gateway adapter, never a public route. Proxy only the new explicit resource paths and keep internal routes/services private.
 
 Set production `BODY_SIZE_LIMIT=29M` and upload-proxy limits; handlers still bound profile JSON to 32 KiB, device control to 4 KiB and asset JSON to 28 MiB. Supported media is plain RGB/RGBA PNG (5 MiB/4096 dimensions/8 million pixels) or metadata-free PCM16 WAV (20 MiB/5 minutes); JPEG/SVG/MP3/range support is unavailable. Upload only approved static assets, not microphone/camera/generated-speech data. Authorized byte reads return actual media; metadata excludes storage paths and private discussion context. Caregiver context-changing edits cancel/pause the current session before COMMIT; support-only saves preserve its effective preset. Approved biography facts remain caregiver-provided; remembering/excerpt enablement is rejected pending its own workflows.
 
+### Implemented profile/media HTTP routes
+
+These routes are enabled on the current deployment and require the outer access key/cookie **and** the stated Bearer credential. Only `profile-alex` is assigned; asset IDs are UUIDs scoped and authorized by the backend. `assets`/`photos` accept validated JSON with bounded base64 data, not multipart uploads. Use the shared schemas for exact bodies.
+
+| Method / URL | Bearer identity | Result |
+| --- | --- | --- |
+| `GET /v1/profiles/profile-alex` | Assigned caregiver | `ProfileDetail` |
+| `PATCH /v1/profiles/profile-alex` | Assigned caregiver | Revision/command-checked update → `ProfileDetail` |
+| `POST /v1/profiles/profile-alex/photos` | Assigned caregiver | Approved PNG upload → `AssetMetadata` |
+| `POST /v1/profiles/profile-alex/assets` | Assigned caregiver | Approved PNG/PCM WAV upload → `AssetMetadata` |
+| `GET /v1/profiles/profile-alex/assets/:assetId` | Assigned caregiver | Authorized media bytes |
+| `GET /v1/participant/profiles/profile-alex` | Paired device | Safe `ParticipantProfile` |
+| `GET /v1/assets/:assetId` | Paired device | Authorized media bytes |
+| `GET /v1/assets/:assetId/metadata` | Paired device | Safe `AssetMetadata` |
+
+Profile/metadata/upload successes use the common `Result<T>` envelope; successful media reads return binary bytes. Do not parse binary media responses as JSON. No photo list, arbitrary storage path, external asset URL or profile creation/deletion route follows from this table.
+
 ## 2. Origins, processes and credentials
 
-Deployment tracking branch: `backend-deploy`. See [new-machine deployment and Cloudflare routing](backend-deploy.md) for setup, exposed paths, restart behavior and host acceptance checks. The domain/tunnel itself is not configured by this repository.
+Deployment tracking branch: `backend-deploy`. See [new-machine deployment and Cloudflare routing](backend-deploy.md) for setup, exposed paths, restart behavior and host acceptance checks. The current host has a configured, supervised Cloudflare Tunnel and loopback proxy. Templates are tracked under `deploy/`; private tunnel credentials/configuration remain host-local and are not provisioned automatically by a checkout.
 
 | Process/origin | Default / exposure | Credential |
 | --- | --- | --- |
 | Mock SvelteKit development app | `http://127.0.0.1:5173`; local only | Explicit mock convention; no caregiver security boundary |
 | Gateway, either mock or live mode | `127.0.0.1:3001`, configurable `GATEWAY_PORT` | Mock token **or** live internal/device credential, selected by startup mode |
 | Built SvelteKit app | Run `HOST=127.0.0.1 PORT=3000 bun run start:web` after build | Live resource handlers independently verify authorization |
-| Live public/LAN origin | Selected `LEMMI_PUBLIC_ORIGIN=https://<host-or-LAN-IP>[:port]`; proxy only supported routes | Managed caregiver token for enrollment/revocation; paired device token for WSS |
+| Live public/LAN origin | Current `https://lemmi.chaoswarrior.dev`; other hosts explicitly set `LEMMI_PUBLIC_ORIGIN`; proxy only supported routes | Outer access key/cookie plus caregiver Bearer for pair/revoke/profile edits, or scoped device Bearer for claim-following participant resources/WSS; claim itself uses its pairing code |
 | Local speech wrapper | `http://127.0.0.1:8765`; **never expose to robot/browser** | Independent `LEMMI_SPEECH_TOKEN` |
 | OpenRouter | Fixed `https://openrouter.ai/api/v1/chat/completions` outbound server request | Private `OPENROUTER_API_KEY`, never sent to a client/model context |
 
 `LEMMI_MODE` defaults to `mock`. `bun run dev` deliberately launches the local mock. For configured live mode, start web/gateway separately using the existing scripts; see [deployment instructions](handoffs/anay-control-foundation.md#runconfigure). The live gateway does not also run a mock coordinator.
 
-The trusted same-host HTTPS/WSS proxy must overwrite Host to the configured public host and `X-Forwarded-Proto: https`; backend ports stay loopback-only. The web adapter uses explicit `ORIGIN` matching `LEMMI_PUBLIC_ORIGIN`; leave forwarded-address overrides unset for the current trusted-peer checks. Proxy `/v1/device-stream` to the gateway and the three device-access resource routes to SvelteKit. Reject `/internal/*`, mock RPC/pages and other unfinished routes externally. Certificate chain, hostname/IP and validity verification remain enabled on clients; public DNS may wait during LAN testing. A plain LAN WebSocket with the development mock token is not the live interface.
+The trusted same-host HTTPS/WSS proxy must overwrite Host to the configured public host and `X-Forwarded-Proto: https`; backend ports stay loopback-only. The web adapter uses explicit `ORIGIN` matching `LEMMI_PUBLIC_ORIGIN`; leave forwarded-address overrides unset for the current trusted-peer checks. Proxy `/v1/device-stream` to the gateway and the implemented access, device and profile/asset resource routes to SvelteKit; see the allowlist in `deploy/nginx.conf.template`. Reject `/internal/*`, mock RPC/pages and other unfinished routes externally. Certificate chain, hostname/IP and validity verification remain enabled on clients; the deployed host now resolves its public hostname normally (the initial DNS failure has cleared). A plain LAN WebSocket with the development mock token is not the live interface.
 
 Credentials are **not interchangeable**:
 
-- Caregiver: externally verified short-lived Bearer access token with assigned subject. Current verifier uses configured HTTPS token introspection, issuer/audience/Bearer/expiry checks and the single `LEMMI_CAREGIVER_SUBJECT` assignment. Actual login UI/provider issuance is pending.
+- Caregiver: externally verified short-lived Bearer access token with assigned subject. Current verifier uses configured HTTPS token introspection, issuer/configured audience-or-client binding/Bearer/expiry checks and the single `LEMMI_CAREGIVER_SUBJECT` assignment. Actual VoidAuth issuance/introspection passed the one-time setup; production browser login UI remains pending.
 - Device: random expiring bearer credential returned once after pairing and local confirmation. Scope is derived server-side; no caller-selected profile/role grants access.
 - Internal control: separate `LEMMI_CONTROL_TOKEN`, at least 32 characters and not the mock token. Only SvelteKit→gateway; never firmware/browser.
 - Speech: independent service credential shared only by trusted backend/engine wrapper.
 - Mock: `LEMMI_MOCK_TOKEN` defaults to `local-mock-only`; development convention, not pairing/authentication for real users/data.
 
 No tokens, pairing codes, private media, provider errors, prompts or contact destinations belong in query strings/logs/source/fixtures. Pairing codes and active authority remain transient. With database mode, credential hashes and factual/session checkpoints persist, but startup explicitly revokes tokens and ends interrupted sessions; restart still requires re-pairing. Complete journal/deletion workflows remain pending.
+
+### Explicit VoidAuth token binding
+
+`LEMMI_AUTH_TOKEN_BINDING` defaults to `audience`, preserving the required `LEMMI_AUTH_AUDIENCE` check. For VoidAuth non-resource access tokens, explicitly select `client_id`; `client_id` must then equal the dedicated configured `LEMMI_AUTH_CLIENT_ID`. Missing/foreign clients are rejected. A present `aud` still must match `LEMMI_AUTH_AUDIENCE`; it is never ignored. Issuer, active status, Bearer type, one-hour expiry bound and configured caregiver subject checks remain enforced in both modes. This is a provider-specific integration choice, not automatic fallback or JWT-only verification. The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper obtains the actual subject using an explicitly authorized one-time code/PKCE login; see [host setup](host-setup.md). Production browser login UI remains pending.
 
 ### Private gateway routes — never proxy externally
 
@@ -66,6 +93,7 @@ No tokens, pairing codes, private media, provider errors, prompts or contact des
 | `POST /internal/control/pair` | Loopback plus independent internal token; `{actor,input:PairDeviceInput}` | Live control gateway only; SvelteKit derives actor from the verified caregiver, never trusts a browser-supplied actor |
 | `POST /internal/control/claim` | Same internal token; `ClaimDeviceInput` | Live control gateway only |
 | `POST /internal/control/revoke` | Same internal token; `{actor,input:RevokeDeviceInput}` | Live control gateway only |
+| `POST /internal/data` | Loopback plus independent internal token; operation and server-derived caregiver actor or scoped device credential | Live PostgreSQL-backed data adapter; never a client-facing URL |
 
 The current live gateway has no equivalent public health/readiness HTTP route. Missing/unconfigured services must be reported honestly; do not use mock health as production readiness or put an internal token into a device/browser to inspect it.
 
@@ -80,7 +108,7 @@ Set `LEMMI_ACCESS_KEY` (independent 32–256 visible characters) on web/gateway.
 | `POST /access/logout` | Same-origin only, clears current browser cookie; does not revoke other browser cookies |
 | Device/provisioning header | `X-Lemmi-Access-Key: <private key>`; WSS still requires `Authorization: Bearer <paired credential>` |
 
-Browser same-origin clients carry cookies; never bundle the shared key. The computer harness reads private `LEMMI_ACCESS_KEY`. Firmware header support and real domain/browser checks remain pending. Rotate the key and restart both processes to revoke gate cookies and active connections. No key is accepted in query strings. Cloudflare Access is optional and not required by this chosen gate. Self-hosted OIDC caregiver integration still requires compatible RFC 7662 introspection; a generic OIDC/JWKS adapter or sign-in UI is not implemented here.
+Browser same-origin clients carry cookies; never bundle the shared key. The computer harness reads private `LEMMI_ACCESS_KEY`. Public domain/gate cookie exchange/logout and computer WSS checks passed. Actual firmware header support and full production browser sign-in remain pending. Rotate the key and restart both processes to revoke gate cookies and active connections. No key is accepted in query strings. Cloudflare Access is optional and not required by this chosen gate. Self-hosted OIDC caregiver integration still requires compatible RFC 7662 introspection; a generic OIDC/JWKS adapter or sign-in UI is not implemented here.
 
 ## 3. Common contracts and error handling
 
@@ -164,7 +192,7 @@ The following table covers every current `operations` entry in [services.ts](../
 
 ## 5. Live enrollment, claim and revocation HTTP
 
-All are SvelteKit handlers on the configured HTTPS origin; JSON requests/responses ≤4 KiB and `Cache-Control:no-store`. Same Origin is checked when supplied; no URL query credentials. Mutations require POST; GET/link previews do not perform them.
+All are SvelteKit handlers on the configured HTTPS origin; JSON requests/responses ≤4 KiB and `Cache-Control:no-store`. Same Origin is checked when supplied; no URL query credentials. Mutations require POST; GET/link previews do not perform them. All three routes also require `X-Lemmi-Access-Key` or the signed access cookie. Include `Content-Type: application/json`; any supplied `Origin` must exactly match the configured public origin.
 
 | Method / URL | Authorization | Request body | Success `data` |
 | --- | --- | --- | --- |
@@ -177,6 +205,8 @@ Actual route pattern is `/v1/devices/[deviceId]/[action]`, but only Alex's confi
 The 24-character random code lasts five minutes and is single-use. Repeat pair ID/body returns the same still-pending code; after expiry/claim/revoke use a fresh command ID. Only one pending pairing/device credential is allowed; revoke before replacement. Claim returns the random device credential **once**, valid for one hour. A lost successful response cannot retrieve it again: revoke/re-pair explicitly. Claims are globally limited to 20/minute for this demo. `localConfirmed:true` is a firmware contract, not cryptographic proof of a physical button press or consent to microphone/camera access.
 
 Revocation clears pending enrollment/current credential, ends the session and closes an existing socket. Replaying an old revoke command cannot revoke a new pairing. Pairing/revoke command history is bounded to 256; new pairings fail at capacity while revocation remains available. Gateway restart clears all credentials/codes; device must not automatically capture/restart on reconnect.
+
+**Database ownership fence (`04d050e`):** pairing checks that the device row belongs to the current gateway boot; a stale authority returns `UNAVAILABLE`. Claim writes only when the row still has that same boot marker and never assigns/replaces ownership itself. If persistence/ownership checks fail, no usable credential is returned; explicitly re-pair against the current gateway. Regression coverage verifies stale claim/pair rejection, preservation of the replacement marker, and successful authentication by the current authority.
 
 **Path difference from the draft:** technical-spec's `/v1/devices/pair` and `DELETE /v1/devices/:id/pairing` are proposed older route names, not implemented aliases. Use the three POST routes above until the shared specs/consumers are deliberately migrated.
 
@@ -209,7 +239,7 @@ First message is `device.hello`, for example:
 
 An alternative audio capability shape permits `{encoding:'pcm_s16le',sampleRate:16000,channels:1,frameMs:20}`; it does **not** authorize capture/ingestion or prove actual hardware support. Server responds `device.ready`, hello `command.ack`, then `state.changed` with the current safe session/null.
 
-`device.ready.payload` is `{mode:'live',deviceId,profileId,credentialExpiresAt,audio:false,camera:false,textChat?:boolean,controls:[...]}`. `textChat`/`text` control indicates configured adapter only, not a successful provider call. Camera/audio remain unsupported on this connected path.
+`device.ready.payload` is `{mode:'live',deviceId,profileId,credentialExpiresAt,audio:false,camera:false,textChat?:boolean,controls:[...]}`. `textChat`/`text` control indicates configured adapter only, not a successful provider call. Camera remains unavailable. Audio stays false unless the gateway enables speech and the client supplies the playback capability described below.
 
 | Incoming type | Payload | Session/behavior |
 | --- | --- | --- |
@@ -233,7 +263,7 @@ Session-bound controls require the latest generation and assigned active session
 | `error` | `{code,message,commandId?}`; sanitized stable error |
 | `response.text` | `{turnId,text,language:'en'|'de',source:'model'|'fixed'}`; envelope `turn_id` matches reply turn |
 
-Socket maximum payload 4,096 bytes; maximum 30 incoming messages/second; output backpressure limit 16 KiB. Heartbeat timeout is six seconds, checked every 500 ms (other controls do not substitute for heartbeat). Disconnect/watchdog pauses and clears pending turns; reconnect never resumes capture/media. Credential expiry/revoke ends session and closes access. Firmware must independently stop capture/playback/camera/motion under local Stop/watchdog even when no server acknowledgment can arrive; that hardware behavior is not established by a fake-device test.
+Socket maximum payload 4,096 bytes; maximum 60 capture frames plus 30 other messages/second (90 total); output backpressure limit 16 KiB. Heartbeat timeout is six seconds, checked every 500 ms (other controls do not substitute for heartbeat). Disconnect/watchdog pauses and clears pending turns; reconnect never resumes capture/media. Credential expiry/revoke ends session and closes access. Firmware must independently stop capture/playback/camera/motion under local Stop/watchdog even when no server acknowledgment can arrive; that hardware behavior is not established by a fake-device test.
 
 ### Text turn behavior
 
@@ -249,17 +279,47 @@ Stop/pause/mute/handoff/disconnect/revoke cancels pending generation and clears 
 
 An exact pending/current-turn duplicate avoids a second model request and duplicate socket output. Same ID/different content conflicts. Older/interrupted turns are not replayable. History is at most six dialogue messages; text command fingerprints are capped at 256 per session and last-reply cache is transient. Raw utterances do not enter generic command cache, journals, durable jobs or summaries. Explicit recognized Stop/help/refusal/concern examples bypass the model; these narrow phrase fixtures are not reliable intent/emergency detection. Contact remains unconfigured and never becomes a simulated send on a live call.
 
+### Opt-in voice turns and playback
+
+Exact examples, configuration, cancellation semantics and morning handoff: [speech pipeline protocol](handoffs/anay-speech-pipeline.md). Shared schemas are in `packages/contracts/src/speech.ts`; silence fixtures export from `@lemmi/contracts/fixtures`.
+
+| Direction/type | Payload / boundary |
+| --- | --- |
+| Client `device.hello` addition | Optional `playback:{encoding:'pcm_s16le',channels:1,sampleRates:[22050]}` alongside 16 kHz/20 ms input capability |
+| Server `device.ready.audio` | False by default; enabled object reports input format, `maxCaptureMs:20000`, negotiated `playback`, `outputWindowChunks:4` |
+| Client `input.speak` | `{language:'en'\|'de'}`, null envelope turn; explicit fresh ready/waiting unmuted action |
+| Server `state.changed` captureGrant | `{turnId,generation,leaseId,streamId,language,expiresAt}` only in current unmuted listening state |
+| Client `audio.chunk` | `{leaseId,streamId,chunkIndex,encoding:'pcm_s16le',data}` with granted envelope turn; exactly 640 bytes, canonical 856-char base64; contiguous zero-based chunk index |
+| Client `audio.end` | `{leaseId,streamId,chunkCount}` and current turn; count 1–1000, exactly accepted frames |
+| Server `response.start` | `{turnId,leaseId,streamId,encoding:'pcm_s16le',channels:1,sampleRate,chunkBytes,chunkCount,byteLength}`; at most 30 seconds, metadata internally consistent |
+| Server `audio.chunk` | `{leaseId,streamId,chunkIndex,encoding,data}` and matching turn; about 20 ms, even-sized final partial allowed |
+| Server `audio.end` | `{leaseId,streamId,chunkCount}`; sending finished, not playback complete |
+| Client `audio.receipt` | `{leaseId,streamId,status:'started'\|'progress'\|'completed'\|'failed',playedChunks}`; authenticated cumulative consumed count, not buffered count |
+| Server `response.cancel` | `{leaseId,streamId,reason:'interrupted'}`; flush local output in addition to authoritative state cancellation |
+
+Speech requires `LEMMI_SPEECH_ENABLED=1`, valid private independent STT/TTS settings and configured OpenRouter. No output resampling: advertise an actual supported native rate (16/22.05/24/44.1/48 kHz); current Piper is 22.05 kHz. Legacy clients and default startup stay audio-disabled. No new public HTTP audio or raw inference endpoints are added.
+
+One 20-second/640,000-byte capture, one turn/output, no inference queue. Current engine seam buffers the bounded complete utterance then recognizes after explicit end; incremental STT and silence end detection remain pending against the technical-spec target. Frame-time checks allow at most a one-second lead. Rate/watchdog/media durations use monotonic elapsed time; credential expiry uses UTC. A single 20-second deadline covers STT→model→TTS. Four output chunks ahead of consumed receipts; started deadline five seconds and playback deadline duration plus five seconds. For ordinary replies, only a started receipt sets speaking; completion returns capture-off waiting. Fixed concern/refusal replies follow the paused-session behavior below. Completion never grants capture.
+
+Mic mute cancels pending input work but preserves approved output. Repeated unmute during capture cancels it; unmute alone never opens capture. Pause/Stop/help/disconnect/revoke/context change cancel; late results/receipts cannot restore state. There is no raw audio/transcript/journal persistence. Endpoint receipts remain reports, not independent proof of hardware output. Unsupported rate/language/engine, malformed/expired/gapped frames and backpressure fail explicitly.
+
+#### Fixed voice replies while paused
+
+Recognized urgent/unwell/topic-refusal phrases bypass the model and pause the session. The canceled input turn remains canceled. The coordinator synchronously creates fresh fixed-output authority with a new turn ID, a new stream and the current paused generation; the gateway publishes that paused snapshot before TTS finishes so Stop can use the current generation. Only that server-owned fixed reply may produce audio while paused. Ordinary model output never acquires this exception.
+
+The existing wire schemas are unchanged: `response.text` has `source:'fixed'`; its turn ID matches `response.start` and audio events. Clients bind the new output to that fixed text, current generation/lease and local permission. A paused snapshot alone never grants playback. Use the new generation/turn/stream for receipts; capture-turn IDs are obsolete. Session phase remains `paused` through synthesis, started/progress/completed receipts, failure and expiry; capture stays off. Firmware/UI must represent fixed playback independently from session phase and continue to honor local Stop/pause/watchdog before server acknowledgments.
+
+The original 20-second post-capture inference deadline also bounds fixed TTS; fresh authorization does not extend it. Later Pause/Stop/help, disconnect/revoke, profile/context change, handoff or explicit Resume cancels fixed work. Mic mute cancels pending synthesis without unpausing; already approved output retains the usual mute semantics. Failed TTS/unsupported formats are explicit errors, and no playback success is fabricated. Real caregiver contact remains unavailable. Hardware enforcement of this wire behavior is pending counterpart review.
+
 ### Defined but not executable device events
 
-`audio.chunk`, `camera.allow`, `camera.decline`, `camera.started`, `camera.ended`, `device.health` have preliminary schemas, **but the connected gateway does not ingest/execute them**. Capture grants remain null. There is no implemented `audio.end`, speech/audio output event/receipt path, camera.request/start/end/state server event, production activity event stream, robot teaching action or expression renderer command. Do not invent these event names/payloads in a consumer.
-
-Current proposed `audio.chunk`: `leaseId`, `streamId`, `encoding:'pcm_s16le'`, base64 `data` exactly 856 characters decoding to 640 bytes. That represents 20 ms at 16 kHz mono int16; Emilia's native framing/reframing and real transport remain unverified. Do not stream merely because the schema accepts the shape.
+Camera allow/decline/started/ended and device.health schemas remain preliminary; the gateway does not execute them. Production activity event streaming, robot teaching commands and expression rendering remain pending. Never infer camera or activity permission from negotiated audio.
 
 ## 7. Session, activity and data projections
 
 ### Session contract
 
-`SessionSnapshot` includes `id,profileId,generation,profileRevision,privacyRevision,policyRevision,phase,endpoint,leaseId,micMuted,captureGrant,communicationSupport,conversationMode,teaching,mode`. Endpoint is `browser|robot`; phase enum is `ready|listening|processing|speaking|waiting|paused|unavailable|ended`. Not all schema phases are reachable in the current transport. A nonnull capture grant is legal only while current/unmuted/listening with matching generation/lease; **no current live handler grants one**.
+`SessionSnapshot` includes `id,profileId,generation,profileRevision,privacyRevision,policyRevision,phase,endpoint,leaseId,micMuted,captureGrant,communicationSupport,conversationMode,teaching,mode`. Endpoint is `browser|robot`; phase enum is `ready|listening|processing|speaking|waiting|paused|unavailable|ended`. Not all schema phases are reachable in the current transport. A nonnull capture grant is legal only while current/unmuted/listening with matching generation/lease; this feature branch grants one only through explicit negotiated `input.speak`; deployment/hardware acceptance remains separate.
 
 `SessionCommand = {commandId,sessionId,expectedGeneration,action}`. Runtime actions: `pause`, `resume`, `stop`, `{type:'mute',muted}`, `{type:'handoff',endpoint}`. Schema additionally defines `speak`, `turn_end` and teaching actions, but they return unavailable. Mock HTTP supports handoff; the live device event union has no handoff event yet. Resume is explicit and capture-off, Stop is terminal, and initiated help requests have their own lifecycle.
 
@@ -309,7 +369,7 @@ Use [Ubuntu speech setup/configuration/API/privacy guide](../services/local-spee
 | `POST /v1/tts` | Token, UUID header, JSON `{text,language:'en'|'de'}` | Raw mono signed int16 little-endian PCM + `X-Lemmi-Sample-Rate`, `X-Lemmi-Encoding`, `X-Lemmi-Language` |
 | `POST /v1/cancel` | Token, JSON `{requestId:<UUID>}` | `{ok:true,data:{applied:boolean}}`; also remembers bounded early-cancel IDs |
 
-STT input: **16 kHz mono**, positive even byte count ≤640,000 (20 seconds); this bounded whole-turn wrapper is separate from proposed 640-byte device chunks. TTS text ≤600 chars; output ≤30 seconds at 8–48 kHz. Current English Piper voice outputs **22,050 Hz**. Test-only in-memory resampling does not settle the device playback format. Unsupported German voice is unavailable, never silently English.
+STT input: **16 kHz mono**, positive even byte count ≤640,000 (20 seconds); this bounded whole-turn wrapper receives the assembled, validated 640-byte device frames after explicit end. TTS text ≤600 chars; output ≤30 seconds at 8–48 kHz. Current English Piper voice outputs **22,050 Hz**. Live output negotiates native playback rates; test-only resampling is only for synthetic input fixtures. Unsupported German voice is unavailable, never silently English.
 
 One inference job, no queue; eight request-thread cap, five-second connection/body bounds, 20-second inference bound. Best-effort cancel can terminate/reload the engine worker; callers independently reject late results. A client disconnect alone is not proof of immediate native inference cancellation. Speech errors are bounded/sanitized; no engine prompt/audio/transcript tracebacks are returned. Host RAM/IPC/native buffers remain transient without a secure-erasure claim; model/dependency caches persist, raw audio/transcripts do not intentionally persist.
 
@@ -326,7 +386,7 @@ chat.complete({ system, history, text, language }, signal)
 
 Independently select STT/TTS `local-http|disabled`, URL, engine/model/device/voice settings at startup. Concrete engines currently faster-whisper 1.2.1/base CPU-int8 and Piper 1.8.0/English LJ Speech medium CPU. Another backend requires an explicit adapter implementation/configuration, not a silent fallback. NVIDIA/VM/Mac/AMD acceleration and German speech quality remain untested.
 
-OpenRouter is server-only: fixed HTTPS endpoint; explicit model; one attempt; no tools or client-selected provider URL; timeout ≤20 seconds, max tokens default 160 (32–512). Text response must be complete/plain/bounded and meet support question limits. Prompt/runtime validation is not proof of semantic safety or approved facts; selected-model rehearsal remains required. Routing/retention/account configuration and external data-handling limits are documented in [speech handoff](handoffs/anay-speech-chat.md#configure-openrouter-text-chat); no universal deletion guarantee.
+OpenRouter is server-only: fixed HTTPS endpoint; explicit model; one attempt; no tools or client-selected provider URL; timeout ≤20 seconds, max tokens default 160 (32–512). `LEMMI_LLM_REASONING_EFFORT=default|none|minimal|low|medium|high|xhigh|max` is explicit; model support must be verified. Reasoning is excluded; truncation fails without retry. GLM 5.3 Flash synthetic rehearsal used low/512 because default reasoning exhausted 160 tokens. Text response must be complete/plain/bounded and meet support question limits. Prompt/runtime validation is not proof of semantic safety or approved facts; selected-model rehearsal remains required. Routing/retention/account configuration and external data-handling limits are documented in [speech handoff](handoffs/anay-speech-chat.md#configure-openrouter-text-chat); no universal deletion guarantee.
 
 ## 9. Configuration and running integration checks
 
@@ -336,10 +396,11 @@ Templates: [root .env.example](../.env.example), [private speech template](../se
 | --- | --- |
 | Mode/gateway | `LEMMI_MODE`, `GATEWAY_PORT`, mock-only `LEMMI_MOCK_TOKEN` |
 | Authenticated origin/internal seam | `LEMMI_PUBLIC_ORIGIN`, `LEMMI_CONTROL_TOKEN`, `LEMMI_ACCESS_KEY`; web `HOST`, `PORT`, explicit `ORIGIN` |
-| Caregiver verifier | `LEMMI_AUTH_INTROSPECTION_URL`, `LEMMI_AUTH_ISSUER`, `LEMMI_AUTH_AUDIENCE`, `LEMMI_AUTH_CLIENT_ID`, `LEMMI_AUTH_CLIENT_SECRET`, `LEMMI_CAREGIVER_SUBJECT` |
+| Caregiver verifier | `LEMMI_AUTH_INTROSPECTION_URL`, `LEMMI_AUTH_ISSUER`, `LEMMI_AUTH_AUDIENCE`, `LEMMI_AUTH_TOKEN_BINDING`, `LEMMI_AUTH_CLIENT_ID`, `LEMMI_AUTH_CLIENT_SECRET`, `LEMMI_CAREGIVER_SUBJECT` |
+| Persistence/media | `LEMMI_DATABASE_URL`, `LEMMI_PRIVATE_MEDIA_DIR`, `BODY_SIZE_LIMIT`; setup uses `LEMMI_CAREGIVER_SUBJECT` and private PostgreSQL configuration |
 | Paired computer harness | `LEMMI_DEVICE_CREDENTIAL`, optional `LEMMI_DEVICE_CA_FILE`; these are not server admin credentials |
-| OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `LEMMI_LLM_TIMEOUT_MS`, `LEMMI_LLM_MAX_TOKENS`, client `LEMMI_CHAT_LANGUAGE` |
-| Speech adapters | `LEMMI_STT_BACKEND`, `LEMMI_TTS_BACKEND`, `LEMMI_STT_URL`, `LEMMI_TTS_URL`, `LEMMI_SPEECH_TOKEN`, `LEMMI_SPEECH_TIMEOUT_MS` |
+| OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `LEMMI_LLM_TIMEOUT_MS`, `LEMMI_LLM_MAX_TOKENS`, `LEMMI_LLM_REASONING_EFFORT`, client `LEMMI_CHAT_LANGUAGE` |
+| Speech adapters | `LEMMI_SPEECH_ENABLED`, `LEMMI_STT_BACKEND`, `LEMMI_TTS_BACKEND`, `LEMMI_STT_URL`, `LEMMI_TTS_URL`, `LEMMI_SPEECH_TOKEN`, `LEMMI_SPEECH_TIMEOUT_MS` |
 | Local engine process | `LEMMI_SPEECH_PORT`, `LEMMI_SPEECH_STT_ENGINE`, `LEMMI_SPEECH_STT_MODEL_PATH`, `LEMMI_SPEECH_STT_DEVICE`, `LEMMI_SPEECH_STT_COMPUTE`, `LEMMI_SPEECH_THREADS`, `LEMMI_SPEECH_TTS_ENGINE`, `LEMMI_SPEECH_VOICE_EN`, `LEMMI_SPEECH_VOICE_DE` |
 
 Use pinned Bun 1.4.4 and `bun install --frozen-lockfile`. Existing checks: `bun run check`, `bun run test`, `bun run build`, `bun run format:check`. With mock dev running/no active session: `bun run smoke:web`. After build: `bun run smoke:control`; optional `bun scripts/smoke-control.ts --chat-fixture` validates chat through a test-only provider fixture with real TLS verification, never a real key/model call.
@@ -378,12 +439,8 @@ Camera is default-off and requires current local Allow for each request; request
 For each backend integration increment:
 
 1. Update the actual shared runtime schema, typed client, authority and counterpart consumers together.
-2. Update this reference's availability row, route/event/field/limit/config/error and compatibility notes. Explicitly identify renamed/replaced shapes and current versus planned paths.
+2. Update this reference's availability row, route/event/field/limit/config/error and compatibility notes. Update [backend status](backend-status.md) in the same change with the deployed revision, services, actual observations, failures and remaining limits; distinguish code-ready from deployed and fixture from live. Explicitly identify renamed/replaced shapes and current versus planned paths.
 3. Add/reuse nonsecret fixtures and meaningful scope/revision/retry/cancellation/privacy checks; record actual commands/results and untested hardware/provider cases in the build plan.
 4. Link the focused handoff and next owner in [Anay's tasks](anay_tasks.md). A task/schema/fixture marked ready never implies hardware or real delivery acceptance.
 
 No OpenAPI document is generated yet. The `operations` registry covers the typed client seam, not every private/public route and not an implemented production REST catalog. Treat this file as the navigable integration inventory and import source schemas for exact executable validation.
-
-### Explicit VoidAuth token binding
-
-`LEMMI_AUTH_TOKEN_BINDING` defaults to `audience`, preserving the required `LEMMI_AUTH_AUDIENCE` check. For VoidAuth non-resource access tokens, explicitly select `client_id`; `client_id` must then equal the dedicated configured `LEMMI_AUTH_CLIENT_ID`. Missing/foreign clients are rejected. A present `aud` still must match `LEMMI_AUTH_AUDIENCE`; it is never ignored. Issuer, active status, Bearer type, one-hour expiry bound and configured caregiver subject checks remain enforced in both modes. This is a provider-specific integration choice, not automatic fallback or JWT-only verification. The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper obtains the actual subject using an explicitly authorized one-time code/PKCE login; see [host setup](host-setup.md). Production browser login UI remains pending.

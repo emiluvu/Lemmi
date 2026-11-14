@@ -14,15 +14,16 @@ export function routeParticipantText(text: string): InputRoute {
     .normalize('NFKC')
     .trim()
     .toLocaleLowerCase()
+    .replace(/[’‘]/g, "'")
     .replace(/[.!?…]+$/u, '')
     .replace(/\s+/g, ' ');
   if (
-    /^(stop|stop talking|i (?:do not|don't) want to (?:talk|play)|stopp|hör auf|hoer auf|ich möchte aufhören|ich will nicht spielen)$/.test(
+    /^(stop|please stop|stop please|stop talking|i (?:do not|don't) want to (?:talk|play)|stopp|bitte stopp|hör auf|bitte hör auf|hoer auf|ich möchte aufhören|ich will nicht spielen)$/.test(
       value,
     )
   )
     return 'stop';
-  if (/^(pause|take a break|eine pause|pause bitte)$/.test(value)) return 'pause';
+  if (/^(pause|please pause|take a break|eine pause|pause bitte)$/.test(value)) return 'pause';
   if (
     /^(help|i need help|get help|please get help|hilfe|ich brauche hilfe|bitte hilfe)$/.test(value)
   )

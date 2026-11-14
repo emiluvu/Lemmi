@@ -35,6 +35,12 @@ Follow the user's current task and accepted corrections. Within the documents, u
 
 This named split supersedes the numbered roles. Use the assigned person's brief in build-plan section 5. Anay owns server/tooling/migrations; Kylie owns app layout/UI; Lukas owns activity rules; Emilia owns device behavior. Coordinate shared contracts, dependencies and cross-boundary changes without blocking routine work inside the assigned slice. Preserve others' work.
 
+### Backend API and deployment ownership
+
+Only Anay, an agent explicitly assigned to Anay's backend work, or someone explicitly instructed by the user may change the backend API (routes, contracts, authorization behavior or `docs/backend_api.md`), push or merge into `backend-deploy`, or redeploy the shared backend. Other teammates/agents may inspect the API and consume its existing typed clients; report proposed API changes or missing interfaces to Anay instead of editing or publishing them. A frontend, firmware or activity task alone does not authorize backend API changes or deployment-branch pushes.
+
+On `mobrob-Precision-3680`, keep the deployment checkout at `/home/anayn/project/Lemmi` on `backend-deploy`. Do not switch this checkout to main, a feature branch or a detached revision unless the user explicitly requests it. This machine-specific rule supersedes the general feature-branch startup advice for this checkout.
+
 Start from one shared scaffold and typed mocks. Read [integration contracts](docs/integration-contracts.md) before parallel feature work. Kylie renders ActivityView and submits typed actions; Lukas provides deterministic reducers/effects, Anay hosts the single authoritative instance, and Emilia follows session/audio commands. Do not duplicate game rules in components, create another session store/backend, or let a model invent action types/URLs. A missing export is a specific handoff to the owner, not an invitation to replace their system.
 
 ## Added personalization and matching scope
@@ -81,6 +87,8 @@ Use integration-contracts sections 3 and 5: required eligibility/presentation co
 - Document actual local speech-engine buffer/temp-file/log handling and external LLM/notification provider data handling and external retention limits. Application deletion does not erase delivered messages or automatically erase provider records. Never claim universal deletion, compliance, or clinical validation without evidence.
 
 ## Verification and handoff
+
+The authorized backend owner must keep [backend status](docs/backend-status.md) and [backend API reference](docs/backend_api.md) current together for backend code, contract, auth, configuration, availability or deployment changes. Other teammates/agents report needed corrections to Anay unless explicitly authorized to edit them. Record the actual deployed revision, observed checks/failures and remaining limits; distinguish implemented from deployed, fixtures from live providers, and software from hardware acceptance. For unrelated changes, review these documents and update only if affected. Never include private configuration values or credentials.
 
 Run checks appropriate to the change. Use meaningful automated checks for authorization, cancellation, privacy revisions, notification deduplication/escalation, and deletion races. For UI/content, inspect the actual flow, keyboard use, readable controls, and error states; avoid tests that merely mirror implementation. Hardware behavior requires hardware checks, not only mocks.
 
