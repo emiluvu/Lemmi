@@ -18,7 +18,9 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
-**Teach Lemmi source increment (`codex/teach-lemmi`):** a playable scripted Alex text demo is available in the existing Participant page. Backend teaching handlers reuse the shared coordinator, OpenRouter and speech seams, with reviewed topics, session-only feedback and a fifteen-minute active-time limit. [Tester manual](docs/teach-lemmi-tester-manual.md) and [Anay/Kylie/Emilia handoff](docs/handoffs/lukas-teach-lemmi.md) cover launch and checks. This increment is not deployed; browser voice, physical robot acceptance and durable teaching memory/journal observations remain pending.
+**Browser voice demo:** [setup and microphone/speaker checks](docs/teach-lemmi-voice-demo.md) explain the new `/participant/voice` local client. It connects to Anay's deployed teaching/speech backend with server-side scoped credentials. One explicitly approved fictional English microphone → STT → AI → TTS → speaker rehearsal passed, and the user confirmed hearing the reply. The scripted text rehearsal remains available separately; broader speech-quality/robot acceptance is still pending.
+
+**Teach Lemmi source increment (`codex/teach-lemmi`):** a playable scripted Alex text demo is available in the existing Participant page. Backend teaching handlers reuse the shared coordinator, OpenRouter and speech seams, with reviewed topics, session-only feedback and a fifteen-minute active-time limit. [Tester manual](docs/teach-lemmi-tester-manual.md) and [Anay/Kylie/Emilia handoff](docs/handoffs/lukas-teach-lemmi.md) cover launch and checks. Anay integrated the original handlers into the shared deployment; this browser-client follow-up is for review/integration. Physical robot acceptance and durable teaching memory/journal observations remain pending.
 
 Alex's updated fictional profile and supplied-media preparation are on `codex/alex-profile-assets`; see [content, private derivatives and integration limits](docs/handoffs/lukas-alex-profile.md). The deployed profile and supplied-media playback are not updated by these content changes.
 

@@ -2,6 +2,8 @@
 
 Branch: `codex/teach-lemmi`. Fictional Alex only. This branch supplies a playable local text demo and backend teaching handlers for Anay to review and deploy. It does not change the shared deployment.
 
+**Voice follow-up:** the [microphone and speaker demo](teach-lemmi-voice-demo.md) adds a separate local browser audio endpoint using the existing live backend. It requires the teaching/speech deployment and a fresh scoped Alex pairing. The scripted text instructions below remain valid; no live-service failure automatically becomes scripted success.
+
 ## Launch the local demo
 
 Use Bun **1.4.4** from the repository root:

@@ -187,6 +187,7 @@
 </script>
 
 <h1>Ready when you are{profile ? `, ${profile.preferredName}` : ''}</h1>
+<p><a href="/participant/voice">Open Teach Lemmi microphone and speaker demo</a></p>
 <p>Microphone off. Camera off. Commands below exercise mock state only.</p>
 {#if !session || session.phase === 'ended'}<button onclick={start} disabled={busy || !profile}
     >Start mock session</button

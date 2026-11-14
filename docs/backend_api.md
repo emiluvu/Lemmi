@@ -6,11 +6,15 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 
 **Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
 
-**Deployed baseline:** `04d050e` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
+**Source baseline:** this branch began from deployed `04d050e` on `https://lemmi.chaoswarrior.dev`. Anay's newer `origin/backend-deploy` record (`8f158b2`) reports runtime `f5724a0`, integrating teaching and the broader frontend/backend work. This branch adds the local voice client and compatibility fields; it does not import all newer backend services. Current shared-host/API details remain Anay's record. Host observations and this task's actual live voice check are in [backend status](backend-status.md); private setup is in [host setup](host-setup.md).
 
 **Undeployed teaching increment (`codex/teach-lemmi`, November 14):** user-authorized teaching handlers now execute in the existing coordinator. See [the exact integration handoff](handoffs/lukas-teach-lemmi.md) and [tester manual](teach-lemmi-tester-manual.md). Existing authenticated device scope/pairing and mock isolation are unchanged. This branch is for Anay to review, merge and deploy.
 
+**Local browser voice follow-up:** `/participant/voice` uses the same scoped WebSocket protocol through a development-only, exact-origin loopback Vite proxy. No new public route, authentication bypass or speech provider. [Setup and verification](teach-lemmi-voice-demo.md) cover private configuration, actual microphone/speaker controls and remaining live acceptance. Its schema accepts the existing deployed metadata from Anay's `origin/backend-deploy`: nullable `credentialExpiresAt`, nine allowlisted controls including `handoff`, and optional session `activeEndpointId`. A live Alex capability probe authenticated and advertised audio but not teaching; it did not start a session or capture audio. The newer shared deployment record is maintained by Anay; earlier deployment observations below remain historical to this source branch.
+
 ## 1. Availability and ownership
+
+**Live browser rehearsal follow-up:** after Anay's teaching deployment, the user-authorized Alex microphone turn completed STT → live AI follow-up → TTS → browser playback, and the user confirmed audibility. Reviewed topic narration, capture-off unmute/resume and Stop were exercised. Browser progress receipts batch every two consumed frames to stay within the deployed 30-control/sec budget. This client-side result does not claim physical Stackchan, broad speech-quality, German or full privacy/storage acceptance. Earlier deployment/probe observations remain historical.
 
 | Surface | Current availability | Integration consumer |
 | --- | --- | --- |

@@ -178,7 +178,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       mode: z.literal('live'),
       deviceId: IdSchema,
       profileId: IdSchema,
-      credentialExpiresAt: z.string().datetime(),
+      credentialExpiresAt: z.string().datetime().nullable(),
       audio: z.union([
         z.literal(false),
         z.strictObject({
@@ -195,8 +195,10 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       textChat: z.boolean().optional(),
       teaching: z.boolean().optional(),
       controls: z
-        .array(z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak']))
-        .max(8),
+        .array(
+          z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak', 'handoff']),
+        )
+        .max(9),
     }),
   }),
   z.strictObject({

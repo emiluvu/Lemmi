@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../styles.css';
+  import { page } from '$app/state';
   let { children } = $props();
 </script>
 
@@ -10,7 +11,9 @@
   /></svelte:head
 >
 <div class="banner">
-  LOCAL MOCK STARTER · No microphone, camera, real notifications or saved data
+  {#if page.url.pathname === '/participant/voice'}
+    LOCAL VOICE CLIENT · Live backend when connected · Camera off · No conversation recording
+  {:else}LOCAL MOCK STARTER · No microphone, camera, real notifications or saved data{/if}
 </div>
 <header>
   <a href="/" class="brand">Lemmi</a>
