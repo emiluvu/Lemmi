@@ -119,3 +119,11 @@ flicker, and Stop suppresses further pet reactions. A reported missing back zone
 responded as the third dot after hands-clear disable/re-enable; baseline is a
 possible explanation, not a proven diagnosis. Ready/reboot/repeated reliability
 checks remain pending. Current petting-only firmware keeps camera/mic/motion off.
+
+## Authenticated control source — hardware pending
+
+Control 0.1 pinned compile (1,339,299 program bytes, 52,804 static globals), host
+policy ASan/UBSan and three private-provisioning/status tests passed. The compiled
+on-device protocol self-check and real Wi-Fi/HTTPS claim/WSS/watchdog/revocation
+remain unobserved. No control upload has occurred yet; petting 0.2 remains the
+last observed running firmware. See [control checks](control-checks.md).

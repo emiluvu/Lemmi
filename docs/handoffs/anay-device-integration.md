@@ -2,6 +2,23 @@
 
 **Updated:** November 13, 2026. Read with `AGENTS.md`, [team start](../team-start.md), [integration contracts](../integration-contracts.md) and [robot capabilities](../robot-capabilities-spec.md).
 
+## Emilia control firmware implementation (after main be1e096)
+
+A separate control 0.1 target now uses the selected live HTTPS/WSS path, required
+X-Lemmi-Access-Key and paired Bearer credential, built-in certificate bundle and
+hostname/time validation, explicit local pairing/Start, bounded commands, local
+Stop and heartbeat watchdog. It reports media/petting unsupported. Private USB
+provisioning keeps config/credentials in RAM with hidden local input and no secret
+logging. Host policy/sanitizer/provisioning tests and pinned ESP32 compile passed;
+actual hardware connection/claim/control receipts remain pending. The firmware
+startup protocol self-check must pass before provisioning/network are enabled.
+
+Review [control implementation/checks](../../firmware/stackchan/control-checks.md)
+for the consumer's narrower control-only schema checks, Stop/Start reconciliation,
+private provisioning and pending live/counterpart acceptance. Shared schemas and
+backend files were not changed. The robot is still running petting 0.2 until the
+local upload. Live media/PCM receipts and secure camera relay remain later work.
+
 ## Offline packetizer increment
 
 Emilia implemented and synthetic-tested `firmware/stackchan/audio/PcmPacketizer.h`:

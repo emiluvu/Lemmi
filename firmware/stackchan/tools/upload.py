@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timezone
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--target", choices=["foundation", "feasibility", "petting"], default="foundation")
+parser.add_argument("--target", choices=["foundation", "feasibility", "petting", "control"], default="foundation")
 parser.add_argument("--port", required=True)
 parser.add_argument("--backup-dir", required=True, type=Path)
 parser.add_argument("--esptool-python", default=sys.executable)
@@ -35,7 +35,7 @@ if backup.stat().st_size != 16777216 or hashlib.sha256(backup.read_bytes()).hexd
 lock = json.loads((root / "toolchain.json").read_text())
 build = root / "build" / args.target
 sketch = "lemmi_" + args.target
-firmware = {"foundation": "lemmi-foundation/0.1", "feasibility": "lemmi-feasibility/0.5", "petting": "lemmi-petting/0.2"}[args.target]
+firmware = {"foundation": "lemmi-foundation/0.1", "feasibility": "lemmi-feasibility/0.5", "petting": "lemmi-petting/0.2", "control": "lemmi-control/0.1"}[args.target]
 if json.loads((build / "build.options.json").read_text())["fqbn"] != lock["fqbn"]:
     raise SystemExit("Build target differs from pinned toolchain")
 # Same four offsets/images as the pinned M5Stack platform.txt upload recipe.

@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "petting"], default="foundation")
+parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "petting", "control"], default="foundation")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 lock = json.loads((root / "toolchain.json").read_text())

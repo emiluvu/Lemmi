@@ -9,6 +9,34 @@ Updated November 13, 2026. This is a restart handoff for a new ChatGPT/Codex acc
 - Read `AGENTS.md`, `firmware/stackchan/README.md`, `firmware/stackchan/hardware-checks.md`, `docs/robot-capabilities-spec.md` and `docs/integration-contracts.md`.
 - Keep firmware implementation on this branch. Anay owns backend/contracts, Kylie UI/art, Lukas activity logic/content. Anay’s separate handoff is already on main: `docs/handoffs/anay-device-integration.md` (`236768d`). Do not recreate the scaffold or move firmware onto main as part of resuming.
 
+## Latest increment — authenticated control source
+
+`firmware/stackchan/lemmi_control/` now implements the agreed control-only
+certificate-verified HTTPS claim/WSS path, fixed live domain/key header, explicit
+local Pair/Start, bounded commands, local Stop/reconciliation and heartbeat
+watchdog. It uses existing SDK TLS/WS/cJSON/WiFi; no packages were installed.
+
+Private provisioning uses `tools/provision-control.py`: nonsecret device probe,
+hidden local TTY inputs, RAM-only config/credential, no automatic network action
+until PAIR + CONNECT Alex is tapped. The helper observes fixed control statuses
+on the same serial connection, writing only allowlisted lines to ignored
+`firmware/stackchan/build/control-monitor.log`, readable by the agent. No provider/
+caregiver credentials belong on the device. Obtain a fresh pairing code privately,
+just before provisioning; do not request/paste secrets in chat.
+
+Latest pinned compile passed: 1,339,299 program bytes / 52,804 static globals.
+Host policy ASan/UBSan and three provisioning/status-log tests passed. Device startup
+has a compiled synthetic protocol self-check that must pass before networking;
+it has not been observed running. Actual upload, Wi-Fi, TLS, pairing/WSS, state/
+control receipts, load/heap and revocation/watchdog behavior remain pending.
+The petting 0.2 firmware is still the last observed running device app.
+
+Next: read [control checks](../../firmware/stackchan/control-checks.md), stop any
+monitor, upload `--target control`, verify off state/selftest, then run the private
+helper and guide one local action at a time. Emilia confirmed she can enter the
+necessary values locally. No microphone/camera streaming or petting integration
+is included. Prior hardware sketches, packetizer and private backup are preserved.
+
 ## Main/backend sync checkpoint
 
 Merged `origin/main` at `be1e096` into this firmware branch with merge commit

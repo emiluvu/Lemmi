@@ -40,6 +40,16 @@ Emilia verified a face reaction, improved smoothness and stopped-state suppressi
 on petting 0.2. Back-zone response recovered after hands-clear re-enabling.
 This separate experiment does not establish the secure F13/integrated F14 gate.
 
+## Authenticated control target
+
+`lemmi_control/` adds private RAM-only local provisioning and the documented
+certificate-verified HTTPS/WSS control path, with explicit on-device pairing/Start,
+local Stop latching and watchdog. Camera, mic, speaker, petting and motion remain
+disabled in this separate target. Compile, host policy/sanitizer and provisioning
+checks passed; actual live connection/hardware results remain pending. See
+[control setup and checks](control-checks.md) before using `--target control` or
+`tools/provision-control.py`. Never paste credentials into source, chat or commands.
+
 ## First test
 
 `lemmi_foundation/lemmi_foundation.ino` shows Ready, Stop and a separate microphone mute setting. Stop latches until an explicit Ready action. Both Ready and Unmute leave capture off. Microphone/speaker initialization is disabled, and camera/network/motion APIs are not initialized. This proves no actual capture/output cancellation until a later audio-enabled hardware test; a software setting is not a physical microphone disconnect.

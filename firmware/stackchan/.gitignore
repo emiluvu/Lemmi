@@ -3,3 +3,6 @@
 build/
 backups/
 secrets.h
+
+__pycache__/
+*.pyc
