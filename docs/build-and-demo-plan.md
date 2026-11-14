@@ -1,5 +1,7 @@
 # Lemmi — Build and demo plan
 
+Use [Anay's task checklist](anay_tasks.md) for backend checkboxes, teammate blockers and Anay-agent file claims. This document retains team ownership, milestones and observed acceptance results.
+
 **Status:** Shared mock starter implemented; named feature work and live/hardware acceptance pending
 **Version:** 0.6  
 **Updated:** November 13, 2026  
@@ -154,6 +156,22 @@ Emilia’s early experiment combines camera/display/touch/Wi-Fi and sequential a
 ## 7. Acceptance tracker
 
 All results start pending. Add a reproduction note, actual configuration and observed result when checked. Unsafe or broken features are fixed/disabled with an honest fallback, not marked passed because a prompt contains a rule.
+
+### Observed backend control subset — November 13, 2026
+
+On branch `anay/device-control-foundation`, Linux workspace, Bun **1.4.4**: `bun install --frozen-lockfile`, `bun run check` (0 Svelte errors/warnings plus TypeScript), `bun run test` (**37 passed, 0 failed**), `bun run build`, `bun run format:check`, and `git diff --check` passed. The Bun lockfile/dependency versions are unchanged. The test suite includes pairing scope/single use/expiry, managed-identity verification fixtures, revocation of an active device, stale/replayed controls, capture-off unmute/resume/reconnect, watchdog, Stop/revocation at command capacity, and certificate-verified WSS through a temporary test proxy.
+
+`bun run smoke:control` passed against the production web build: actual SvelteKit resource routes → a local fixture identity provider over certificate-verified HTTPS → gateway pairing → the computer control harness over certificate-verified WSS → start/pause/resume/revoke. Missing identity, foreign Origin, preview profile and GET pairing were rejected. The fixture CA/provider/proxy/credentials are created temporarily and removed; the smoke sends no media or notifications. OpenSSL is required for its temporary certificate. `bun run smoke:web` also passed with `bun run dev`, preserving the original mock app→gateway→music path. The inspected browser build contained no server-only auth/credential symbols (`LEMMI_AUTH_CLIENT_SECRET`, `LEMMI_CONTROL_TOKEN`, `node:crypto`, `authenticateCaregiver`).
+
+These observations validate **the control subset only**. Identity-provider account/login integration, a selected public origin/certificate/proxy and demo-network access, database persistence, media, real notifications, K151 firmware/local controls and counterpart technical review remain pending. Credentials/pairings are bounded in-memory and revoked on restart. No full acceptance row below is upgraded by this result. Exact interfaces, configuration, nonsecret fixtures and Emilia/Kylie handoffs: [authenticated control foundation](handoffs/anay-control-foundation.md).
+
+### Observed activity contract subset — November 13, 2026
+
+On `anay/device-control-foundation`, Linux, Bun **1.4.4**, A01–A04 now supply four discriminated states, bounded/acyclic guessing packs, matching presentation context/evidence, and strict factual event/transition schemas. Shared fictional packs and safe UI/state/transition fixtures accompany them. The existing music reducer validates transition outputs; its coordinator preserves complete events and accurate interruption reasons. Exact interfaces, breaking fixture/view fields and review handoffs are recorded in [Anay → Lukas/Kylie](handoffs/anay-activity-contracts.md). Contract changes are committed on `anay/activity-contracts-a01-a04`; counterpart review is pending.
+
+Observed: pre-change **37 tests** and check passed; final `bun run test` **51 passed, 0 failed**, `bun run check` (0 Svelte errors/warnings and no TypeScript errors), `bun run build`, `bun run format:check`, `git diff --check`, and `bun run smoke:web` passed. One intermediate new-test TypeScript expectation was corrected before final checks. The smoke exercised SvelteKit → gateway → music request/pause/Stop, preview rejection and explicit live unavailability; it sent no media/notifications. No dependencies or lockfile changed.
+
+The new tests reject malformed/cyclic/unbounded guessing graphs, unknown candidates/entries, inconsistent states, stale matching session/instance/activity/presentation/policy revisions, foreign choices/sample signals, excluded distractors and private/free-text event fields. They separate request events from receipt-backed playback events and verify interruption journaling/deduplication and typed-client round trips. These are **contract/mock results**: three reducers remain unavailable, new pack content/media are placeholders, full effect/receipt authorization and catalog hosting remain A05, policy storage remains A24, and A06 Lukas/Kylie review/publication remains pending. No hardware, live-provider, full activity, browser/accessibility or F13 gate is marked passed.
 
 | Check | Owner | Counterpart | Result |
 | --- | --- | --- | --- |

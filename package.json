@@ -20,7 +20,8 @@
     "start:gateway": "bun apps/realtime/src/index.ts",
     "format": "bun --bun prettier --write apps packages scripts tests package.json tsconfig.json",
     "format:check": "bun --bun prettier --check apps packages scripts tests package.json tsconfig.json",
-    "smoke:web": "bun scripts/smoke-web.ts"
+    "smoke:web": "bun scripts/smoke-web.ts",
+    "smoke:control": "bun scripts/smoke-control.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
