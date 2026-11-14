@@ -118,6 +118,147 @@ const ready = (f: ReturnType<typeof setup>) => {
   f.control({ type: 'mute', muted: false });
   expect(f.start().ok).toBe(true);
 };
+
+test('spoken teaching controls receive fresh audible output instead of canceling their own reply', async () => {
+  for (const text of ['Different topic', 'Not sure', 'I like this topic']) {
+    const f = setup({
+      stt: {
+        async transcribe() {
+          return ok({ text, language: 'en' });
+        },
+      },
+    });
+    f.control({ type: 'teaching.start' });
+    ready(f);
+    f.chunk();
+    const generation = f.coordinator.snapshot()!.generation;
+    const result = await f.end();
+    expect(result.ok).toBe(true);
+    expect(f.coordinator.snapshot()!.generation).toBeGreaterThan(generation);
+    expect(f.coordinator.speechOutputInfo()).not.toBeNull();
+    expect(f.seen.spoken).toBeTruthy();
+    expect(f.coordinator.snapshot()?.captureGrant).toBeNull();
+    f.control({ type: 'stop' });
+  }
+});
+
+function consumeOutput(f: ReturnType<typeof setup>) {
+  const c = f.coordinator,
+    metadata = c.speechOutputInfo()!;
+  expect(metadata).not.toBeNull();
+  let delivered = 0,
+    started = false;
+  for (let i = 0; i < 20; i++) {
+    const batch = c.drainSpeechOutput();
+    if (!batch) throw new Error('Expected bounded output');
+    delivered += batch.chunks.length;
+    const scope = {
+      sessionId: c.snapshot()!.id,
+      expectedGeneration: c.snapshot()!.generation,
+      turnId: metadata.turnId,
+      leaseId: metadata.leaseId,
+      streamId: metadata.streamId,
+    };
+    if (!started) {
+      expect(c.playbackReceipt({ ...scope, status: 'started', playedChunks: 0 }).ok).toBe(true);
+      started = true;
+    }
+    expect(
+      c.playbackReceipt({
+        ...scope,
+        status: batch.end ? 'completed' : 'progress',
+        playedChunks: delivered,
+      }).ok,
+    ).toBe(true);
+    if (batch.end) return;
+  }
+  throw new Error('Output did not terminate');
+}
+
+test('alternating explanations and teaching controls complete seven consecutive voice replies', async () => {
+  const texts = [
+    'I grow roses',
+    'Different topic',
+    'I enjoy the sea',
+    'I like this topic',
+    'The sea sounds nice',
+    'Not sure',
+    'A bank can help people',
+  ];
+  let turn = 0,
+    spoken = 0;
+  const f = setup({
+    stt: {
+      async transcribe() {
+        return ok({ text: texts[turn++]!, language: 'en' });
+      },
+    },
+    chat: {
+      async complete() {
+        return ok({
+          text: 'Thank you for sharing. Would you like to explain more?',
+          language: 'en',
+        });
+      },
+    },
+    tts: {
+      async synthesize() {
+        spoken++;
+        return ok({
+          pcm: new Uint8Array(882 * 12).fill(3),
+          sampleRate: 22050,
+          encoding: 'pcm_s16le',
+          channels: 1,
+          language: 'en',
+        });
+      },
+    },
+  });
+  f.control({ type: 'teaching.start' });
+  f.control({ type: 'mute', muted: false });
+  for (let i = 0; i < texts.length; i++) {
+    expect(f.start().ok).toBe(true);
+    expect(f.chunk().ok).toBe(true);
+    expect((await f.end()).ok).toBe(true);
+    consumeOutput(f);
+    expect(f.coordinator.snapshot()?.phase).toBe('waiting');
+    expect(f.coordinator.snapshot()?.captureGrant).toBeNull();
+  }
+  expect(spoken).toBe(7);
+  f.control({ type: 'stop' });
+});
+
+test('Stop and pause cancel fresh teaching-control synthesis and wipe its late PCM', async () => {
+  for (const type of ['stop', 'pause']) {
+    let finish!: (value: any) => void, signal!: AbortSignal;
+    const f = setup({
+      stt: {
+        async transcribe() {
+          return ok({ text: 'Different topic', language: 'en' });
+        },
+      },
+      tts: {
+        synthesize(_input, s) {
+          signal = s;
+          return new Promise((resolve) => (finish = resolve));
+        },
+      },
+    });
+    f.control({ type: 'teaching.start' });
+    ready(f);
+    f.chunk();
+    const pending = f.end();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    f.control({ type });
+    expect(signal.aborted).toBe(true);
+    const pcm = new Uint8Array(882).fill(9);
+    finish(ok({ pcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }));
+    expect((await pending).ok).toBe(false);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    expect(pcm.every((byte) => byte === 0)).toBe(true);
+    expect(f.coordinator.speechOutputInfo()).toBeNull();
+  }
+});
 const tick = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };

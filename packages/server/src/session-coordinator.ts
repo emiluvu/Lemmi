@@ -658,27 +658,41 @@ export class SessionCoordinator {
         | 'teaching.not_sure'
         | 'teaching.prefer'
         | 'teaching.avoid';
-      const changed = this.handle('session.command', {
-        sessionId: session.id,
-        expectedGeneration: session.generation,
-        commandId: input.commandId,
-        action: { type: action },
-      });
-      if (!changed.ok) return changed;
+      let changed: Result<unknown> = fail('REVISION_CONFLICT', 'Teaching transition was canceled');
+      const apply = () => {
+        changed = this.handle('session.command', {
+          sessionId: session.id,
+          expectedGeneration: session.generation,
+          commandId: input.commandId,
+          action: { type: action },
+        });
+        return changed.ok;
+      };
+      const replyTurnId = speechOwner
+        ? this.speech?.replaceForTeachingReply(speechOwner, apply)
+        : apply()
+          ? input.commandId
+          : null;
+      if (!replyTurnId)
+        return changed.ok
+          ? fail('REVISION_CONFLICT', 'Teaching speech turn was canceled')
+          : changed;
       const result = ok<ConversationTextResult>({
         kind: 'reply',
         reply: {
-          turnId: input.commandId,
+          turnId: replyTurnId,
           language: input.language,
           source: 'fixed',
           text:
             teachingIntent === 'prefer'
               ? 'You can keep sharing if you like. Preferences are only used in this session.'
-              : 'We can leave that topic. You can choose another topic or finish.',
+              : (this.session?.teaching?.prompt ??
+                'No eligible topics remain. You can choose another activity or finish.'),
         },
         session: this.snapshot()!,
       });
       this.lastChat = { commandId: input.commandId, result };
+      if (speechOwner) this.onFixedReply();
       return result;
     }
     if (

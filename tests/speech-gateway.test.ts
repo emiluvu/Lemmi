@@ -254,6 +254,54 @@ test('teaching voice explanation reaches the existing STT/model/TTS path with on
   }
 });
 
+test('spoken teaching Next crosses WSS with a fresh generation and audible replacement reply', async () => {
+  const d = await device({
+    speech: {
+      stt: {
+        async transcribe() {
+          return ok({ text: 'Different topic', language: 'en' });
+        },
+      },
+      tts: {
+        async synthesize() {
+          return ok({
+            pcm: new Uint8Array(882 * 4).fill(3),
+            sampleRate: 22050,
+            encoding: 'pcm_s16le',
+            channels: 1,
+            language: 'en',
+          });
+        },
+      },
+    },
+  });
+  try {
+    d.send('input.teaching.start');
+    await d.until(() => d.events.some((e) => e.type === 'response.start'));
+    d.send('input.pause');
+    await d.until(() => d.session().phase === 'paused');
+    d.send('input.resume');
+    await d.until(() => d.session().phase === 'ready');
+    const input = await d.capture(),
+      generation = d.session().generation;
+    input.finish();
+    await d.until(() => d.events.filter((e) => e.type === 'response.start').length === 2);
+    const reply = d.events.find((e) => e.type === 'response.text');
+    expect(reply?.type).toBe('response.text');
+    if (reply?.type !== 'response.text') throw new Error('Missing fixed teaching reply');
+    expect(reply.payload.source).toBe('fixed');
+    expect(reply.payload.turnId).not.toBe(input.grant.turnId);
+    expect(reply.generation).toBeGreaterThan(generation);
+    expect(d.session().teaching?.entityId).toBe('topic:beaches');
+    expect(d.events.some((e) => e.type === 'error' && e.payload.code === 'REVISION_CONFLICT')).toBe(
+      false,
+    );
+    expect(d.session().captureGrant).toBeNull();
+  } finally {
+    d.close();
+  }
+});
+
 test('negotiated gateway carries PCM → model → PCM with bounded credit and receipt-backed speaking', async () => {
   const d = await device();
   try {
