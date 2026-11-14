@@ -18,6 +18,8 @@ Lemmi is an experimental prototype. It has not been clinically evaluated and doe
 
 Current device/backend coordination: [Anay’s handoff from Emilia](docs/handoffs/anay-device-integration.md). The firmware test is compile-checked on its own branch; hardware upload and K151 live transport verification remain pending.
 
+Activity contracts A01–A04 now provide separate states for all four activities, a bounded reviewed-tree schema, matching presentation evidence, and validated factual events/transitions. [Lukas/Kylie handoff](docs/handoffs/anay-activity-contracts.md) lists exact fields, shared UI fixtures and compatibility changes. The runnable host still supports only the mock music example; new reducers, reviewed live content, catalog hosting and counterpart review remain pending.
+
 An optional **authenticated control foundation** now adds scoped device pairing/revocation, a managed-provider token verification adapter, and control-only WebSockets through the existing session coordinator. See [Anay’s control handoff](docs/handoffs/anay-control-foundation.md) for contracts, private configuration and TLS/provisioning requirements. Default startup remains the local mock. Actual identity-provider setup, public TLS/network deployment, caregiver sign-in UI, hardware, media and real notifications remain unverified or unavailable; this is not completed product authentication or robot readiness.
 
 ## Demo profile scope

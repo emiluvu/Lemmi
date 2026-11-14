@@ -11,6 +11,7 @@ import {
   ServerEventSchema,
   SessionSnapshotSchema,
 } from './index';
+export * from './activity-fixtures';
 export const DEMO_PROFILE_ID = 'profile-alex';
 export const participantProfile = ParticipantProfileSchema.parse({
   id: DEMO_PROFILE_ID,
@@ -177,6 +178,7 @@ export const contextFor = (sessionId: string): ActivityContext => ({
     available: true,
   },
   presentationPolicy: { preset: 'guided', configVersion: 1 },
+  matchingPresentation: null,
 });
 export const activityViewFixtures = [
   {
@@ -188,6 +190,8 @@ export const activityViewFixtures = [
   {
     activityId: 'twenty_questions',
     question: null,
+    offeredGuess: null,
+    roundPhase: 'ready',
     capabilities: { audioRequired: false, largeScreenPreferred: true },
   },
   {
@@ -201,8 +205,8 @@ export const activityViewFixtures = [
     activityId: 'object_matching',
     sampleAssetId: null,
     candidateAssetIds: [],
-    presentationId: 'presentation-placeholder',
-    presentationRevision: 0,
+    presentation: null,
+    pairShown: false,
     capabilities: { audioRequired: false, largeScreenPreferred: true },
   },
 ].map((fields) =>

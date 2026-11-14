@@ -11,7 +11,12 @@ import {
   type Result,
 } from './common';
 import { SessionSnapshotSchema, SessionCommandSchema, EndpointSchema } from './session';
-import { ActivityIdSchema, ActivityViewSchema, ActivityCommandSchema } from './activity';
+import {
+  ActivityIdSchema,
+  ActivityViewSchema,
+  ActivityCommandSchema,
+  ActivityEventSchema,
+} from './activity';
 import { CheckInSnapshotSchema } from './device';
 import {
   PairDeviceInputSchema,
@@ -41,6 +46,12 @@ export const HelpSnapshotSchema = z.strictObject({
   reason: z.enum(['manual', 'urgent_concern']),
   message: z.string().max(200),
 });
+export const JournalEventSchema = z.union([
+  ...ActivityEventSchema.options.map((event) =>
+    event.extend({ source: z.literal('measured_event') }),
+  ),
+  z.strictObject({ type: z.literal('session_stopped'), source: z.literal('measured_event') }),
+]);
 export const JournalSchema = z.strictObject({
   profileId: IdSchema,
   mode: z.enum(['mock', 'live']),
@@ -48,21 +59,7 @@ export const JournalSchema = z.strictObject({
     .array(
       z.strictObject({
         sessionId: IdSchema,
-        events: z
-          .array(
-            z.strictObject({
-              type: z.enum([
-                'activity_started',
-                'activity_ended',
-                'track_selected',
-                'track_play_requested',
-                'session_stopped',
-              ]),
-              source: z.literal('measured_event'),
-              itemId: IdSchema.optional(),
-            }),
-          )
-          .max(100),
+        events: z.array(JournalEventSchema).max(100),
         summary: z.null(),
       }),
     )

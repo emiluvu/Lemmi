@@ -165,6 +165,14 @@ On branch `anay/device-control-foundation`, Linux workspace, Bun **1.4.4**: `bun
 
 These observations validate **the control subset only**. Identity-provider account/login integration, a selected public origin/certificate/proxy and demo-network access, database persistence, media, real notifications, K151 firmware/local controls and counterpart technical review remain pending. Credentials/pairings are bounded in-memory and revoked on restart. No full acceptance row below is upgraded by this result. Exact interfaces, configuration, nonsecret fixtures and Emilia/Kylie handoffs: [authenticated control foundation](handoffs/anay-control-foundation.md).
 
+### Observed activity contract subset — November 13, 2026
+
+On `anay/device-control-foundation`, Linux, Bun **1.4.4**, A01–A04 now supply four discriminated states, bounded/acyclic guessing packs, matching presentation context/evidence, and strict factual event/transition schemas. Shared fictional packs and safe UI/state/transition fixtures accompany them. The existing music reducer validates transition outputs; its coordinator preserves complete events and accurate interruption reasons. Exact interfaces, breaking fixture/view fields and review handoffs are recorded in [Anay → Lukas/Kylie](handoffs/anay-activity-contracts.md). Contract changes are committed on `anay/activity-contracts-a01-a04`; counterpart review is pending.
+
+Observed: pre-change **37 tests** and check passed; final `bun run test` **51 passed, 0 failed**, `bun run check` (0 Svelte errors/warnings and no TypeScript errors), `bun run build`, `bun run format:check`, `git diff --check`, and `bun run smoke:web` passed. One intermediate new-test TypeScript expectation was corrected before final checks. The smoke exercised SvelteKit → gateway → music request/pause/Stop, preview rejection and explicit live unavailability; it sent no media/notifications. No dependencies or lockfile changed.
+
+The new tests reject malformed/cyclic/unbounded guessing graphs, unknown candidates/entries, inconsistent states, stale matching session/instance/activity/presentation/policy revisions, foreign choices/sample signals, excluded distractors and private/free-text event fields. They separate request events from receipt-backed playback events and verify interruption journaling/deduplication and typed-client round trips. These are **contract/mock results**: three reducers remain unavailable, new pack content/media are placeholders, full effect/receipt authorization and catalog hosting remain A05, policy storage remains A24, and A06 Lukas/Kylie review/publication remains pending. No hardware, live-provider, full activity, browser/accessibility or F13 gate is marked passed.
+
 | Check | Owner | Counterpart | Result |
 | --- | --- | --- | --- |
 | F15 one functional profile; example/unassigned IDs rejected by live services; explicit refusal/preference precedence; separate remembering permission | Anay | Kylie + Emilia | Pending |

@@ -8,6 +8,8 @@ This is the small shared implementation reference for all four Codex workstreams
 
 ## Implemented transport baseline
 
+**Activity contract increment A01–A04:** [Anay → Lukas/Kylie handoff](handoffs/anay-activity-contracts.md) documents implemented discriminated states, guessing graph validation, required nullable matching context, command/signal freshness helpers and strict factual event/transition schemas. Guessing views now include `roundPhase`/`offeredGuess`; matching views/commands use a nested nullable `presentation` instead of the old top-level presentation fields. Shared state/screen fixtures are available, while the host still runs only mock music. Missing reducers/content, A05 hosting/execution and A06 counterpart review remain pending.
+
 **Control foundation update:** see [Anay → Emilia/Kylie handoff](handoffs/anay-control-foundation.md). An opt-in authenticated control mode now shares the existing `SessionCoordinator`, with scoped device pairing/claim/revocation resource routes, `clients.device`, managed-provider introspection verification and `device.ready`/live control snapshots. `DeviceEventSchema` can represent `audio:{supported:false}` and explicit `input.start`. These additions do not implement media, camera, production event streaming, sign-in UI, persistent credentials or real notifications. Provider responses and device behavior have been tested with fixtures/computer clients only; actual provider/deployment/hardware and counterpart review remain pending. Default mock transport is preserved.
 
 `ServiceClients`, `createClients`, `createHttpTransport` and `createFixtureTransport` are exported from `@lemmi/contracts`. The local mock path uses POST `/v1/mock/<operation>` through SvelteKit to the loopback gateway’s internal adapter. These are development RPC endpoints, not replacements for the specified production resource routes. `/v1/live/<operation>` explicitly returns UNAVAILABLE; it never falls back to mocks. Browser subscriptions currently poll the same authority once per second and return an unsubscribe function; a production event stream remains Anay’s task.
@@ -51,6 +53,14 @@ interface ActivityCommand {
   instanceId: string;
   expectedRevision: number;
   action: ActivityAction;
+  presentation?: MatchingPresentation; // required for match.*; echo current view
+}
+
+interface MatchingPresentation {
+  instanceId: string;
+  presentationId: string;
+  presentationRevision: number;
+  policyRevision: number;
 }
 
 interface ActivityView {
@@ -63,7 +73,7 @@ interface ActivityView {
   assetIds: string[];
   choices: { id: string; label: string; action: ActivityAction }[];
   capabilities: { audioRequired: boolean; largeScreenPreferred: boolean };
-  // Add validated discriminated per-activity fields at kickoff.
+  // Actual discriminated per-activity fields live in ActivityViewSchema.
 }
 ```
 

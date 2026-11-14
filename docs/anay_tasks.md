@@ -2,18 +2,20 @@
 
 Scope: Anay's current implementation work. Teammate names identify who needs our output or reviews a shared boundary. Check tasks off after the stated result is verified; record the commit/checks and handoff. Keep existing IDs stable.
 
-Current branch: `anay/device-control-foundation`. The authenticated control foundation is pushed in [`86ac155`](https://github.com/emiluvu/Lemmi/commit/86ac155); its 37 tests and web/control smoke checks passed. Actual provider setup, LAN robot integration, speech and persistence remain pending. See [control handoff](handoffs/anay-control-foundation.md) and [acceptance evidence](build-and-demo-plan.md#observed-backend-control-subset--november-13-2026).
+Current branch: `anay/activity-contracts-a01-a04`. The authenticated control foundation is pushed in [`86ac155`](https://github.com/emiluvu/Lemmi/commit/86ac155); its 37 tests and web/control smoke checks passed. Actual provider setup, LAN robot integration, speech and persistence remain pending. See [control handoff](handoffs/anay-control-foundation.md) and [acceptance evidence](build-and-demo-plan.md#observed-backend-control-subset--november-13-2026).
 
 ## First: unblock Lukas and the activity UI
 
 Publish usable schemas and fixtures before waiting for the entire live backend. Anay owns canonical contract edits; agree the fields with Lukas and the view shape with Kylie.
 
-- [ ] **A01 — Extend `ActivityStateSchema` for photos, guessing and matching.** Replace unavailable-only placeholders with discriminated state fields for position, phase and pause/resume/end behavior. **Handoff: Lukas.**
-- [ ] **A02 — Extend `ApprovedPackSchema` for the reviewed guessing tree.** Validate reviewed questions/candidates, yes/no/not-sure branches, skip/reveal/new-round behavior and canonical content tags/references. **Handoff: Lukas.**
-- [ ] **A03 — Extend `ActivityContextSchema` for matching presentations.** Add coordinator-issued presentation IDs/revisions alongside authoritative eligibility/presentation policy; define stale action/signal rejection. **Handoff: Lukas.**
-- [ ] **A04 — Expand activity events and validated transitions.** Cover all four activities, photo-talk requests, interruptions and actual playback receipts. Distinguish selection/request from playback; keep utterances/private guidance out of factual events. **Handoff: Lukas and Kylie.**
+- [x] **A01 — Extend `ActivityStateSchema` for photos, guessing and matching.** Replace unavailable-only placeholders with discriminated state fields for position, phase and pause/resume/end behavior. **Handoff: Lukas.**
+- [x] **A02 — Extend `ApprovedPackSchema` for the reviewed guessing tree.** Validate reviewed questions/candidates, yes/no/not-sure branches, skip/reveal/new-round behavior and canonical content tags/references. **Handoff: Lukas.**
+- [x] **A03 — Extend `ActivityContextSchema` for matching presentations.** Add coordinator-issued presentation IDs/revisions alongside authoritative eligibility/presentation policy; define stale action/signal rejection. **Handoff: Lukas.**
+- [x] **A04 — Expand activity events and validated transitions.** Cover all four activities, photo-talk requests, interruptions and actual playback receipts. Distinguish selection/request from playback; keep utterances/private guidance out of factual events. **Handoff: Lukas and Kylie.**
 - [ ] **A05 — Expand authoritative activity hosting.** Replace hard-coded music-pack hosting with the reviewed catalog and correct instance/content lookup. Serialize actions/system inputs; enforce scope, revisions, retries, effect deduplication and stale receipt cancellation. Host Lukas's reducers through the existing coordinator. **Handoff: Lukas and Kylie.**
 - [ ] **A06 — Publish the activity contract increment.** Update exports, typed clients, nonsecret fixtures and meaningful tests together. Document exact fields/events and mocked versus live behavior; obtain counterpart review. **Handoff: Lukas and Kylie.**
+
+A01–A04 verified locally with Bun 1.4.4: **51 tests**, check, build, formatting and `smoke:web` passed. Contract changes are committed on `anay/activity-contracts-a01-a04`. See the [activity contract handoff](handoffs/anay-activity-contracts.md) and [acceptance evidence](build-and-demo-plan.md#observed-activity-contract-subset--november-13-2026) for exact fields, compatibility changes, fixtures and remaining scope. These checkmarks cover contracts and existing-consumer compatibility; Lukas's missing reducers/content, A05 hosting/receipt execution and A06 counterpart review remain pending.
 
 ## Device protocol and LAN access
 
@@ -71,7 +73,7 @@ Claim exact tasks/files before parallel edits. Shared contracts, coordinator, cl
 
 | Agent | Claimed tasks | Branch | Exclusive files/scope | Status |
 | --- | --- | --- | --- | --- |
-| This Codex session | Checklist correction | `anay/device-control-foundation` | This file and its documentation links | Complete; implementation assignment pending |
+| Activity-contract agent | A01–A04 | `anay/activity-contracts-a01-a04` | Activity contracts/fixtures, contract tests, minimal existing consumer compatibility, documentation handoff | Complete; 51 tests/check/build/format/web smoke passed; Lukas/Kylie review pending in A06 |
 | Second Anay agent | Unclaimed | To choose | Agree before editing | Available |
 
 Suggested assignment: one agent takes **A01–A06** to unblock Lukas; another takes **A11** for isolated local STT feasibility/service work. Agree the speech-service path/interface first; request shared contract/client/dependency edits from their current editor. Assign **A09/A10/A13** to one editor when connecting OpenRouter and speech to the coordinator.

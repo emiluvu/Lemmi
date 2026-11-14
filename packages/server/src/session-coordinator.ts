@@ -5,6 +5,10 @@ import {
   ParticipantProfileSchema,
   SessionSnapshotSchema,
   SessionCommandSchema,
+  ActivityTransitionSchema,
+  validateActivityCommandContext,
+  type ActivityEvent,
+  type ActivitySystemInput,
   type Operation,
   type OperationOutput,
   type Result,
@@ -52,39 +56,35 @@ export class SessionCoordinator {
       communicationSupport: this.profile.communicationSupport,
     });
   }
-  private event(type: Journal['sessions'][number]['events'][number]['type'], itemId?: string) {
+  private event(event: ActivityEvent | { type: 'session_stopped' }) {
     const record = this.journal.sessions.find((r) => r.sessionId === this.session?.id);
     if (record && record.events.length < 100)
-      record.events.push({ type, source: 'measured_event', ...(itemId ? { itemId } : {}) });
+      record.events.push({ ...event, source: 'measured_event' });
   }
   private system(input: Parameters<typeof applyActivitySystemInput>[1]) {
-    if (this.activity && this.context)
-      this.activity = applyActivitySystemInput(
-        this.activity,
-        input,
-        musicPack,
-        this.context,
-      ).nextState;
+    if (this.activity && this.context) {
+      const transition = ActivityTransitionSchema.parse(
+        applyActivitySystemInput(this.activity, input, musicPack, this.context),
+      );
+      this.activity = transition.nextState;
+      for (const event of transition.events) this.event(event);
+    }
   }
-  private interrupt(phase: 'paused' | 'ended') {
+  private interrupt(input: Extract<ActivitySystemInput, { type: 'system.pause' | 'system.end' }>) {
     if (!this.session || this.session.phase === 'ended') return;
     this.session = {
       ...this.session,
       generation: this.session.generation + 1,
-      phase,
+      phase: input.type === 'system.end' ? 'ended' : 'paused',
       captureGrant: null,
     };
-    this.system(
-      phase === 'ended'
-        ? { type: 'system.end', reason: 'stop' }
-        : { type: 'system.pause', reason: 'participant' },
-    );
+    this.system(input);
   }
   disconnect() {
-    this.interrupt('paused');
+    this.interrupt({ type: 'system.pause', reason: 'disconnect' });
   }
   revokeDeviceAccess() {
-    this.interrupt('ended');
+    this.interrupt({ type: 'system.end', reason: 'revoked' });
   }
   handle(operation: string, raw: unknown): Result<unknown> {
     if (!Object.hasOwn(operations, operation))
@@ -153,7 +153,7 @@ export class SessionCoordinator {
             JSON.stringify(input.profile[key]) !==
             JSON.stringify(this.profile[key as keyof typeof this.profile]),
         );
-        if (changedContext) this.interrupt('paused');
+        if (changedContext) this.interrupt({ type: 'system.pause', reason: 'config_change' });
         this.profile = { ...input.profile, revision: this.profile.revision + 1 };
         return ok(this.profile);
       case 'overview.load':
@@ -202,11 +202,11 @@ export class SessionCoordinator {
         const action = input.action;
         switch (action.type) {
           case 'pause':
-            this.interrupt('paused');
+            this.interrupt({ type: 'system.pause', reason: 'participant' });
             break;
           case 'stop':
-            this.interrupt('ended');
-            this.event('session_stopped');
+            this.interrupt({ type: 'system.end', reason: 'stop' });
+            this.event({ type: 'session_stopped' });
             break;
           case 'resume':
             if (this.session.phase !== 'paused')
@@ -228,7 +228,7 @@ export class SessionCoordinator {
             };
             break;
           case 'handoff':
-            this.interrupt('paused');
+            this.interrupt({ type: 'system.pause', reason: 'handoff' });
             this.session = {
               ...this.session,
               endpoint: action.endpoint,
@@ -266,7 +266,7 @@ export class SessionCoordinator {
           musicPack,
           this.context,
         );
-        this.event('activity_started');
+        this.event({ type: 'activity_started' });
         return ok(projectActivity(this.activity, musicPack, this.context));
       case 'activities.view':
       case 'activities.submit':
@@ -283,15 +283,19 @@ export class SessionCoordinator {
             return fail('REVISION_CONFLICT', 'Reload current activity');
           if (this.session.phase === 'paused' || this.session.phase === 'ended')
             return fail('REVISION_CONFLICT', 'Session cannot advance');
-          const transition = reduceActivity(this.activity, input.action, musicPack, this.context);
+          const validated = validateActivityCommandContext(input, this.activity, this.context);
+          if (!validated.ok) return validated;
+          const transition = ActivityTransitionSchema.parse(
+            reduceActivity(this.activity, validated.data.action, musicPack, this.context),
+          );
           this.activity = transition.nextState;
-          for (const event of transition.events) this.event(event.type, event.itemId);
+          for (const event of transition.events) this.event(event);
           // Deliberately DO NOT execute effects: no approved music bytes or live endpoint yet.
         }
         return ok(projectActivity(this.activity, musicPack, this.context));
       case 'help.create':
         if (this.mode === 'live') {
-          this.interrupt('paused');
+          this.interrupt({ type: 'system.pause', reason: 'help' });
           return fail(
             'UNAVAILABLE',
             'Caregiver contact is not configured; no request was created or sent',
@@ -299,7 +303,7 @@ export class SessionCoordinator {
         }
         if (input.mode !== 'simulation')
           return fail('UNAVAILABLE', 'Real notifications are not configured');
-        this.interrupt('paused');
+        this.interrupt({ type: 'system.pause', reason: 'help' });
         if (!this.help || ['canceled', 'resolved', 'expired'].includes(this.help.status))
           this.help = {
             id: `help-${++this.count}`,
