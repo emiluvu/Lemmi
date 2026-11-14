@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   ok,
+  fail,
   SessionSnapshotSchema,
   DeviceEventSchema,
   ServerEventSchema,
@@ -24,6 +25,7 @@ function setup(overrides: Partial<SpeechAdapters> & { chat?: ChatAdapter } = {})
     model?: string;
     sttSignal?: AbortSignal;
     ttsSignal?: AbortSignal;
+    spoken?: string;
   } = {};
   const coordinator = new SessionCoordinator(
     'live',
@@ -42,7 +44,8 @@ function setup(overrides: Partial<SpeechAdapters> & { chat?: ChatAdapter } = {})
         },
       },
       tts: overrides.tts ?? {
-        async synthesize(_input, signal) {
+        async synthesize(input, signal) {
+          seen.spoken = input.text;
           seen.ttsSignal = signal;
           return ok({
             pcm: output,
@@ -548,7 +551,7 @@ test('recognized help/Stop/refusal bypass the model and preserve fixed routing b
     f.chunk();
     const result = await f.end();
     expect(f.seen.model).toBeUndefined();
-    expect(f.coordinator.speechOutputInfo()).toBeNull();
+    expect(!!f.coordinator.speechOutputInfo()).toBe(text === "Don't ask about that");
     if (text === 'Help') {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.message).toContain('no request was created or sent');
@@ -624,4 +627,301 @@ test('maximum capture size and incompatible native TTS rate fail without retaini
   expect((await g.end()).ok).toBe(false);
   expect(pcm.every((x) => x === 0)).toBe(true);
   expect(g.coordinator.speechOutputInfo()).toBeNull();
+});
+
+const concernSpeech = (tts?: SpeechAdapters['tts'], text = 'I cannot breathe') =>
+  setup({
+    stt: {
+      async transcribe() {
+        return ok({ text, language: 'en' });
+      },
+    },
+    ...(tts ? { tts } : {}),
+  });
+const fixedReceipt = (f: ReturnType<typeof setup>, status: string, playedChunks: number) => {
+  const s = f.coordinator.snapshot()!,
+    metadata = f.coordinator.speechOutputInfo()!;
+  return f.coordinator.playbackReceipt({
+    sessionId: s.id,
+    expectedGeneration: s.generation,
+    turnId: metadata.turnId,
+    leaseId: metadata.leaseId,
+    streamId: metadata.streamId,
+    status,
+    playedChunks,
+  });
+};
+
+test('recognized concerns/refusal use fresh fixed output authority and finish still paused', async () => {
+  for (const text of [
+    'I cannot breathe',
+    'I took too many pills',
+    'I feel unwell',
+    "Don't ask about that",
+    'Someone is hiding in my room',
+    "Don't write that down",
+    "I'm going home",
+  ]) {
+    const f = concernSpeech(undefined, text),
+      c = f.coordinator;
+    ready(f);
+    const original = f.scope();
+    f.chunk();
+    const result = await f.end();
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.data.kind !== 'reply') throw new Error('Missing fixed reply');
+    expect(result.data.reply.source).toBe('fixed');
+    expect(f.seen.spoken).toBe(result.data.reply.text);
+    expect(f.seen.model).toBeUndefined();
+    const metadata = c.speechOutputInfo()!;
+    expect(metadata.turnId).toBe(result.data.reply.turnId);
+    expect(metadata.turnId).not.toBe(original.turnId);
+    expect(c.isCurrentTextReply(original.turnId)).toBe(false);
+    expect(c.isCurrentTextReply(metadata.turnId)).toBe(true);
+    expect(metadata.streamId).not.toBe(original.streamId);
+    expect(c.snapshot()?.generation).toBe(original.expectedGeneration + 1);
+    expect(c.snapshot()?.phase).toBe('paused');
+    expect(c.snapshot()?.captureGrant).toBeNull();
+    expect(f.start().ok).toBe(false);
+    expect((await c.finishCapture({ ...original, chunkCount: 1 })).ok).toBe(false);
+    c.drainSpeechOutput();
+    expect(
+      c.playbackReceipt({
+        ...original,
+        streamId: metadata.streamId,
+        status: 'started',
+        playedChunks: 0,
+      }).ok,
+    ).toBe(false);
+    expect(fixedReceipt(f, 'started', 0).ok).toBe(true);
+    expect(c.snapshot()?.phase).toBe('paused');
+    f.control({ type: 'mute', muted: true });
+    expect(c.speechOutputInfo()).toEqual(metadata);
+    for (const played of [4, 8]) {
+      expect(fixedReceipt(f, 'progress', played).ok).toBe(true);
+      c.drainSpeechOutput();
+    }
+    expect(fixedReceipt(f, 'completed', 12).ok).toBe(true);
+    expect(c.isCurrentTextReply(metadata.turnId)).toBe(false);
+    expect(c.snapshot()?.phase).toBe('paused');
+    expect(c.snapshot()?.captureGrant).toBeNull();
+    expect(c.speechOutputInfo()).toBeNull();
+    expect(f.output.every((x) => x === 0)).toBe(true);
+    expect(JSON.stringify(c.persistenceSnapshot())).not.toContain(text);
+  }
+});
+
+function interruptFixed(f: ReturnType<typeof setup>, action: string) {
+  if (action === 'disconnect') f.coordinator.disconnect();
+  else if (action === 'revoke') f.coordinator.revokeDeviceAccess();
+  else if (action === 'profile') f.coordinator.pauseForProfileUpdate({ approvedFacts: [] });
+  else if (action === 'help')
+    f.coordinator.handle('help.create', {
+      profileId: 'profile-alex',
+      commandId: crypto.randomUUID(),
+      mode: 'real',
+    });
+  else
+    f.control(
+      action === 'mute'
+        ? { type: 'mute', muted: true }
+        : action === 'handoff'
+          ? { type: 'handoff', endpoint: 'browser' }
+          : { type: action },
+    );
+}
+
+test('fixed synthesis cancels on controls/context changes and wipes adapter results that arrive late', async () => {
+  for (const action of [
+    'stop',
+    'pause',
+    'help',
+    'mute',
+    'handoff',
+    'disconnect',
+    'revoke',
+    'profile',
+    'resume',
+  ]) {
+    let finish!: (value: any) => void, canceled!: AbortSignal, entered!: () => void;
+    const began = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const f = concernSpeech({
+      synthesize(_input, signal) {
+        canceled = signal;
+        entered();
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    ready(f);
+    f.chunk();
+    const work = f.end();
+    await began;
+    expect(f.coordinator.snapshot()?.phase).toBe('paused');
+    interruptFixed(f, action);
+    expect(canceled.aborted).toBe(true);
+    expect((await work).ok).toBe(false);
+    const late = new Uint8Array(882).fill(7);
+    finish(
+      ok({ pcm: late, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }),
+    );
+    await tick();
+    expect(late.every((x) => x === 0)).toBe(true);
+    expect(f.coordinator.speechOutputInfo()).toBeNull();
+    expect(f.coordinator.snapshot()?.captureGrant).toBeNull();
+    expect(f.coordinator.snapshot()?.phase).toBe(
+      ['stop', 'revoke'].includes(action) ? 'ended' : action === 'resume' ? 'ready' : 'paused',
+    );
+  }
+});
+
+test('queued/playing fixed speech is canceled without reopening capture or accepting stale receipts', async () => {
+  for (const playing of [false, true])
+    for (const action of [
+      'stop',
+      'pause',
+      'help',
+      'handoff',
+      'disconnect',
+      'revoke',
+      'profile',
+      'resume',
+    ]) {
+      const f = concernSpeech();
+      ready(f);
+      f.chunk();
+      expect((await f.end()).ok).toBe(true);
+      const c = f.coordinator,
+        s = c.snapshot()!,
+        metadata = c.drainSpeechOutput()!.metadata;
+      if (playing) expect(fixedReceipt(f, 'started', 0).ok).toBe(true);
+      interruptFixed(f, action);
+      expect(c.speechOutputInfo()).toBeNull();
+      expect(f.output.every((x) => x === 0)).toBe(true);
+      expect(
+        c.playbackReceipt({
+          sessionId: s.id,
+          expectedGeneration: s.generation,
+          turnId: metadata.turnId,
+          leaseId: metadata.leaseId,
+          streamId: metadata.streamId,
+          status: 'progress',
+          playedChunks: 4,
+        }).ok,
+      ).toBe(false);
+      expect(c.snapshot()?.captureGrant).toBeNull();
+    }
+});
+
+test('fixed TTS failure and missing receipts stay paused and never grant capture', async () => {
+  const failed = concernSpeech({
+    async synthesize() {
+      return fail('UNAVAILABLE', 'Fixture failure');
+    },
+  });
+  ready(failed);
+  failed.chunk();
+  expect((await failed.end()).ok).toBe(false);
+  expect(failed.coordinator.snapshot()?.phase).toBe('paused');
+  expect(failed.coordinator.speechOutputInfo()).toBeNull();
+  for (const state of ['queued', 'playing', 'failed-receipt']) {
+    const f = concernSpeech();
+    ready(f);
+    f.chunk();
+    await f.end();
+    f.coordinator.drainSpeechOutput();
+    if (state === 'playing') expect(fixedReceipt(f, 'started', 0).ok).toBe(true);
+    if (state === 'failed-receipt') expect(fixedReceipt(f, 'failed', 0).ok).toBe(true);
+    else {
+      f.advance(6000);
+      expect(f.coordinator.sweepSpeech()).toBe(true);
+    }
+    expect(f.coordinator.snapshot()?.phase).toBe('paused');
+    expect(f.coordinator.snapshot()?.captureGrant).toBeNull();
+    expect(f.coordinator.speechOutputInfo()).toBeNull();
+    expect(f.output.every((x) => x === 0)).toBe(true);
+  }
+});
+
+test('saving a future preset preserves fixed guidance, while apply-now cancels that fixed authority', async () => {
+  for (const stage of ['tts', 'queued', 'playing'] as const) {
+    let entered!: () => void, finish!: (value: any) => void, signal: AbortSignal | undefined;
+    const began = new Promise<void>((r) => {
+      entered = r;
+    });
+    const f = concernSpeech(
+      stage === 'tts'
+        ? {
+            synthesize(_input, s) {
+              signal = s;
+              entered();
+              return new Promise((r) => {
+                finish = r;
+              });
+            },
+          }
+        : undefined,
+    );
+    ready(f);
+    f.chunk();
+    const work = f.end();
+    if (stage === 'tts') await began;
+    else expect((await work).ok).toBe(true);
+    if (stage === 'playing') {
+      f.coordinator.drainSpeechOutput();
+      expect(fixedReceipt(f, 'started', 0).ok).toBe(true);
+    }
+    const c = f.coordinator,
+      before = c.snapshot()!;
+    const profile = {
+      ...caregiverProfile,
+      revision: 1,
+      communicationSupport: { preset: 'quiet' as const, configVersion: 1 as const },
+      approvedFacts: [],
+      privacyRevision: 0,
+      policyRevision: 0,
+    };
+    c.acceptPersistentProfile(profile, false);
+    expect(c.snapshot()).toMatchObject({
+      generation: before.generation,
+      profileRevision: before.profileRevision,
+      phase: 'paused',
+      communicationSupport: { preset: 'guided' },
+    });
+    if (signal) expect(signal.aborted).toBe(false);
+    else expect(c.speechOutputInfo()).not.toBeNull();
+    expect(
+      c.applyCommunicationSupport(
+        {
+          profileId: 'profile-alex',
+          expectedProfileRevision: 1,
+          sessionId: before.id,
+          expectedGeneration: before.generation,
+          commandId: crypto.randomUUID(),
+        },
+        profile,
+        'fixture-caregiver',
+      ).ok,
+    ).toBe(true);
+    expect(c.snapshot()).toMatchObject({
+      phase: 'paused',
+      captureGrant: null,
+      generation: before.generation + 1,
+      communicationSupport: { preset: 'quiet' },
+    });
+    expect(c.speechOutputInfo()).toBeNull();
+    if (signal) {
+      expect(signal.aborted).toBe(true);
+      expect((await work).ok).toBe(false);
+      const late = new Uint8Array(882).fill(6);
+      finish(
+        ok({ pcm: late, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }),
+      );
+      await tick();
+      expect(late.every((b) => b === 0)).toBe(true);
+    } else expect(f.output.every((b) => b === 0)).toBe(true);
+  }
 });

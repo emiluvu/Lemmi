@@ -201,6 +201,10 @@ This table governs firmware, browser and server behavior. Local capture/output r
 
 Disconnect/watchdog stops capture, output, camera and motion locally, invalidates stale work, and requires explicit continuation after reconciliation. Mic mute must not be used as a substitute for Pause/Stop or advertised as camera-off. If a capture turn caused pending model/TTS work, muting cancels that work; unrelated already-approved playback is governed by its own output token. Tests must distinguish these cases.
 
+### Fixed speech while interaction remains paused
+
+The opt-in speech implementation cancels a recognized concern/refusal input, pauses it, and creates fresh authority only for the application-owned fixed reply. The gateway publishes the paused generation immediately. Existing `response.text` (`source:'fixed'`), `response.start` and PCM events share a new turn ID/current generation/lease; receipts must use those identifiers. Ordinary output never gains permission to run while paused. A paused state alone cannot authorize playback. Local Stop/pause/watchdog always override this output; capture remains off and completion/failure/expiry leaves the interaction paused. Firmware/UI should track this bounded fixed playback independently from session phase. Backend software checks pass; physical enforcement and counterpart review remain pending. See [speech handoff](handoffs/anay-speech-pipeline.md#fixed-concernrefusal-output-after-pause).
+
 ## 6. Asset handoff: Kylie → Emilia/Lukas/Anay
 
 The project/companion name is Lemmi. The exact avatar set is `dog`, `cat`, `bunny`, `bird`, `lemming` (labels Dog, Cat, Bunny, Bird, Lemming). Define `AvatarId` as this enum in shared contracts. Store `avatarId` with profile revision and expose it in participant-safe profile/device state; `expressionId` is a separate interaction-state enum. Do not use the animal name as an expression or activity ID. Validate both fields at the boundary. Avatar changes follow the same approved profile-update path and invalidate outdated render instructions; preserve the choice on app/device handoff.

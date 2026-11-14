@@ -58,7 +58,9 @@ type Options = {
 export function startControlGateway(options: Options) {
   const now = options.now ?? Date.now;
   const elapsedNow = options.now ?? (() => performance.now());
-  const coordinator = new SessionCoordinator('live', options.chatAdapter, options.speech, now);
+  const coordinator = new SessionCoordinator('live', options.chatAdapter, options.speech, now, () =>
+    broadcast(),
+  );
   const sockets = new Set<Bun.ServerWebSocket<SocketData>>();
   let connectionClaimed = false;
   let connectionClaimedAt = 0;

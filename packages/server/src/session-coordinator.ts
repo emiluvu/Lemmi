@@ -51,6 +51,7 @@ export class SessionCoordinator {
     private readonly chatAdapter?: ChatAdapter,
     speech?: SpeechAdapters,
     now: () => number = Date.now,
+    private readonly onFixedReply: () => void = () => {},
   ) {
     if (mode === 'live' && chatAdapter && speech)
       this.speech = new SpeechTurns(
@@ -66,7 +67,12 @@ export class SessionCoordinator {
             this.pendingChat.controller.abort();
             this.pendingChat = null;
           }
-          if (this.lastChat?.commandId === turnId) {
+          if (
+            this.lastChat?.commandId === turnId ||
+            (this.lastChat?.result.ok &&
+              this.lastChat.result.data.kind === 'reply' &&
+              this.lastChat.result.data.reply.turnId === turnId)
+          ) {
             this.lastChat = null;
             this.dialogue = [];
           }
@@ -198,7 +204,10 @@ export class SessionCoordinator {
     if (Object.keys(patch).some((key) => key !== 'communicationSupport'))
       this.interrupt({ type: 'system.pause', reason: 'config_change' });
   }
-  acceptPersistentProfile(profile: import('@lemmi/contracts').ProfileDetail) {
+  acceptPersistentProfile(
+    profile: import('@lemmi/contracts').ProfileDetail,
+    syncPausedRevision = true,
+  ) {
     const {
       approvedFacts,
       privacyRevision: _privacy,
@@ -207,7 +216,7 @@ export class SessionCoordinator {
     } = profile;
     this.profile = structuredClone(caregiver);
     this.approvedFacts = approvedFacts.map((fact) => fact.value);
-    if (this.session?.phase === 'paused')
+    if (syncPausedRevision && this.session?.phase === 'paused')
       this.session = { ...this.session, profileRevision: profile.revision };
   }
   persistenceSnapshot() {
@@ -239,7 +248,8 @@ export class SessionCoordinator {
       this.speech?.replyCurrent(turnId) ||
       (this.lastChat?.commandId === turnId &&
         this.lastChat.result.ok &&
-        this.lastChat.result.data.kind === 'reply')
+        this.lastChat.result.data.kind === 'reply' &&
+        this.lastChat.result.data.reply.turnId === turnId)
     );
   }
   private cancelChat(inputOnly = false, preserveSpeech?: object) {
@@ -319,18 +329,27 @@ export class SessionCoordinator {
         return fail('REVISION_CONFLICT', 'A conversation turn is pending');
       if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
       this.cancelChat(false, speechOwner);
-      if (interrupts)
-        this.interrupt({
-          type: 'system.pause',
-          reason: ['topic_refusal', 'privacy_refusal'].includes(route) ? 'participant' : 'help',
-        });
-      else this.session = { ...session, phase: 'waiting', captureGrant: null };
+      let replyTurnId = input.commandId;
+      if (interrupts) {
+        const pause = () =>
+          this.interrupt({
+            type: 'system.pause',
+            reason: ['topic_refusal', 'privacy_refusal'].includes(route) ? 'participant' : 'help',
+          });
+        if (speechOwner) {
+          const fixedTurn = this.speech?.replaceForFixedReply(speechOwner, pause);
+          if (!fixedTurn) return fail('REVISION_CONFLICT', 'Speech turn canceled');
+          replyTurnId = fixedTurn;
+        } else pause();
+      } else this.session = { ...session, phase: 'waiting', captureGrant: null };
       const result = ok<ConversationTextResult>({
         kind: 'reply',
-        reply: { turnId: input.commandId, text: fixed, language: input.language, source: 'fixed' },
+        reply: { turnId: replyTurnId, text: fixed, language: input.language, source: 'fixed' },
         session: this.snapshot()!,
       });
       this.lastChat = { commandId: input.commandId, result };
+      // Publish the new paused generation before awaiting its fixed TTS.
+      if (speechOwner && replyTurnId !== input.commandId) this.onFixedReply();
       return structuredClone(result);
     }
     if (
@@ -627,6 +646,7 @@ export class SessionCoordinator {
           case 'resume':
             if (this.session.phase !== 'paused')
               return fail('REVISION_CONFLICT', 'Session is not paused');
+            this.cancelChat();
             this.system({ type: 'system.resume' });
             this.session = {
               ...this.session,
@@ -640,7 +660,8 @@ export class SessionCoordinator {
             if (action.muted || this.session.captureGrant !== null) {
               const pending = this.pendingChat !== null || this.speech?.inputPending();
               this.cancelChat(true);
-              if (pending) this.session = { ...this.session, phase: 'waiting' };
+              if (pending && this.session.phase !== 'paused')
+                this.session = { ...this.session, phase: 'waiting' };
             }
             this.session = {
               ...this.session,

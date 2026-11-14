@@ -147,7 +147,10 @@ export class PersistentData {
               release = this.coordinator.beginProfileUpdate(input.patch);
               this.changed();
             });
-            this.coordinator.acceptPersistentProfile(profile);
+            this.coordinator.acceptPersistentProfile(
+              profile,
+              Object.keys(input.patch).some((key) => key !== 'communicationSupport'),
+            );
             return ok(profile);
           } finally {
             release();

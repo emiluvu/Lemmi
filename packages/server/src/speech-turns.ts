@@ -22,7 +22,9 @@ export interface SpeechAdapters {
   stt: SttAdapter;
   tts: TtsAdapter;
 }
+type ReplyResult = Extract<ConversationTextResult, { kind: 'reply' }>;
 type Owner = {
+  fixedFor?: string;
   token: SessionSnapshot;
   turnId: string;
   streamId: string;
@@ -44,6 +46,25 @@ type Owner = {
   announced: boolean;
   ended: boolean;
 };
+// Bound adapters that ignore cancellation and discard their late owned PCM.
+function boundedWork<T>(signal: AbortSignal, work: () => Promise<T>, discard?: (value: T) => void) {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new Error('Canceled'));
+    signal.addEventListener('abort', abort, { once: true });
+    Promise.resolve()
+      .then(() => {
+        signal.throwIfAborted();
+        return work();
+      })
+      .then((value) => {
+        if (signal.aborted) {
+          discard?.(value);
+          reject(new Error('Canceled'));
+        } else resolve(value);
+      }, reject)
+      .finally(() => signal.removeEventListener('abort', abort));
+  });
+}
 // This is a bounded media-work helper owned by SessionCoordinator, not a second session store.
 export class SpeechTurns {
   #owner: Owner | null = null;
@@ -81,7 +102,7 @@ export class SpeechTurns {
       this.#owner === v &&
       !v.controller.signal.aborted &&
       !!s &&
-      !['paused', 'ended', 'unavailable'].includes(s.phase) &&
+      (v.fixedFor ? s.phase === 'paused' : !['paused', 'ended', 'unavailable'].includes(s.phase)) &&
       ['id', 'generation', 'leaseId', 'profileRevision', 'privacyRevision', 'policyRevision'].every(
         (k) => s[k as keyof SessionSnapshot] === v.token[k as keyof SessionSnapshot],
       )
@@ -117,12 +138,45 @@ export class SpeechTurns {
     v.input = null;
     v.output?.pcm.fill(0);
     v.output = undefined;
-    if (wait && wasCurrent) this.transition('waiting', null);
+    if (wait && wasCurrent && !v.fixedFor) this.transition('waiting', null);
   }
   interrupt(inputOnly = false, preserve?: object) {
     if (this.owns(preserve)) return;
     if (inputOnly && this.#owner && ['queued', 'playing'].includes(this.#owner.phase)) return;
     this.clear();
+  }
+  // Only the coordinator's synchronous concern/refusal route can replace a current input.
+  // The pause must cancel the old owner first; this creates fresh output authority afterward.
+  replaceForFixedReply(owner: object, pause: () => void): string | null {
+    const previous = this.#owner;
+    if (
+      !previous ||
+      previous !== owner ||
+      previous.phase !== 'processing' ||
+      this.now() >= previous.deadline ||
+      !this.current(previous)
+    )
+      return null;
+    pause();
+    const token = this.snapshot();
+    if (this.#owner || !previous.controller.signal.aborted || token?.phase !== 'paused')
+      return null;
+    const next: Owner = {
+      ...previous,
+      fixedFor: previous.turnId,
+      token,
+      turnId: crypto.randomUUID(),
+      streamId: crypto.randomUUID(),
+      controller: new AbortController(),
+      began: this.now(),
+      deadline: previous.deadline,
+      input: null,
+      inputBytes: 0,
+      nextChunk: 0,
+      promise: undefined,
+    };
+    this.#owner = next;
+    return next.turnId;
   }
   reset() {
     this.clear();
@@ -254,29 +308,11 @@ export class SpeechTurns {
     const signal = AbortSignal.any([v.controller.signal, AbortSignal.timeout(20_000)]);
     const cancelChat = () => this.cancelText(v.turnId);
     signal.addEventListener('abort', cancelChat, { once: true });
-    // Race even an adapter that ignores abort, and detach the event handler on completion.
-    const bounded = <T>(work: () => Promise<T>, discard?: (result: T) => void) =>
-      new Promise<T>((resolve, reject) => {
-        const abort = () => reject(new Error('Canceled'));
-        signal.addEventListener('abort', abort, { once: true });
-        Promise.resolve()
-          .then(() => {
-            signal.throwIfAborted();
-            return work();
-          })
-          .then((value) => {
-            if (signal.aborted) {
-              discard?.(value);
-              reject(new Error('Canceled'));
-            } else resolve(value);
-          }, reject)
-          .finally(() => signal.removeEventListener('abort', abort));
-      });
     try {
       const pcm = v.input!.subarray(0, v.inputBytes);
       let transcript;
       try {
-        transcript = await bounded(() =>
+        transcript = await boundedWork(signal, () =>
           this.adapters.stt.transcribe({ pcm, language: v.language }, signal),
         );
       } finally {
@@ -310,14 +346,47 @@ export class SpeechTurns {
         return response;
       }
       if (!this.current(v)) {
-        // A current fixed refusal/urgent response may intentionally pause instead of speaking.
-        if (response.data.reply.source === 'fixed' && response.data.session.phase === 'paused')
-          return response;
+        const fixed = this.#owner;
+        if (
+          fixed?.fixedFor === v.turnId &&
+          response.data.reply.source === 'fixed' &&
+          response.data.reply.turnId === fixed.turnId &&
+          response.data.session.generation === fixed.token.generation &&
+          this.current(fixed)
+        )
+          return await this.synthesize(fixed, response.data);
         return fail('REVISION_CONFLICT', 'Speech turn canceled');
       }
-      this.transition('processing', null);
-      const reply = response.data.reply;
-      const spoken = await bounded(
+      return await this.synthesize(v, response.data, signal);
+    } catch {
+      const current = this.current(v);
+      if (this.#owner === v) this.clear(true);
+      return fail(
+        current ? 'UNAVAILABLE' : 'REVISION_CONFLICT',
+        'Speech turn canceled or unavailable',
+      );
+    } finally {
+      signal.removeEventListener('abort', cancelChat);
+      v.input?.fill(0);
+      v.input = null;
+      if (this.#owner === v && v.phase === 'processing') this.clear(true);
+    }
+  }
+  private async synthesize(
+    v: Owner,
+    response: ReplyResult,
+    parentSignal?: AbortSignal,
+  ): Promise<Result<ConversationTextResult>> {
+    const signal = AbortSignal.any([
+      v.controller.signal,
+      parentSignal ?? AbortSignal.timeout(Math.max(0, Math.ceil(v.deadline - this.now()))),
+    ]);
+    try {
+      if (!this.current(v)) return fail('REVISION_CONFLICT', 'Speech turn canceled');
+      if (!v.fixedFor) this.transition('processing', null);
+      const reply = response.reply;
+      const spoken = await boundedWork(
+        signal,
         () =>
           this.adapters.tts.synthesize(
             {
@@ -366,7 +435,7 @@ export class SpeechTurns {
       v.metadata = metadata.data;
       v.phase = 'queued';
       v.deadline = this.now() + 5000;
-      return ok({ ...response.data, session: this.snapshot()! });
+      return ok({ ...response, session: this.snapshot()! });
     } catch {
       const current = this.current(v);
       if (this.#owner === v) this.clear(true);
@@ -375,9 +444,6 @@ export class SpeechTurns {
         'Speech turn canceled or unavailable',
       );
     } finally {
-      signal.removeEventListener('abort', cancelChat);
-      v.input?.fill(0);
-      v.input = null;
       if (this.#owner === v && v.phase === 'processing') this.clear(true);
     }
   }
@@ -446,7 +512,7 @@ export class SpeechTurns {
         return fail('REVISION_CONFLICT', 'Invalid playback start');
       v.phase = 'playing';
       v.deadline = this.now() + (metadata.byteLength / (metadata.sampleRate * 2)) * 1000 + 5000;
-      this.transition('speaking', null);
+      if (!v.fixedFor) this.transition('speaking', null);
     } else {
       if (v.phase !== 'playing') return fail('REVISION_CONFLICT', 'Playback has not started');
       if (input.status === 'completed') {
