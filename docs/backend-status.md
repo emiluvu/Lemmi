@@ -2,7 +2,13 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed web runtime revision: **`eab2c35`** (main-based live UI alignment, with designed landing/conversation routes); gateway remains **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
+Deployed web and gateway runtime revision: **`d3d4337`** (prioritized teaching voice continuity fix). The live UI alignment and designed routes remain included. Later documentation-only commits do not require a runtime restart.
+
+## Teaching voice continuity deployed — November 14, 2026
+
+Prioritized user request: integrated the narrow server/tests changes from Lukas `4690bf6` as `d3d4337`. Recognized teaching Next/Not sure/Like/Avoid now mint fresh server-owned speech output after the validated topic transition, keeping current session/lease/profile/privacy/policy checks, original deadline and Stop/Pause/mute cancellation. The newly selected reviewed prompt is returned. Existing UI buttons/enrollment/audio paths retained. The broader local voice-client automatic-listening loop from that branch is not deployed by this narrow fix.
+
+Independent read-only technical review found no blocker and confirmed the missing spoken-reply path already existed in original teaching `c006d26`, before recent UI integration: topic buttons had a separate approved-prompt path, explaining different behavior. Sixty-four targeted speech/teaching/browser tests / 2,228 expectations, type/Svelte zero errors/warnings and production build passed. Tests cover consecutive spoken transitions and Stop/Pause during replacement synthesis with late-buffer wiping. Retained previous source/build/manifest via `.data/teaching-continuity-rollback-path`; restarted gateway/web once, ending sessions without restoring capture/output or changing persistent keys. Actual public HTTPS/WSS verified the existing saved persistent key, explicit Start → teaching → typed Different topic → changed topic/reply → Stop; no model/microphone call in this production probe. Actual human spoken-control quality/robot playback remain separate acceptance. All four services active, zero automatic gateway restarts.
 
 ## Live UI alignment deployed — November 14, 2026
 

@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+### Prioritized teaching voice continuity deployment — November 14, 2026
+
+Deployed `d3d4337`: narrow server replacement-output fix from Lukas `4690bf6`, retaining live UI and per-profile access. Independent technical review found no blocking authority/cancellation problem; historical `c006d26` already had spoken switching's canceled-reply bug. Sixty-four targeted checks / 2,228 expectations, type/Svelte zero errors/warnings/build passed. Public same-key WSS Start/teaching/typed Different topic/changed prompt/Stop passed; actual microphone/provider/hardware not used. Gateway/web restarted, sessions ended safely, persistent keys retained. Broader branch hands-free local demo not integrated by this hotfix. [Status](backend-status.md#teaching-voice-continuity-deployed--november-14-2026).
+
 ### Main-based live UI alignment — November 14, 2026
 
 Integrated `a0a3797` (`codex/main-ui-alignment`) with tested Photo Story source and installed web `eab2c35`. Live dialog/avatar/basic-information/empty summary/trends and conversation scene/control-bar refinements retain existing safe projections and handlers. Combined type/Svelte zero errors/warnings and build passed; reconciled backend had 227 tests / 4,163 expectations with no database skips and four production fixture smokes. Actual public unlock/caregiver/conversation/root/profile-list and updated UI bundle bytes passed; private profile still 401 and local photo page/worklet 404. Only web restarted; gateway PID/start time unchanged. Main/backend-deploy receive the same source. New real browser/hardware acceptance and production Photo Story hosting remain pending. See [backend status](backend-status.md#live-ui-alignment-deployed--november-14-2026).
