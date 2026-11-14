@@ -32,6 +32,47 @@ function music(c: MockCoordinator, sessionId: string) {
   );
 }
 describe('single mock authority', () => {
+  test('journal keeps interruption reasons, deduplicates retries and does not invent playback', () => {
+    const c = new MockCoordinator();
+    let s = start(c);
+    music(c, s.id);
+    const pause = {
+      sessionId: s.id,
+      commandId: 'pause-once',
+      expectedGeneration: s.generation,
+      action: { type: 'pause' },
+    };
+    s = data(c.handle('session.command', pause));
+    c.handle('session.command', pause);
+    s = data(
+      c.handle('session.command', {
+        sessionId: s.id,
+        commandId: 'resume-once',
+        expectedGeneration: s.generation,
+        action: { type: 'resume' },
+      }),
+    );
+    c.disconnect();
+    s = data(c.handle('session.get', { sessionId: s.id }));
+    s = data(
+      c.handle('session.command', {
+        sessionId: s.id,
+        commandId: 'resume-again',
+        expectedGeneration: s.generation,
+        action: { type: 'resume' },
+      }),
+    );
+    data(c.handle('help.create', { profileId, commandId: 'help-once', mode: 'simulation' }));
+    const journal = JournalSchema.parse(data(c.handle('journal.load', { profileId })));
+    const events = journal.sessions[0]!.events;
+    expect(events.filter((event) => event.type === 'activity_paused')).toEqual([
+      { type: 'activity_paused', reason: 'participant', source: 'measured_event' },
+      { type: 'activity_paused', reason: 'disconnect', source: 'measured_event' },
+      { type: 'activity_paused', reason: 'help', source: 'measured_event' },
+    ]);
+    expect(events.filter((event) => event.type === 'activity_resumed')).toHaveLength(2);
+    expect(events.some((event) => event.type === 'track_played')).toBe(false);
+  });
   test('preview and unassigned IDs cannot access Alex operations', () => {
     const c = new MockCoordinator();
     for (const op of ['profile.load', 'journal.load', 'preferences.load', 'overview.load'])

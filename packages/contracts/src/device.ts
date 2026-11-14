@@ -70,17 +70,27 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
       firmwareVersion: z.string().max(80),
       cameraSupported: z.boolean(),
       pettingSupported: z.boolean(),
-      audio: z.strictObject({
-        encoding: z.literal('pcm_s16le'),
-        sampleRate: z.literal(16000),
-        channels: z.literal(1),
-        frameMs: z.literal(20),
-      }),
+      audio: z.union([
+        z.strictObject({ supported: z.literal(false) }),
+        z.strictObject({
+          encoding: z.literal('pcm_s16le'),
+          sampleRate: z.literal(16000),
+          channels: z.literal(1),
+          frameMs: z.literal(20),
+        }),
+      ]),
     }),
   }),
   z.strictObject({
     ...base,
-    type: z.enum(['heartbeat', 'input.stop', 'input.pause', 'input.resume', 'input.help']),
+    type: z.enum([
+      'heartbeat',
+      'input.start',
+      'input.stop',
+      'input.pause',
+      'input.resume',
+      'input.help',
+    ]),
     payload: z.strictObject({}),
   }),
   z.strictObject({
@@ -121,23 +131,47 @@ export type DeviceEvent = z.infer<typeof DeviceEventSchema>;
 export const ServerEventSchema = z.discriminatedUnion('type', [
   z.strictObject({
     ...base,
+    type: z.literal('device.ready'),
+    payload: z.strictObject({
+      mode: z.literal('live'),
+      deviceId: IdSchema,
+      profileId: IdSchema,
+      credentialExpiresAt: z.string().datetime(),
+      audio: z.literal(false),
+      camera: z.literal(false),
+      controls: z.array(z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help'])).max(6),
+    }),
+  }),
+  z.strictObject({
+    ...base,
     type: z.literal('state.changed'),
-    payload: z.strictObject({ mode: z.literal('mock'), session: SessionSnapshotSchema.nullable() }),
+    payload: z.strictObject({
+      mode: z.enum(['mock', 'live']),
+      session: SessionSnapshotSchema.nullable(),
+    }),
   }),
   z.strictObject({
     ...base,
     type: z.literal('command.ack'),
-    payload: z.strictObject({ mode: z.literal('mock'), commandId: IdSchema, applied: z.boolean() }),
+    payload: z.strictObject({
+      mode: z.enum(['mock', 'live']),
+      commandId: IdSchema,
+      applied: z.boolean(),
+    }),
   }),
   z.strictObject({
     ...base,
     type: z.literal('heartbeat'),
-    payload: z.strictObject({ mode: z.literal('mock') }),
+    payload: z.strictObject({ mode: z.enum(['mock', 'live']) }),
   }),
   z.strictObject({
     ...base,
     type: z.literal('error'),
-    payload: z.strictObject({ code: ErrorCodeSchema, message: z.string().max(300) }),
+    payload: z.strictObject({
+      code: ErrorCodeSchema,
+      message: z.string().max(300),
+      commandId: IdSchema.optional(),
+    }),
   }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEventSchema>;

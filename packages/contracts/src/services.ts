@@ -11,8 +11,21 @@ import {
   type Result,
 } from './common';
 import { SessionSnapshotSchema, SessionCommandSchema, EndpointSchema } from './session';
-import { ActivityIdSchema, ActivityViewSchema, ActivityCommandSchema } from './activity';
+import {
+  ActivityIdSchema,
+  ActivityViewSchema,
+  ActivityCommandSchema,
+  ActivityEventSchema,
+} from './activity';
 import { CheckInSnapshotSchema } from './device';
+import {
+  PairDeviceInputSchema,
+  PairDeviceResultSchema,
+  ClaimDeviceInputSchema,
+  ClaimDeviceResultSchema,
+  RevokeDeviceInputSchema,
+  RevokeDeviceResultSchema,
+} from './device-access';
 export const HelpSnapshotSchema = z.strictObject({
   id: IdSchema,
   profileId: IdSchema,
@@ -33,6 +46,12 @@ export const HelpSnapshotSchema = z.strictObject({
   reason: z.enum(['manual', 'urgent_concern']),
   message: z.string().max(200),
 });
+export const JournalEventSchema = z.union([
+  ...ActivityEventSchema.options.map((event) =>
+    event.extend({ source: z.literal('measured_event') }),
+  ),
+  z.strictObject({ type: z.literal('session_stopped'), source: z.literal('measured_event') }),
+]);
 export const JournalSchema = z.strictObject({
   profileId: IdSchema,
   mode: z.enum(['mock', 'live']),
@@ -40,21 +59,7 @@ export const JournalSchema = z.strictObject({
     .array(
       z.strictObject({
         sessionId: IdSchema,
-        events: z
-          .array(
-            z.strictObject({
-              type: z.enum([
-                'activity_started',
-                'activity_ended',
-                'track_selected',
-                'track_play_requested',
-                'session_stopped',
-              ]),
-              source: z.literal('measured_event'),
-              itemId: IdSchema.optional(),
-            }),
-          )
-          .max(100),
+        events: z.array(JournalEventSchema).max(100),
         summary: z.null(),
       }),
     )
@@ -69,6 +74,9 @@ const operation = <I extends z.ZodType, O extends z.ZodType>(input: I, output: O
   output,
 });
 export const operations = {
+  'device.pair': operation(PairDeviceInputSchema, PairDeviceResultSchema),
+  'device.claim': operation(ClaimDeviceInputSchema, ClaimDeviceResultSchema),
+  'device.revoke': operation(RevokeDeviceInputSchema, RevokeDeviceResultSchema),
   'profile.load': operation(profile, ParticipantProfileSchema),
   'profile.loadCaregiver': operation(profile, CaregiverProfileSchema),
   'profile.save': operation(
@@ -191,6 +199,11 @@ export function createClients(transport: ServiceTransport) {
     listener: (value: Result<OperationOutput<K>>) => void,
   ) => subscribeOperation(transport, op, input, listener);
   return {
+    device: {
+      pair: (input: OperationInput<'device.pair'>) => call('device.pair', input),
+      claim: (input: OperationInput<'device.claim'>) => call('device.claim', input),
+      revoke: (input: OperationInput<'device.revoke'>) => call('device.revoke', input),
+    },
     profile: {
       load: (input: OperationInput<'profile.load'>) => call('profile.load', input),
       loadCaregiver: (input: OperationInput<'profile.loadCaregiver'>) =>
@@ -266,7 +279,13 @@ export function createHttpTransport(
       if (!operations[op].input.safeParse(input).success)
         return { ok: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid command' } };
       try {
-        const response = await fetcher(`/v1/${mode}/${op}`, {
+        let path = `/v1/${mode}/${op}`;
+        if (mode === 'live') {
+          if (op === 'device.claim') path = '/v1/device-pairings/claim';
+          if ((op === 'device.pair' || op === 'device.revoke') && 'deviceId' in input)
+            path = `/v1/devices/${encodeURIComponent(input.deviceId as string)}/${op === 'device.pair' ? 'pairings' : 'revoke'}`;
+        }
+        const response = await fetcher(path, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(input),
