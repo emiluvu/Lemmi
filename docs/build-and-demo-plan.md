@@ -88,6 +88,23 @@ Review split: Anay reviews authorization/data/notification work; Emilia reviews 
 
 ## 5. Individual Codex briefs
 
+### Lukas activity branch verification — November 13, 2026
+
+Merged main through `53c7a5f`, preserving the Python terminal prototype. Added pure
+photo and reviewed-tree guessing transitions through the existing activity exports;
+see [reducer handoff](handoffs/lukas-reviewed-activities.md) for behavior, remaining
+matching contract questions and A05 hosting needs. Placeholder fixture assets are
+not live media or content approval. No shared schemas/backend/UI were changed.
+
+Observed on Windows with Bun 1.4.4: locked dependency install, 61 tests,
+`bun run check` (zero Svelte errors/warnings and TypeScript errors), and
+`bun run build` passed. Python 3.13.2's 10 terminal experiment tests also passed.
+`bun run format:check` reports 54 existing files outside this increment's formatted
+TypeScript files; broad formatting was left untouched. Windows CRLF checkout is
+present. Web smoke, browser review and real media/hardware checks were not run for
+this increment. Matching, approved media and integrated activity acceptance remain
+pending; no M2 completion is claimed.
+
 ### Lukas terminal experiment — observed November 13, 2026
 
 User-requested Python hidden-subject 20 Questions prototype lives in

@@ -95,6 +95,12 @@ The rough business idea is a subscription service plus optional robot sales, ret
 
 ## Getting started
 
+The activity branch adds pure photo/guessing reducers against A01–A04 contracts;
+catalog hosting and approved media remain pending. See the
+[Lukas handoff](docs/handoffs/lukas-reviewed-activities.md) for tested behavior and
+remaining matching dependencies. The separately requested Python terminal
+experiment has its own [run instructions](packages/activities/prototypes/twenty_questions/README.md).
+
 The selected stack direction is SvelteKit/Svelte with TypeScript, Bun for tooling/runtime, SvelteKit backend HTTP routes, a native Bun realtime gateway, and a Bun background worker. Caregiver tools and participant views are separate areas of the same app; caregivers sign in, while participants use a paired/setup device without a login screen.
 
 The backend, PostgreSQL, and local speech-to-text/text-to-speech models will run on a team-managed server: a lab desktop, one of our laptops, or a teammate's homelab. The lab desktop is the first candidate to evaluate because the team reports Ethernet and a GPU; actual speed and demo-network reachability still need testing. The LLM remains an external API. Local hosting does not make the complete system offline.

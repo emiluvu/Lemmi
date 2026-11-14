@@ -101,15 +101,20 @@ describe('activity state/pack handoff', () => {
       ActivityViewSchema.safeParse({ ...photoView, discussionContext: 'private context' }).success,
     ).toBe(false);
   });
-  test('new pack shapes validate and unfinished reducers stay explicitly unavailable', () => {
+  test('new pack shapes validate and required content eligibility gates creation', () => {
     for (const pack of [guessingPackFixture, photoPackFixture, matchingPackFixture]) {
       expect(ApprovedPackSchema.safeParse(pack).success).toBe(true);
       const state = createActivity({ instanceId: 'not-implemented' }, pack, contextFor('s'));
       expect(ActivityStateSchema.safeParse(state).success).toBe(true);
-      expect(state.phase).toBe('unavailable');
-      expect(() =>
-        reduceActivity(state, { type: 'activity.leave' }, pack, contextFor('s')),
-      ).toThrow();
+      expect(state.phase).toBe(pack.activityId === 'photo_album' ? 'ready' : 'unavailable');
+      if (pack.activityId === 'object_matching')
+        expect(() =>
+          reduceActivity(state, { type: 'activity.leave' }, pack, contextFor('s')),
+        ).toThrow();
+      else
+        expect(
+          reduceActivity(state, { type: 'activity.leave' }, pack, contextFor('s')).nextState.phase,
+        ).toBe('ended');
     }
   });
   test('reviewed guessing trees require all branches, valid candidates and entry/reveal references', () => {
