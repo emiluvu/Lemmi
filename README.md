@@ -1,5 +1,7 @@
 # Lemmi
 
+Team checklist: [Shared task board](docs/tasks.md) — current blockers, owners, checkboxes and agent claims.
+
 A personalized companion for familiar conversation, enjoyable activities, and connection with family.
 
 Lemmi is a Cal Poly Vibecode Club hackathon project exploring how an app and an optional Stackchan robot can support people living with dementia. Caregiver-provided context—such as preferred names, interests, familiar people, and communication preferences—helps the companion make interactions more personal.
