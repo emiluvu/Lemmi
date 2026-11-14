@@ -1,5 +1,57 @@
 # Lemmi — Build and demo plan
 
+### Designed public UI acceptance — November 14, 2026
+
+Deployed web `cb64621`: caregiver landing/Profiles/Games/Ecosystem design and illustrated conversation at the requested public URLs, connected to existing live fictional setup/WSS/speech/teaching. The earlier source-only UI merge left those routes blocked; this corrects that mismatch. Read-only safe demo profiles, inert examples, private caregiver authorization and explicit unavailable/preview features retained. Type/Svelte zero errors/warnings, build, 43 focused tests / 452 expectations, formatting/whitespace and proxy syntax passed. Public locked-page/root redirects, designed pages, profile-list/artwork and private/mock/internal denials passed. Only web restarted; gateway retained PID/start time and existing tests. Actual interactive browser audio, keyboard/zoom and counterpart UI acceptance remain pending. No robot/provider/live session acceptance is implied. [Exact status and boundaries](backend-status.md#designed-public-ui-integration--november-14-2026).
+
+### Kylie published UI merge acceptance — November 14, 2026
+
+Merged requested `d8a6fe4` into backend-deploy as `733fb1c` and installed its isolated production web build. Existing integration already contained the same designed components/styles/artwork; conflict resolution retained live/mock separation, enrollment, teaching and Alex context. Final source diff is documentation/font-license whitespace only. Thirty-eight focused tests / 392 expectations, production build and actual-workspace type/Svelte checks passed. Isolated checking failed to resolve route types through shared dependency symlinks; actual-workspace check passed with zero errors/warnings. Public access/unlock/participant/profile-list, twenty matching JS/CSS bundles and three matching font/surface files passed. Restarted only web; gateway remained running with existing connections. Browser visual/hardware/counterpart UI acceptance was not repeated; caregiver/mock pages remain local. See [backend status](backend-status.md#kylie-ui-publication-merge--november-14-2026).
+
+### Browser unlock repair acceptance — November 14, 2026
+
+Deployed web-only fix `7ad2de1` for the native form Origin suppression caused by `Referrer-Policy: no-referrer`; policy is now `same-origin`, with strict POST Origin checks retained. Five access tests / 39 expectations, type/Svelte checks, focused formatting and isolated production build passed. Public HTTPS access/header/unlock/cookie/participant/profile-list/logout passed; opaque Origin remains rejected. Only web restarted; gateway `f5724a0`, credentials and database preserved. The user subsequently confirmed Emilia's Chrome unlock worked. Broader counterpart review remains pending. See [backend status](backend-status.md#browser-unlock-repair--november-14-2026).
+
+## 17. Alex content preparation — November 14, 2026
+
+**Main synchronization:** merged main `24e7fe2` into the Alex feature branch,
+preserving the profile/uploader work and main's speech-pipeline increment. The
+README conflict retained both Alex instructions and the updated project status.
+Type/Svelte checks and all eleven profile/uploader tests pass. Full suite:
+114 pass, 18 database skips, one unchanged Windows POSIX file-mode assertion
+failure. No live service, provider, upload or hardware verification was performed.
+
+**Subsequent music approval/uploader:** the user explicitly attested song source
+and permission approval for demo playback. Lukas recorded that attestation and
+added a local browser-login/PKCE uploader consuming the existing authenticated
+profile/assets clients. No backend auth/routes/assignment/deployment changes.
+Five uploader tests plus six profile tests pass (72 combined assertions);
+type/Svelte and formatting pass. Full suite: 89 pass, 18 DB skips, the unchanged
+Windows POSIX-mode failure remains. Browser provider configuration/private access
+key are absent locally; no actual login/upload occurred. See
+[uploader instructions](upload-alex-music.md). Earlier missing-permission notes
+below describe the initial snapshot; photo permissions remain pending.
+
+On `codex/alex-profile-assets`, based on main `a6f7ff9`, Lukas prepared the supplied
+fictional Alex profile, caption/context drafts, favorite-song metadata, pure
+revision-aware profile-update preparation and existing-contract pack bindings.
+See [handoff and remaining integration](handoffs/lukas-alex-profile.md). Shared
+caregiver mock interests/guidance changed; no API, backend, UI or deployment changed.
+Six private PNG derivatives and the full 276.26-second PCM WAV passed the existing
+media decoder; originals/watermarks remain intact. Media permission is missing,
+so files remain unapproved and ignored, not playable approved uploads. Bob/Jill
+remain authoritative over the Christmas filename's Jill/Joe; cooking is excluded.
+
+Observed: six new tests pass (34 assertions); type/Svelte checks, production build
+and scoped formatting/whitespace checks pass. Full Bun suite: 84 pass, 18 database
+tests skipped (no dedicated test database), one existing Windows POSIX-mode
+assertion fails (`0666` returned instead of `0600` in `tests/data.test.ts:117`).
+No live profile write, provider call, speech/music playback, UI acceptance or
+hardware check was run. Anay: review catalog IDs, authenticated profile/media
+import and A05 pack hosting; Kylie: integrate existing views after hosting is
+available. No automatic merge/deployment, no claim of a complete playable
+supplied-media demo.
+
 Use [Anay's task checklist](anay_tasks.md) for backend checkboxes, teammate blockers and Anay-agent file claims. This document retains team ownership, milestones and observed acceptance results.
 
 **Status:** Shared mock starter implemented; named feature work and live/hardware acceptance pending
@@ -170,6 +222,10 @@ On branch `anay/device-control-foundation`, Linux workspace, Bun **1.4.4**: `bun
 These observations validate **the control subset only**. Identity-provider account/login integration, a selected public origin/certificate/proxy and demo-network access, database persistence, media, real notifications, K151 firmware/local controls and counterpart technical review remain pending. Credentials/pairings are bounded in-memory and revoked on restart. No full acceptance row below is upgraded by this result. Exact interfaces, configuration, nonsecret fixtures and Emilia/Kylie handoffs: [authenticated control foundation](handoffs/anay-control-foundation.md).
 
 ### Observed activity contract subset — November 13, 2026
+
+Teaching-branch formatting verification: changed code and diff whitespace passed; repository-wide formatting reports 83 unchanged files. No unrelated formatting changes were made.
+
+**Later Teach Lemmi source slice, November 14:** on `codex/teach-lemmi`, Windows, Bun 1.4.4, the user authorized backend handlers for Anay to merge/integrate/deploy. The existing coordinator now hosts reviewed teaching prompts, session-only feedback and a fifteen-minute active-time limit, with a playable scripted participant text demo. Type/Svelte checks and production build passed. Automated suite: **132 passed, 18 database-dependent skipped, one existing Windows POSIX-permission assertion failed**; Git's installed OpenSSL supplied the missing test executable. Browser checks passed for start, roses follow-up, pause, keyboard resume, Not sure, rotation/exhaustion, Finish, session-hide across teaching restart and typed Stop. Synthetic scoped device tests covered prompt playback, receipt-backed output and teaching STT/model/TTS; injected clocks covered pause/exhaustion and pending generation/audio at expiry. [Tester manual](teach-lemmi-tester-manual.md) and [counterpart handoff](handoffs/lukas-teach-lemmi.md) list exact interfaces and limits. No shared deployment, real provider/hardware, complete accessibility, durable learned policy/journal observations or F13 acceptance is claimed. Full F17/P0 and counterpart technical review remain pending.
 
 On `anay/device-control-foundation`, Linux, Bun **1.4.4**, A01–A04 now supply four discriminated states, bounded/acyclic guessing packs, matching presentation context/evidence, and strict factual event/transition schemas. Shared fictional packs and safe UI/state/transition fixtures accompany them. The existing music reducer validates transition outputs; its coordinator preserves complete events and accurate interruption reasons. Exact interfaces, breaking fixture/view fields and review handoffs are recorded in [Anay → Lukas/Kylie](handoffs/anay-activity-contracts.md). Contract changes are committed on `anay/activity-contracts-a01-a04`; counterpart review is pending.
 
@@ -396,12 +452,24 @@ Merged `main` at `a6f7ff9` into `anay/speech-pipeline` after speech fix `3fb561d
 
 On the resolved tree, pinned Bun 1.4.4, disposable PostgreSQL 17 and separate runtime/schema-test databases: **122 tests / 2,480 expectations**, type/Svelte check, production build, formatting, whitespace and production data smoke passed. TLS/identity were fixtures. No physical hardware, real provider request, new speech quality check, production database or running service was involved. The shared checkout remains on `backend-deploy`; publishing this resolution updates only the speech feature branch and leaves the final main merge to Anay.
 
+## Observed multi-profile/browser increment — November 14, 2026
+
 ### Main-to-backend deployment — November 14, 2026
 
 Integrated main `24e7fe2` into backend-deploy as runtime `275de72`; retained the local pairing helper and historical branch-review findings with a link to the subsequent concern fix. The only merge conflict was appended verification prose; both records were preserved. Before restart an isolated checkout passed Bun 1.4.4 frozen install, check, **122 Bun tests / 2,480 expectations** with separate PostgreSQL 17 runtime/schema databases, seven speech Python tests, four helper Python tests, production build/format, production control/data fixture smokes and the six-second output/receipt speech fixture smoke.
 
 Created a private PostgreSQL dump/source/build backup, applied the reviewed metadata-only migration and restarted web/gateway/private speech. No full proposal, reseed, private config/model/voice/accelerator change or public speech enablement occurred. Alex persists and both migration names are in the ledger. Services active with zero automatic restarts. Normal hostname HTTPS unlock/public gate/cookie/logout/internal/mock/invalid-device denial passed. Real persistent private-authority pairing → public claim/profile → verified WSS text greeting using actual OpenRouter → Pause/Resume/Stop passed, credential revoked. Three synthetic CPU local-engine turns also passed isolated verified WSS with fixture LLM and simulated consumption (STT 291/286/292 ms, TTS 50/98/94 ms). These are transport/adapter observations, not human recognition accuracy or speaker proof. No production voice, physical microphone/speaker/camera, fresh caregiver login, notification, reboot or venue test was performed. Public voice stays disabled pending quality/counterpart/hardware acceptance. Status/API/host guides updated.
 
+Initial checks needed sandbox escalation because local listeners/checker workers were restricted; an earlier broad run exposed a missing-credential error-order regression and a test race that observed processing before the model adapter started. The Origin guard was scoped to cookie authentication and the test now awaits actual adapter entry; final integrated checks passed. These observations establish software/fixture behavior only. No actual microphone, speaker, browser keyboard/zoom run, K151 firmware/flash, external provider, deployed host or real participant was exercised. Camera, complete activities and durable contact/journal/policy/deletion workflows remain outside this increment. Deployment/main/shared checkout were unchanged. [Exact integration and next handoff](handoffs/anay-multi-profile-endpoints.md).
+
+
+## Local frontend/backend integration preparation — November 14, 2026
+
+On the separate `integration/frontend-backend` worktree, combined Teach Lemmi/Alex (`c006d26`), the latest **local uncommitted UI copy** from `.worktrees/kylie-ui`, and Anay's browser enrollment/endpoint branch (`284dcb7`). Original UI and firmware worktrees remain untouched. Preserved scoped coordinators, fixed-reply paused-state publication, per-profile teaching expiry and current revision handling; added live teaching controls and stale reply projection checks. No deployment, shared database, actual model/media or notification action occurred.
+
+Observed on this Mac with Bun 1.4.4: frozen install (lock unchanged), check with 0 Svelte errors/warnings, build and format check passed. Canonical `TMPDIR=/private/tmp` plus loopback access: **154 tests passed, 20 database tests skipped, 0 failed; 2,832 expectations**. Production fixture HTTPS/WSS control smoke and the existing web smoke with only its origin adapted to isolated port 5187 passed. Chrome mock text rehearsal verified the preserved dashboard/Alex background, teaching start/roses reply, Pause, keyboard Resume, Not sure/topic change and Stop. No live browser microphone/speaker, K151, combined PostgreSQL/migration or deployed acceptance is claimed. Anay must review the merge and run combined database/participant production smokes before deployment. Exact changes, environment failures, evidence and remaining gates: [frontend/backend integration handoff](handoffs/frontend-backend-integration.md).
+
+Final UI follow-up: preview logs exposed snapshot-driven resubscription in the imported mock component. Derived scalar session/activity IDs now keep subscriptions stable. A fresh Chrome Start → teaching/Gardening → Stop rehearsal passed; observed **3 session reads over 3 seconds**. Type/Svelte check (0 errors/warnings), production build and full format check passed again after this UI-only change. Owned previews were stopped; the original local servers and uncommitted UI/firmware were preserved.
 ### Persistent device credential backend — November 14, 2026
 
 On `anay/persistent-device-credentials`, isolated from the live redeployment agent and based on `618bec2`, implemented caregiver-selected `credentialMode:'persistent'` using existing pairing/claim/revoke routes. Claim and device-ready expiry are nullable for this mode. Only a hashed per-device key survives backend restart; pending codes, default one-hour credentials and active sessions do not. Gateway ownership, explicit Start/capture-off behavior and caregiver/participant separation remain enforced. Durable bounded revocation receipts preserve retry safety across restart; stale authorities cannot replace/revoke the current key. Enrollment/claim recheck current caregiver assignment. Migration `003` does not upgrade existing keys.
@@ -432,3 +500,64 @@ No device firmware/storage, physical mic/speaker/camera, new real caregiver supp
 Pairing helper diagnostics: eight local Python fixtures passed after adding sanitized stage/status output and provider-body redaction; existing state/PKCE and persistent-default tests remain green. Read-only live discovery and expected caregiver-less HTTP 401 passed. No new enrollment/revoke was performed; user's post-callback failure remains under diagnosis. Runtime/public voice configuration unchanged.
 
 One-file team credential follow-up: user explicitly requested revocation of the existing key and a reusable shared test credential. Old key was durably revoked; a replacement persistent computer credential was created via private authenticated authority, claimed over public HTTPS, saved to ignored mode-0600 `.data/stackchan-access.json`, and verified against the scoped participant profile. Replacement deliberately retained for user use; no token/header values logged. Helper now claims/saves the bundle by default; `--pair-only` retains robot-side enrollment. Ten Python fixtures passed for OAuth, modes, safe errors, claim headers, secret exclusions, private-file output, overwrite refusal and failure cleanup. No server/schema/deployment, caregiver privileges, multiple-WSS support, physical confirmation, microphone or speaker acceptance changed.
+
+### Multi-profile endpoint integration preparation — November 14, 2026
+
+User explicitly authorized full fictional multi-profile scope. Reconciled endpoint branch 284dcb7 with the deployed persistent-key/chat-support code in an isolated checkout. Agent reviews covered credential transaction/epoch/membership/null-expiry preservation and per-profile support/cancellation. Preserved applied migration checksums; replaced the branch's colliding receipt-table creation with 004_endpoint_revocations.sql, retaining legacy receipts and existing key hashes. Added per-profile support and credential/migration race regressions. Existing example cards stay preview-only.
+
+Candidate checks: Bun 1.4.4 frozen install, type/Svelte, 169 Bun tests / 3,585 expectations on separate PostgreSQL 17 runtime/schema/support databases, ten pairing-helper Python tests and seven speech-boundary Python tests, build/format/diff checks, built participant cookie/enrollment/concurrent-WSS/restart/release smoke, persistent data/support, control/chat and long-output speech fixture smokes passed. These use fixture providers/clients and simulated playback, not physical robot/human acceptance. Teach Lemmi was reviewed separately and remains unmerged pending per-profile ownership, timer and live-participant adaptation. Actual host upgrade/restart and public endpoint observations are recorded only after deployment below.
+
+Multi-profile host deployment observation: runtime `17a8522` installed after the checks above. Backed up private DB/config/source/build, applied only reconciled compatibility migrations, enabled fictional enrollment and validated/reloaded proxy routes. Preserved the active shared indefinite key; public participant profile read with it passed. Public gate/participant HTML/demo route denials passed. Created two clearly fictional rehearsal profiles, enrolled distinct robot endpoints and verified simultaneous public WSS Start/Pause/Stop with profile isolation and audio false. Only rehearsal endpoints/profiles were revoked/removed; shared key unchanged. Web/gateway active with zero automatic restarts. No browser UI/hardware, new actual caregiver login, human recognition, real-model multi-profile conversation, reboot or venue test was run. Backend status/API/host instructions updated. Teach Lemmi reviewed but deliberately unmerged for now because its old gateway/live-shell assumptions need per-profile ownership/timer adaptation.
+
+### Emilia frontend/backend integration backend gate — November 14, 2026
+
+On `anay/frontend-backend-integration`, reconciled Emilia integration `437f065` with deployed-source `7debf9a` in an isolated worktree. Retained source/UI history and all six deployed SQL bytes; excluded old incompatible receipt migration. Added teaching/support coexistence/fencing regressions and fixed browser paused fixed-output/receipt behavior plus background suppression. Preserved the broader reviewed Stop phrases after the first combined run exposed the merge regression. Explicit generic participant art/font proxy paths and production asset checks were added; no private static-directory alias was introduced.
+
+Observed Bun 1.4.4/PostgreSQL17: **212 tests / 3,991 expectations, no skipped database cases**; dedicated migration/credential compatibility **10 / 74**; ten helper/seven speech Python tests; frozen install, type/Svelte/build/format/diff checks passed. Built participant cookie/concurrent-profile/ownership/restart/release, persistent data/support, control/chat and six-second speech fixture smokes passed. Fixture model/identity/audio consumption only, no physical browser/K151/provider/session/config/deployment change. No main/backend-deploy merge or publication by this pass. [Detailed handoff, source decisions and remaining acceptance](handoffs/frontend-backend-integration.md#backend-integration-follow-up--november-14-2026).
+
+
+### Public speech configuration observation — November 14, 2026
+
+The deployment owner enabled speech on the existing `17a8522` runtime and observed one synthetic public verified-WSS turn through actual local STT → real OpenRouter → local TTS: **141 capture frames / 421 output chunks**, with simulated consumption receipts. This is actual provider/transport evidence; it is not browser microphone/speaker, human English recognition, K151 local-control or new frontend/Teach deployment acceptance. The reconciled frontend/Teach candidate retains its separately recorded 212-test fixture/database gate. Remote browser rehearsal is the next check: [steps and failure reporting](handoffs/remote-voice-test.md). No raw audio, transcript, reply or credential is retained in this acceptance record.
+
+
+### Frontend/Teach host deployment acceptance — November 14, 2026
+
+Anay deployed `f5724a0` from `anay/frontend-backend-integration`, including Teach Lemmi. Final isolated suite: 213 passed / 4,045 expectations, no skips; type/build/format, helper/speech tests and built participant/persistent data/control/speech smokes passed. Public fictional rehearsal passed owner-scoped teaching, actual model reply, topic advance, Pause/Finish preserving pause/Resume/Stop and profile isolation; existing persistent key survived. User approved all three reviewed teaching topic IDs for fictional Alex. No new migration or firmware flash. Browser microphone/autoplay/speaker, K151 controls and venue/reboot acceptance remain pending. See current backend status and remote voice handoff for exact runtime availability.
+
+### Repository UI layout cleanup — November 14, 2026
+
+**Profile import correction:** The initial selective import below was incomplete. Imported Kylie's `AdditionalInformation`, `ConversationSummary` and `PhotoStoryFiles` components, the profile-scoped paper/tape summary styles, and the `profileId` connection from `43a6064`. Added the required browser-only picture context and minimal data wiring to the existing participant Photo story preview; the surrounding header/menu, typography, participant layout/controls and original avatars remain ours. Only Alex can add preview pictures. Pictures are reviewed before approval, stay in the current tab, are revoked when removed/unmounted, and are not uploaded, persisted or sent to AI. This supersedes the earlier exclusions of additional-information and summary changes.
+
+Observed correction: pinned Bun `check` passed with zero Svelte errors/warnings, production `build` and whitespace checks passed. Browser verification selected fictional repository artwork, reviewed and approved it, displayed its blob URL/caption in the existing participant preview with caregiver navigation hidden, then removed the test picture. Visually inspected the restored paper/tape summary cards. No live session, server storage, AI picture processing or hardware acceptance is implied. Next handoff: Kylie reviews the complete selected profile and Games integration.
+
+**Selective Kylie update:** Fetched `origin/codex/kylie-ui` at `43a6064` and imported only the profile appearance editor and Games catalog from its change over `11f2ed1`. Imported `ProfilePanel.svelte` appearance controls, the dashboard's local background callback/URL lifecycle, the required appearance CSS selectors, `GamesCatalog.svelte`, and its dedicated `photo-story-bubbles.png`/provenance. Kept the existing `AdditionalInformation` API (no profile-photo-sharing context), summary layout, settings pages, root header/left menu, typography, participant routes and five avatar assets. No branch-wide merge or main/backend updates were applied. A pre-import archive/file comparison confirmed no other existing source files changed in this integration.
+
+Observed: Bun 1.4.4 `check` passed with zero errors/warnings, `build` passed, and whitespace checks passed. Browser checks confirmed read-only mode has no portrait file input; Edit exposes photo/background controls; choosing Sand then Cancel restored Sage and removed the edit-only input. Games details and preview opened; the dedicated Photo story image loaded (1536px natural width), with no modal horizontal overflow at the inspected narrow width. Escape closed the modal and restored card focus. Add more → Music added a page-local card; reload restored the initial two-card catalog. These are mock/visual previews, not live games, file-upload persistence, camera or speech acceptance. Actual file selection/approval/storage and full accessibility checks were not run. Next handoff: Kylie reviews the selected editor/catalog integration while retaining this branch's surrounding UI.
+
+**Product styling follow-up:** Added locally served Nunito variable typography (original OFL license included under `apps/web/static/fonts/`), a heavier rounded wordmark/heading hierarchy, tactile sage/cream buttons with hover/pressed/focus/disabled states, decorative SVG control icons, richer profile portrait treatments using the existing avatar, and illustrated activity/setup cards with factual availability labels. Menu moved to the left and now groups workspace destinations, settings/privacy controls and the existing caregiver account/photo preview. Navigation links use the existing caregiver route with Profiles/Games/Ecosystem hashes, which also preserve selection with browser Back. Example cards remain static, with zero links/buttons. No new session store, APIs, sign-in flow, media playback or live profile management was added.
+
+Observed follow-up: local font loading confirmed in the browser (no third-party runtime font request); menu links opened the correct folder; keyboard tab switching and browser Back worked; Escape restored focus to the menu button. Desktop at 1440px and narrow layout at 390px had no horizontal page overflow. Participant conversation retained hidden caregiver navigation and a 56px preview button. Original avatar files/mapping/component remain unchanged. Type/Svelte check passed with zero errors/warnings, production build passed, and changed source formatting/whitespace checks passed. Full accessibility/contrast audit and live-service/hardware checks remain unrun.
+
+On `codex/kylie-ui-refinements`, applied the user's requested cleanup directly to the existing SvelteKit app. Added a persistent Lemmi wordmark/header and skip link; kept Kylie's Profiles/Games/Ecosystem folders; aligned the toolbar and responsive profile grid; rendered the existing Morgan/Sam preview fixtures as static, clearly labeled cards with no actions. Alex remains the only functional profile. The account drawer now overlays content without changing its width. Profile dialogs, avatar choices, supporting text and controls use consistent sizing. Conversation has its own Lemmi title, a shorter responsive avatar area and no caregiver navigation; photo-preview controls wrap at phone widths. The original five avatar assets/mapping/component are untouched. No backend, activity rules or Figma files changed during this repository cleanup.
+
+Observed with pinned Bun 1.4.4: `check` passed with zero Svelte errors/warnings, `build` passed and `git diff --check` passed. Browser checks covered the desktop dashboard, Games keyboard navigation, profile search/no-results, Alex's dialog and phone-width dialog overflow, drawer Escape/focus recovery, camera/settings/login layouts, conversation and photo preview. At 390px, the inspected dashboard/dialog and photo preview had no horizontal overflow. The desktop conversation's preview button was fully visible, at least 56px tall. Photo preview Stop returned to the ready screen. Full accessibility/200% zoom, hardware and live-service acceptance were not run. Functionality remains mock-backed; camera/voice/sign-in availability is unchanged. Next handoff: Kylie reviews the implemented spacing/sizing and retained folder structure.
+
+### Kylie UI decorative material pass — November 14, 2026
+
+On isolated branch `codex/kylie-ui-refinements`, the user requested generated soft game-style assets while preserving Kylie's existing format/layout and all custom animal avatars. Added a static conversation meadow surround and low-contrast cream paper material for existing folders/cards, plus inset highlights and shallow surface shadows. The original dashboard banner, five avatar images, avatar mapping/component, controls, client calls and mock availability are preserved. Asset provenance and exact built-in image-generation prompts are in [the surface asset notes](../apps/web/static/images/surfaces/README.md).
+
+Observed: pinned Bun 1.4.4 `check` passed with zero Svelte errors/warnings, `build` passed, changed source files were formatted, and `git diff --check` passed. Browser inspection covered caregiver dashboard and conversation at 1280 × 720 and 390 × 844, with no horizontal page overflow at phone width. Dashboard arrow-key/Home tab navigation worked. SHA-256 checks confirmed all five original avatar PNGs unchanged. No layout geometry or behavior changes were introduced; this is a visual pass over the same local mock. No live speech/camera, hardware, full accessibility audit or production readiness is established. Next handoff: Kylie reviews the material/art direction and placement; no server/activity/device interface changes are needed.
+
+### UI publication check — November 14, 2026
+
+At the user's request, prepared the existing local UI refinements for publication
+on `codex/kylie-ui-refinements`. Re-ran pinned Bun 1.4.4 `check` (zero Svelte
+errors/warnings), production `build`, and `git diff --check`; all passed. No new
+browser acceptance was performed in this publication pass. This branch preserves
+the designed mock caregiver/participant previews, fonts and decorative assets;
+it is not the deployed backend integration branch. Anay/Kylie must reconcile UI
+changes with `backend-deploy` before deployment, retaining its live participant
+enrollment/transport/teaching and cancellation fixes. Caregiver sign-in and live
+dashboard integration remain unfinished. No firmware, credentials, migration,
+server deployment or live-data claims are included in this UI publication.

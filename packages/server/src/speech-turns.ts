@@ -25,6 +25,7 @@ export interface SpeechAdapters {
 type ReplyResult = Extract<ConversationTextResult, { kind: 'reply' }>;
 type Owner = {
   fixedFor?: string;
+  approvedPrompt?: boolean;
   token: SessionSnapshot;
   turnId: string;
   streamId: string;
@@ -90,7 +91,11 @@ export class SpeechTurns {
     return this.#owner !== null;
   }
   inputPending(): boolean {
-    return !!this.#owner && ['capture', 'processing'].includes(this.#owner.phase);
+    return (
+      !!this.#owner &&
+      !this.#owner.approvedPrompt &&
+      ['capture', 'processing'].includes(this.#owner.phase)
+    );
   }
   replyCurrent(turnId: string): boolean {
     const v = this.#owner;
@@ -142,7 +147,12 @@ export class SpeechTurns {
   }
   interrupt(inputOnly = false, preserve?: object) {
     if (this.owns(preserve)) return;
-    if (inputOnly && this.#owner && ['queued', 'playing'].includes(this.#owner.phase)) return;
+    if (
+      inputOnly &&
+      this.#owner &&
+      (this.#owner.approvedPrompt || ['queued', 'playing'].includes(this.#owner.phase))
+    )
+      return;
     this.clear();
   }
   // Only the coordinator's synchronous concern/refusal route can replace a current input.
@@ -251,6 +261,64 @@ export class SpeechTurns {
       expiresAt: new Date(v.deadline).toISOString(),
     });
     return ok(this.snapshot()!);
+  }
+  // Application-owned reviewed output uses the same bounded queue/receipts as replies.
+  // It never opens capture, including when the endpoint microphone is unmuted.
+  async speakApproved(
+    raw: unknown,
+    rates: number[],
+    text: string,
+  ): Promise<Result<ConversationTextResult>> {
+    const parsed = SpeechStartCommandSchema.safeParse(raw),
+      s = this.snapshot();
+    if (!parsed.success || !text || text.length > 300)
+      return fail('VALIDATION_ERROR', 'Invalid approved prompt request');
+    const input = parsed.data;
+    if (
+      !s ||
+      s.id !== input.sessionId ||
+      s.generation !== input.expectedGeneration ||
+      !['ready', 'waiting'].includes(s.phase) ||
+      this.busy()
+    )
+      return fail('REVISION_CONFLICT', 'Prompt requires a current ready endpoint');
+    if (!rates.length) return fail('UNAVAILABLE', 'Negotiate playback before reading a prompt');
+    if (this.#commands.has(input.commandId))
+      return fail('REVISION_CONFLICT', 'Prompt request already consumed');
+    if (this.#commands.size >= 256) return fail('UNAVAILABLE', 'Speech turn capacity reached');
+    this.#commands.add(input.commandId);
+    const v: Owner = {
+      approvedPrompt: true,
+      token: s,
+      turnId: crypto.randomUUID(),
+      streamId: crypto.randomUUID(),
+      language: input.language,
+      commandId: input.commandId,
+      rates: [...rates],
+      began: this.now(),
+      deadline: this.now() + 20_000,
+      phase: 'processing',
+      controller: new AbortController(),
+      input: null,
+      inputBytes: 0,
+      nextChunk: 0,
+      sent: 0,
+      played: 0,
+      announced: false,
+      ended: false,
+    };
+    this.#owner = v;
+    this.transition('processing', null);
+    return this.synthesize(v, {
+      kind: 'reply',
+      reply: {
+        turnId: v.turnId,
+        text,
+        language: v.language,
+        source: 'fixed',
+      },
+      session: this.snapshot()!,
+    });
   }
   chunk(raw: unknown): Result<{ acceptedChunks: number }> {
     const parsed = SpeechInputChunkSchema.safeParse(raw),

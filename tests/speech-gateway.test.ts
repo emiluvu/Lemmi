@@ -175,6 +175,85 @@ async function device(
   };
 }
 
+test('teaching commands share the authorized gateway and read reviewed prompts without opening capture', async () => {
+  const d = await device();
+  try {
+    expect(d.events.find((e) => e.type === 'device.ready')!.payload).toHaveProperty(
+      'teaching',
+      true,
+    );
+    d.send('input.teaching.start');
+    await d.until(() => d.events.some((e) => e.type === 'response.start'));
+    expect(d.session().teaching?.entityId).toBe('topic:gardening');
+    expect(d.session().captureGrant).toBeNull();
+    const first = d.events.find((e) => e.type === 'response.start')!;
+    if (first.type !== 'response.start') throw new Error('Missing prompt playback');
+    expect(d.session().phase).toBe('processing');
+    d.send('input.teaching.not_sure');
+    await d.until(() => d.session().teaching?.entityId === 'topic:beaches');
+    await d.until(() => d.events.filter((e) => e.type === 'response.start').length === 2);
+    expect(
+      d.events.some((e) => e.type === 'response.cancel' && e.turn_id === first.payload.turnId),
+    ).toBe(true);
+    expect(d.session().captureGrant).toBeNull();
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
+    expect(d.session().teaching).toBeNull();
+    expect(d.session().captureGrant).toBeNull();
+  } finally {
+    d.close();
+  }
+});
+
+test('teaching voice explanation reaches the existing STT/model/TTS path with only the current topic', async () => {
+  let context = '';
+  const d = await device({
+    chat: {
+      async complete(input) {
+        context = input.system;
+        return ok({ text: 'Thank you for sharing.', language: 'en' });
+      },
+    },
+  });
+  try {
+    d.send('input.teaching.start');
+    await d.until(() => d.events.some((e) => e.type === 'response.start'));
+    const first = d.events.find((e) => e.type === 'response.start')!;
+    if (first.type !== 'response.start') throw new Error('Missing prompt');
+    const meta = first.payload;
+    const receipt = (status: string, playedChunks: number) =>
+      d.send(
+        'audio.receipt',
+        {
+          leaseId: meta.leaseId,
+          streamId: meta.streamId,
+          status,
+          playedChunks,
+        },
+        meta.turnId,
+      );
+    receipt('started', 0);
+    await d.until(() => d.session().phase === 'speaking');
+    receipt('progress', 4);
+    await d.until(() => d.events.filter((e) => e.type === 'audio.chunk').length === 8);
+    receipt('progress', 8);
+    await d.until(() => d.events.some((e) => e.type === 'audio.end'));
+    receipt('completed', 12);
+    await d.until(() => d.session().phase === 'waiting');
+    expect(d.session().captureGrant).toBeNull();
+    const input = await d.capture();
+    input.finish();
+    await d.until(() => d.events.filter((e) => e.type === 'response.start').length === 2);
+    expect(context).toContain('Teach Lemmi conversation mode');
+    expect(context).toContain('topic:gardening');
+    expect(context).not.toContain('Barbara');
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
+  } finally {
+    d.close();
+  }
+});
+
 test('negotiated gateway carries PCM → model → PCM with bounded credit and receipt-backed speaking', async () => {
   const d = await device();
   try {

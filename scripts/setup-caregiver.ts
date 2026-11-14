@@ -11,7 +11,11 @@ const config = caregiverAuthConfig({
   ...process.env,
   LEMMI_CAREGIVER_SUBJECT: 'pending-setup',
 });
-const redirect = 'http://127.0.0.1:3333/callback';
+const setupPort = Number(process.env.LEMMI_SETUP_PORT ?? 3333);
+if (!Number.isInteger(setupPort) || setupPort < 1024 || setupPort > 65535)
+  throw new Error('LEMMI_SETUP_PORT must be an integer from 1024 to 65535');
+const setupOrigin = `http://127.0.0.1:${setupPort}`;
+const redirect = `${setupOrigin}/callback`;
 const state = crypto.randomUUID();
 const verifier = crypto.randomUUID() + crypto.randomUUID();
 const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -49,15 +53,11 @@ let finish!: (code: number) => void;
 const completed = new Promise<number>((resolve) => (finish = resolve));
 const server = Bun.serve({
   hostname: '127.0.0.1',
-  port: 3333,
+  port: setupPort,
   maxRequestBodySize: 4096,
   async fetch(request) {
     const url = new URL(request.url);
-    if (
-      request.method !== 'GET' ||
-      url.origin !== 'http://127.0.0.1:3333' ||
-      url.pathname !== '/callback'
-    )
+    if (request.method !== 'GET' || url.origin !== setupOrigin || url.pathname !== '/callback')
       return new Response('Not found', { status: 404 });
     if (busy || url.searchParams.get('state') !== state)
       return new Response('Invalid setup callback', { status: 403 });

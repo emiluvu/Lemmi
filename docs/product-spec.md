@@ -38,7 +38,7 @@ The initial design audience is people with mild to moderate dementia using Lemmi
 
 ### Demo profile scope
 
-The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
+The authorized November 14 multi-profile increment supports independently created fictional participant profiles, with Alex as the initial profile. Each profile has separate approved context, assets, authorization, session state and transient conversation. Browser and robot endpoints assigned to the same profile share one session and one active audio endpoint; different profiles may run concurrently. New frontend setup selects an authorized fictional profile or creates a distinct fictional profile. Preview cards remain labeled **Example profile — preview only** and never become live records or reuse Alex’s context. Easy enrollment is explicitly enabled for fictional demo profiles only; caregiver/private-data permissions remain separate. Profile changes stop/cancel prior endpoint work, and all APIs enforce resource scope. See [multi-profile handoff](handoffs/anay-multi-profile-endpoints.md) for implementation and verification limits.
 
 ## 3. Scope and priorities
 
@@ -143,6 +143,8 @@ Use **Conversation support**, not a clinical “dementia scale”: Conversationa
 ### F17 — Teach Lemmi
 
 Lemmi selects a simple approved and currently eligible object/topic and invites the participant to teach it: “Here is a watering can. Would you like to tell me how someone uses it?” Keep the object/name visible if helpful; never require identification or a correct answer. Accept an optional explanation with a brief acknowledgment, at most one gentle follow-up, and Change topic / Not sure / Finish. No explanation is graded, challenged, stored as verified biography or used as evidence of ability. Refusal/uncertainty follows F15/F16 eligibility/retirement; move on without probing. Use existing conversation, privacy, help and cancellation services.
+
+End teaching after fifteen minutes of active conversation without a visible countdown, excluding pauses and unavailable-topic waiting. A clear Stop request ends the session immediately through the existing controls. Silence, short answers and uncertain recognition never imply disinterest or negative preference. Retain only explicitly permitted data through existing consent/storage services; missing retention support means no teaching-content save.
 
 ### F4 — Photo album talk
 
@@ -280,3 +282,6 @@ A future reviewed activity marketplace may include suitable third-party activity
 - [Integration contracts](integration-contracts.md): named ownership, activity engine/UI seam, typed commands, mocks, audio/assets, and handoffs.
 
 - [Kylie design and UI guide](kylie-design-guide.md): interface/page inventory, inspiration workflow, avatar deliverables and frontend order.
+
+
+November 14 integration clarification: the user explicitly authorized full fictional multi-profile support. Alex remains the initial profile; separately created fictional participants have isolated authorized context/assets/sessions. Existing labeled example cards remain preview-only. Multiple endpoints may observe one profile, with explicit handoff and one active audio owner. This supersedes earlier Alex-only demo restrictions for fictional profiles only; it does not authorize real participant data or infer care readiness. See [backend API](backend_api.md) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).

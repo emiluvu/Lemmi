@@ -1,5 +1,7 @@
 # PostgreSQL and private media — A18/A19
 
+**Storage schema proposal:** [Anay's app-data handoff](../docs/handoffs/anay-app-data-schema.md) includes additive draft SQL for albums/playlists, journal sources/summaries, permissions, contact jobs and deletion/camera metadata. It is outside the active migration directory, has not been executed on PostgreSQL, and does not enable those features.
+
 The optional live backend now uses PostgreSQL for Alex's profile/access, approved facts/media, issued-device credential hashes and session/factual-event checkpoints. The schema also defines scoped contact and preference/item-policy tables for later owners; their editing, notification, journal-review and remembering workflows are not implemented here. Mock mode still runs without a database and remains in-memory. No live database failure becomes mock success.
 
 Bun **1.4.4** supplies the PostgreSQL driver; there are no new dependencies or lockfile changes. This slice was exercised on native **PostgreSQL 14.24** in an isolated local cluster. `db/compose.yaml` supplies an optional PostgreSQL 17 Docker setup for portable development; Docker was unavailable here, so that specific container configuration and other machines are not yet verified.

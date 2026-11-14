@@ -1,5 +1,7 @@
 # Backend on mobrob-Precision-3680
 
+Current public UI: `/access` → `/caregiver` landing/Profiles dashboard → `/participant/conversation` for the designed live companion. Exact demo pages require the shared gate and fictional-demo switch; private APIs still require independent authorization. Earlier root-404/local-only page observations below are historical. Web-only `cb64621` and proxy allowlist are installed; gateway remains `f5724a0`. See current backend status.
+
 Observed November 13, 2026 (local time). Checkout: `/home/anayn/project/Lemmi`, branch `backend-deploy`. Public hostname selected by Anay: `lemmi.chaoswarrior.dev`. Current deployment summary: [backend status](backend-status.md). This setup does not configure automatic publication or deployment updates.
 
 ## Running services
@@ -115,3 +117,9 @@ Runtime `275de72` integrates main `24e7fe2`, the corrected speech pipeline and r
 Runtime `d067ac0` is deployed with `003_communication_support.sql` and `003_persistent_device_credentials.sql`. A private database/source/build/proxy backup is retained under `.data/releases`; its path is `.data/rollback-release-path`. New communication-support proxy paths were validated/reloaded. Same-key public authentication after a real gateway restart and complete text/control rehearsal passed; temporary persistent key revoked. The Python helper now requests persistent enrollment by default; one-hour credentials are not automatically upgraded. Keep null expiry support and private robot key storage in Emilia's firmware scope.
 
 GLM is configured with the documented `LEMMI_LLM_REASONING_EFFORT=low` and `LEMMI_LLM_MAX_TOKENS=512`; model/key unchanged. The previous mode-0600 environment is retained privately with the rollback backup. Never downgrade to pre-persistent code while persistent keys remain active: revoke through the new implementation first or use a reviewed restore/migration. See current [backend status](backend-status.md) for all observed tests and limits.
+
+## Fictional multi-profile endpoints — November 14, 2026
+
+Runtime `17a8522` deployed after 169 backend and 17 Python tests plus production fixture smokes. Database/source/build/environment/proxy backups retained under `.data/releases`; current backup path is `.data/rollback-release-path`. Existing persistent shared key/file is unchanged and public authentication passed after upgrade. Full fictional profile/enrollment routes are enabled with `LEMMI_DEMO_ENROLLMENT=1`; `/participant` is gate-protected. Migration `002_multi_profile_endpoints.sql` adds profile/device/gateway scope and `004_endpoint_revocations.sql` preserves old revoke receipts while changing their device scope. No applied migration was edited. Two public fictional rehearsal profiles/endpoints passed concurrent WSS control isolation; only those rehearsal records were cleaned up.
+
+Use `/access` then `/participant` for browser setup. For independent robot identities use the existing `bun run enroll-device PROFILE_ID PRIVATE_FILE`; each saved file is a distinct finite 30-day identity, while the earlier shared indefinite token remains valid. One profile has one active audio endpoint with explicit handoff; no automatic capture or output after reconnect. Public voice stays disabled and Teach Lemmi remains a separate unmerged integration. Backend status/API docs give exact consumer contracts and checks not yet performed.

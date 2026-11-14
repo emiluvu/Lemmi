@@ -2,7 +2,77 @@
 
 **Updated:** November 13, 2026. Read with `AGENTS.md`, [team start](../team-start.md), [integration contracts](../integration-contracts.md) and [robot capabilities](../robot-capabilities-spec.md).
 
-## Current status
+## Emilia control firmware implementation (after main be1e096)
+
+A separate control 0.1 target now uses the selected live HTTPS/WSS path, required
+X-Lemmi-Access-Key and paired Bearer credential, built-in certificate bundle and
+hostname/time validation, explicit local pairing/Start, bounded commands, local
+Stop and heartbeat watchdog. It reports media/petting unsupported. Private USB
+provisioning keeps config/credentials in RAM with hidden local input and no secret
+logging. Host policy/sanitizer/provisioning tests and pinned ESP32 compile passed;
+actual hardware connection/claim/control receipts remain pending. The firmware
+startup protocol self-check must pass before provisioning/network are enabled.
+
+Review [control implementation/checks](../../firmware/stackchan/control-checks.md)
+for the consumer's narrower control-only schema checks, Stop/Start reconciliation,
+private provisioning and pending live/counterpart acceptance. Shared schemas and
+backend files were not changed. The robot is still running petting 0.2 until the
+local upload. Live media/PCM receipts and secure camera relay remain later work.
+
+## Offline packetizer increment
+
+Emilia implemented and synthetic-tested `firmware/stackchan/audio/PcmPacketizer.h`:
+256-sample mic buffers can be split/combined into 320-sample / 640-byte PCM s16le
+frames with one bounded slot. Host sanitizers and pinned ESP32 compilation passed.
+It is not wired to capture/WSS; local epochs are not server authorization. Final
+partial tails are provisionally discarded, pending shared stream-end agreement.
+The uploaded 0.5 device is unchanged. No real samples were recorded or transmitted.
+
+Please provide the concrete live handoff in
+[audio README](../../firmware/stackchan/audio/README.md#anay-handoff-required-before-live-use):
+WSS/pairing/trust; sample updated shared schemas/fixtures for capture grants,
+independent output leases/cancellation, stream end and playback receipts; confirm
+microphone framing/base64 and TTS output format; heartbeat/deadline/backpressure;
+and a scoped endpoint with actual no-recording/buffer/temp-file behavior documented.
+Shared contract files remain Anay-owned and unchanged by this increment.
+
+## Current firmware/audio hardware handoff — November 13 local
+
+0.5 is uploaded/hash-verified and starts with camera/capture off (320×240).
+Emilia observed a correctly colored local 160×120 RGB565 preview (38400-byte
+frames), 15-second camera expiry and early local camera Stop. Teardown was
+64 ms on expiry / 65 ms on local Stop in the recorded runs. This is offline
+feasibility, not an authenticated F13 check-in.
+
+The explicit mic level test responds to Emilia's voice. Unmute alone leaves
+capture off. Active mic Mute and global Stop each reported 4 ms handler cleanup
+in separate 0.5 runs. Tone at volume 64/255 is audible; local Stop reported 5 ms
+cleanup and Emilia confirms the tone cut off early. Handler timings start after
+touch detection, not at physical contact. Intelligible speech and live STT/TTS
+remain unverified. Earlier 24/255 tone requests were inaudible despite ok=1.
+
+A later monitored 0.5 run also exercised camera → local Stop → mic → local Stop
+→ audible speaker without a new firmware upload between tests. Reverse switching,
+stress/peak-memory and live media remain unverified.
+
+Use the existing proposed 16 kHz mono signed little-endian PCM contract:
+20 ms / 320 samples / 640 bytes, base64 in current JSON audio.chunk schema.
+Offline firmware requests 256 int16 mono samples at 16 kHz and discards them;
+the offline packetizer is now available but not integrated. WSS/pairing, capture/output grants,
+input/output cancellation, stream ends and playback receipts remain joint work.
+Agree TTS output format/rate explicitly before freezing it. No microphone data
+or generated speech is currently sent to or recorded by this firmware.
+
+Camera encoding remains unresolved: hardware preview is RGB565; shared schema
+accepts JPEG only. Agree measured conversion/transport limits before freezing
+media. Do not expose the loopback mock gateway. Detailed observations and exact
+commands: [Emilia resume](emilia-resume.md) and
+[feasibility checks](../../firmware/stackchan/feasibility-checks.md).
+
+The following original inventory is historical; its missing live protocol/access
+interfaces remain relevant. Hardware status above supersedes its pre-upload notes.
+
+## Original foundation inventory
 
 The shared mock starter is on main (`429225e`). Emilia’s first firmware source is on [emilia/firmware-foundation](https://github.com/emiluvu/Lemmi/tree/emilia/firmware-foundation), initially committed as [`a9b4ae7`](https://github.com/emiluvu/Lemmi/commit/a9b4ae7). It is not merged into main by this handoff.
 

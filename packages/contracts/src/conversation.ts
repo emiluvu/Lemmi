@@ -14,7 +14,7 @@ export const ConversationReplySchema = z.strictObject({
   turnId: IdSchema,
   text: z.string().min(1).max(600),
   language: z.enum(['en', 'de']),
-  source: z.enum(['model', 'fixed']),
+  source: z.enum(['model', 'fixed', 'scripted']),
 });
 export type ConversationReply = z.infer<typeof ConversationReplySchema>;
 export const ConversationTextResultSchema = z.discriminatedUnion('kind', [

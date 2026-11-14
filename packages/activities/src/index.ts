@@ -1,3 +1,5 @@
+export * from './alex-profile';
+export * from './teaching';
 import {
   ActivityStateSchema,
   ActivityContextSchema,

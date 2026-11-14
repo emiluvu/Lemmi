@@ -2,6 +2,8 @@
 
 Shared mock starter, November 13, 2026. This is the baseline for parallel development, not the completed product or a production deployment.
 
+**Multi-profile feature branch:** `anay/multi-profile-endpoints` adds per-profile sessions, persistent browser/robot enrollment and a live participant selector. Follow [the integration handoff](handoffs/anay-multi-profile-endpoints.md); this is separate from the loopback mock starter below and is not deployed by changing source.
+
 ## Clone and run
 
 Install Bun **1.4.4** using the [official installation instructions](https://bun.sh/docs/installation). No database, API account or real credentials are needed for the starter.
@@ -71,10 +73,10 @@ SvelteKit is **3.2.0**, Svelte **5.57.3**, Vite **8.3.8**, Zod **4.6.7**, TypeSc
 
 - No integrated K151/browser capture/playback, complete voice-chat round trip, physical watchdog proof or real activity media assets. Local engine assets are explicitly provisioned separately; play requests are not playback evidence.
 - No completed caregiver sign-in/deployment, external access, persistent summaries, retained excerpts or real notification provider/outbox. Optional authenticated device controls and PostgreSQL profile/assets resource routes are described in their handoffs; database mode is opt-in. The mock caregiver page is never a security boundary.
-- Guessing/photo/matching states and packs are placeholders, not finished game schemas. The teaching snapshot/command seam exists, but teaching execution is unavailable. Lukas/Anay must extend the discriminated schemas together. Shared contract additions are expected, not permission for a second session store.
+- Guessing/photo/matching logic remains unfinished. On `codex/teach-lemmi`, teaching commands now execute through the shared conversation coordinator, with a scripted local text demo and live adapter integration checked synthetically. See the [tester manual](teach-lemmi-tester-manual.md). This is not deployed or physical-device acceptance; durable memory/teaching observations remain unavailable.
 - Camera is off; request/end adapters return UNAVAILABLE. Camera UI snapshots/header/control schemas are preliminary, not a working authorization/consent/relay. F13 hardware and access gate precedes F14 polish.
 - Preferences load as empty with remembering off. Update/forget/signals, journal writes/summary edits and asset resolution return UNAVAILABLE. Policy retention, item retirement, source review, deletion and late-write races are not implemented.
-- Subscriptions poll the one authority, with unsubscribe and no overlapping requests; production event streaming, full revision-conflict snapshots and complete server event vocabulary remain work for Anay. Fake-device wire traffic currently supports hello/heartbeat/basic controls/state, not audio/camera/teaching actions.
+- Subscriptions poll the one authority, with unsubscribe and no overlapping requests; production event streaming, full revision-conflict snapshots and complete server event vocabulary remain work for Anay. The fake-device script exercises basic controls/state; teaching wire commands are available on this branch for counterpart integration. Camera remains unavailable; negotiated speech transport is separate from fake-device hardware proof.
 - The starter is limited to bounded in-memory history (100 sessions, 100 events/session, 256 command IDs), not production retention. No diagnostic/clinical or emergency claims follow from its tests.
 
 For the current firmware/backend boundary and Anay’s next tasks, read the [device integration handoff](handoffs/anay-device-integration.md). It distinguishes compile-checked source from untested hardware and names the missing protocol exports.
@@ -94,3 +96,5 @@ Anay starts by reviewing/extending the existing backend baseline, not redoing sc
 ## Verification scope
 
 Observed on this development Mac: dependency install with Bun lockfile, type/Svelte checks, contract/coordinator/HTTP/WebSocket tests and Bun adapter production build. The 23 automated tests and the end-to-end `smoke:web` path passed; these checks validate the mock subset only. Home and participant-shell rendering were inspected in Chrome; full interactive browser/accessibility/recovery checks and later feature/hardware results remain to be recorded when observed; no provider, hardware, clinical or full P0 acceptance is implied.
+
+Current deployed integration supports explicitly created fictional profiles and browser/robot endpoints; the default `dev` mock instructions above remain local. Use [backend API](backend_api.md#deployed-endpoints--frontend-and-robot-contracts) for live cookies, endpoint enrollment, ownership/handoff and scoped caregiver routes, and [backend status](backend-status.md) for actual acceptance. Existing preview cards remain static. Teach Lemmi is not integrated in this deployment.

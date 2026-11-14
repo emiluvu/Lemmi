@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os';
 
 test('loopback caregiver setup validates state and provider binding before private assignment', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lemmi-caregiver-setup-'));
+  const portProbe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response(null) });
+  const setupPort = portProbe.port!;
+  portProbe.stop(true);
   const original = 'LEMMI_CAREGIVER_SUBJECT=\nLEMMI_DATABASE_URL=\n';
   let child: ReturnType<typeof Bun.spawn> | undefined;
   try {
@@ -21,7 +24,7 @@ test('loopback caregiver setup validates state and provider binding before priva
           return new Response(null,{status:401});
         const body = new URLSearchParams(String(init.body));
         if (url === issuer+'/token') {
-          if(body.get('code')!=='fixture-code' || body.get('code_verifier')?.length!==72 || body.get('redirect_uri')!=='http://127.0.0.1:3333/callback')
+          if(body.get('code')!=='fixture-code' || body.get('code_verifier')?.length!==72 || body.get('redirect_uri')!=='http://127.0.0.1:'+process.env.LEMMI_SETUP_PORT+'/callback')
             return new Response(null,{status:400});
           return Response.json({access_token:'fixture-access-token',token_type:'Bearer'});
         }
@@ -45,6 +48,7 @@ test('loopback caregiver setup validates state and provider binding before priva
           cwd: directory,
           env: {
             PATH: process.env.PATH,
+            LEMMI_SETUP_PORT: String(setupPort),
             LEMMI_AUTH_INTROSPECTION_URL: 'https://setup-fixture.invalid/oidc/introspect',
             LEMMI_AUTH_ISSUER: 'https://setup-fixture.invalid/oidc',
             LEMMI_AUTH_TOKEN_BINDING: 'client_id',
@@ -79,7 +83,7 @@ test('loopback caregiver setup validates state and provider binding before priva
       const authorization = new URL(
         output.split('\n').find((line) => line.startsWith('https://'))!,
       );
-      const callback = new URL('http://127.0.0.1:3333/callback');
+      const callback = new URL(`http://127.0.0.1:${setupPort}/callback`);
       callback.searchParams.set('code', 'fixture-code');
       callback.searchParams.set('state', 'wrong-state');
       expect((await fetch(callback)).status).toBe(403);

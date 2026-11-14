@@ -118,8 +118,9 @@ export const controlServerEventFixtures = [
 export const caregiverProfile = CaregiverProfileSchema.parse({
   ...participantProfile,
   source: 'caregiver_provided',
-  interests: ['topic:gardening'],
-  sensitiveTopicGuidance: 'Do not invent personal facts.',
+  interests: ['topic:gardening', 'topic:beaches', 'topic:banking'],
+  sensitiveTopicGuidance:
+    'Do not invent personal facts. Avoid proactively introducing cooking, including cooking photos and activities. Banking conversation must not solicit account details or give financial advice. Never quiz family identities or recall. Unknown family status and personal details remain unknown.',
   rememberingEnabled: false,
   excerptSavingEnabled: false,
 });

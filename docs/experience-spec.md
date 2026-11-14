@@ -54,7 +54,7 @@ The production-shaped web flow has separate participant and protected caregiver 
 
 ### Dashboard example profiles
 
-The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
+The authorized November 14 multi-profile increment supports independently created fictional participant profiles, with Alex as the initial profile. Each profile has separate approved context, assets, authorization, session state and transient conversation. Browser and robot endpoints assigned to the same profile share one session and one active audio endpoint; different profiles may run concurrently. New frontend setup selects an authorized fictional profile or creates a distinct fictional profile. Preview cards remain labeled **Example profile — preview only** and never become live records or reuse Alex’s context. Easy enrollment is explicitly enabled for fictional demo profiles only; caregiver/private-data permissions remain separate. Profile changes stop/cancel prior endpoint work, and all APIs enforce resource scope. See [multi-profile handoff](handoffs/anay-multi-profile-endpoints.md) for implementation and verification limits.
 
 ### Persistent participant controls
 
@@ -335,6 +335,8 @@ Show one approved, policy-eligible object/topic, with optional image and supplie
 
 Persistent choices: Speak now, Different topic, Not sure, Finish and shared Pause/Stop/Get help. A refusal changes topic without persuasion; object-specific uncertainty uses the existing first-occasion/session-hide and later retirement policy. Generic silence/STT failure is not a negative preference or inability signal. No automatic rephrasing/retest loop. While policy saves, output cancels or service fails, show the actual pending/paused/unavailable state; never silently repeat an excluded topic. No eligible topics offers music, just look or finish. Camera/pause/stop/profile changes invalidate the prompt and pending answer.
 
+The requested teaching limit is fifteen minutes of active conversation, including waiting, generation and output; pause/disconnect and no-eligible-topic waiting do not accrue time. Do not display a countdown. At the limit finish teaching, cancel pending capture/generation/output and return to ready with capture off. Different topic does not reset elapsed time. The current local text demo and source implementation limits are described in the [tester manual](teach-lemmi-tester-manual.md); durable observations and later-session retirement are still integration work.
+
 ### First visit and growing familiarity
 
 Start with a short greeting and neutral approved choices when profile context is sparse. Ask one optional general interest question rather than a biography questionnaire. Later suggestions use permitted explicit/tentative preferences, rotate topics and honor avoid/retired policy. Never fill missing profile fields from model guesses or claim recall of an unretained conversation.
@@ -352,3 +354,6 @@ If time remains, add factual activity-use duration by date/activity. Call it Rec
 ### Final stretch entry
 
 Solitaire is the bottom/last stretch item, after all committed work and other optional features. Do not render it as a working card until implemented; a planning item or clearly unavailable state cannot satisfy a demo criterion.
+
+
+November 14 integration clarification: the user explicitly authorized full fictional multi-profile support. Alex remains the initial profile; separately created fictional participants have isolated authorized context/assets/sessions. Existing labeled example cards remain preview-only. Multiple endpoints may observe one profile, with explicit handoff and one active audio owner. This supersedes earlier Alex-only demo restrictions for fictional profiles only; it does not authorize real participant data or infer care readiness. See [backend API](backend_api.md) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).

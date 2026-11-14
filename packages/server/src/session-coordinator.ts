@@ -9,6 +9,8 @@ import {
   validateActivityCommandContext,
   ConversationTextCommandSchema,
   ConversationReplySchema,
+  EligibilitySnapshotSchema,
+  type EligibilitySnapshot,
   ApplyCommunicationSupportSchema,
   type SupportSelection,
   type ConversationTextResult,
@@ -37,6 +39,12 @@ import {
   reduceActivity,
   projectActivity,
   applyActivitySystemInput,
+  nextTeachingTopic,
+  teachingTopics,
+  teachingTextIntent,
+  teachingInstructions,
+  teachingReplyWithinTopic,
+  TEACHING_ACTIVE_LIMIT_MS,
 } from '@lemmi/activities';
 import { createHash } from 'node:crypto';
 import { companionInput } from './adapters/companion-prompt';
@@ -44,7 +52,8 @@ import { fixedInputReply, routeParticipantText } from './adapters/input-routing'
 import { permittedModelReply } from './adapters/reply-policy';
 import type { ChatAdapter, ChatMessage } from './adapters/types';
 import { SpeechTurns, type SpeechAdapters } from './speech-turns';
-// One in-memory authority. Live mode currently exposes controls only, with no media/retention.
+import { elapsedEpochClock } from './elapsed-clock';
+// One session authority; teaching reuses conversation/speech without durable dialogue retention.
 export class SessionCoordinator {
   constructor(
     private readonly mode: 'mock' | 'live' = 'mock',
@@ -53,6 +62,7 @@ export class SessionCoordinator {
     now: () => number = Date.now,
     private readonly onFixedReply: () => void = () => {},
   ) {
+    this.now = now === Date.now ? elapsedEpochClock() : now;
     if (mode === 'live' && chatAdapter && speech)
       this.speech = new SpeechTurns(
         speech,
@@ -79,11 +89,155 @@ export class SessionCoordinator {
         },
       );
   }
+  private readonly now: () => number;
+  private teachingRun: { elapsed: number; since: number | null; seen: string[] } | null = null;
+  private teachingHidden = new Set<string>();
+  private teachingPreferred = new Set<string>();
+  private teachingEligibility: EligibilitySnapshot | null = null;
+
+  private eligibleForTeaching(): EligibilitySnapshot {
+    const s = this.session!;
+    const base = this.teachingEligibility ?? {
+      profileId: s.profileId,
+      sessionId: s.id,
+      policyRevision: s.policyRevision,
+      // Narrow baseline only: approved caregiver interests, no learned policy promises.
+      permittedEntityIds: this.profile.interests,
+      sessionHiddenIds: [],
+      available: !this.profile.rememberingEnabled && s.policyRevision === 0,
+    };
+    return {
+      ...base,
+      available:
+        base.available &&
+        base.profileId === s.profileId &&
+        base.sessionId === s.id &&
+        base.policyRevision === s.policyRevision,
+      sessionHiddenIds: [...new Set([...base.sessionHiddenIds, ...this.teachingHidden])],
+    };
+  }
+  // Coordinator-only integration hook; never accepts a client/model-selected policy.
+  applyTeachingEligibility(raw: unknown) {
+    const parsed = EligibilitySnapshotSchema.safeParse(raw);
+    if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid teaching eligibility');
+    const policy = parsed.data,
+      s = this.session;
+    if (!s || s.phase === 'ended' || policy.profileId !== s.profileId || policy.sessionId !== s.id)
+      return fail('FORBIDDEN', 'Eligibility does not belong to the active session');
+    if (
+      policy.policyRevision < s.policyRevision ||
+      (policy.policyRevision === s.policyRevision &&
+        (this.teachingEligibility !== null || s.teaching !== null))
+    )
+      return fail('REVISION_CONFLICT', 'Use a current initial or advancing eligibility revision');
+    this.interrupt({ type: 'system.pause', reason: 'config_change' });
+    this.teachingEligibility = policy;
+    this.session = { ...this.session!, policyRevision: policy.policyRevision };
+    this.refreshTeachingPrompt();
+    return ok(this.snapshot()!);
+  }
+  private freezeTeaching() {
+    if (this.teachingRun?.since != null) {
+      this.teachingRun.elapsed += Math.max(0, this.now() - this.teachingRun.since);
+      this.teachingRun.since = null;
+    }
+  }
+  private finishTeaching() {
+    this.cancelChat();
+    this.teachingRun = null;
+    if (this.session)
+      this.session = {
+        ...this.session,
+        generation: this.session.generation + 1,
+        conversationMode: 'open',
+        teaching: null,
+        // Leaving teaching must not release a participant/help/configuration pause.
+        phase: this.session.phase === 'paused' ? 'paused' : 'ready',
+        captureGrant: null,
+      };
+  }
+  sweepTeaching(): boolean {
+    const run = this.teachingRun;
+    if (!run) return false;
+    const elapsed = run.elapsed + (run.since === null ? 0 : Math.max(0, this.now() - run.since));
+    if (elapsed < TEACHING_ACTIVE_LIMIT_MS) return false;
+    this.finishTeaching();
+    return true;
+  }
+  private refreshTeachingPrompt() {
+    const s = this.session,
+      t = s?.teaching;
+    if (!s || !t) return;
+    const eligible = this.eligibleForTeaching();
+    const topic = teachingTopics.find(
+      (item) =>
+        item.entityId === t.entityId &&
+        eligible.available &&
+        eligible.permittedEntityIds.includes(item.entityId) &&
+        !eligible.sessionHiddenIds.includes(item.entityId),
+    );
+    this.session = {
+      ...s,
+      teaching: {
+        ...t,
+        entityId: topic?.entityId ?? null,
+        topicLabel: topic?.label ?? null,
+        prompt: topic?.invitations[s.communicationSupport.preset] ?? null,
+        presentationId: crypto.randomUUID(),
+        revision: t.revision + 1,
+        policyRevision: s.policyRevision,
+        phase: s.phase === 'paused' ? 'paused' : topic ? 'ready' : 'unavailable',
+      },
+    };
+  }
+  private chooseTeachingTopic() {
+    const s = this.session!,
+      run = this.teachingRun!;
+    const topic = nextTeachingTopic(this.eligibleForTeaching(), run.seen, [
+      ...this.teachingPreferred,
+    ]);
+    if (topic) run.seen.push(topic.entityId);
+    this.session = {
+      ...s,
+      generation: s.generation + 1,
+      phase: 'ready',
+      captureGrant: null,
+      conversationMode: 'teach_lemmi',
+      teaching: {
+        mode: 'teach_lemmi',
+        entityId: topic?.entityId ?? null,
+        assetId: null,
+        topicLabel: topic?.label ?? null,
+        prompt: topic?.invitations[s.communicationSupport.preset] ?? null,
+        presentationId: crypto.randomUUID(),
+        revision: (s.teaching?.revision ?? -1) + 1,
+        policyRevision: s.policyRevision,
+        phase: topic ? 'ready' : 'unavailable',
+      },
+    };
+    // No eligible topic is waiting for an explicit choice, not active conversation time.
+    if (!topic) this.freezeTeaching();
+    else if (run.since === null) run.since = this.now();
+  }
   private readonly speech?: SpeechTurns;
+  async speakTeachingPrompt(raw: unknown, rates: number[]) {
+    this.sweepTeaching();
+    if (this.configurationChanges.size)
+      return fail('REVISION_CONFLICT', 'Configuration save is pending');
+    const prompt = this.session?.teaching?.prompt;
+    if (!prompt) return fail('UNAVAILABLE', 'No current teaching prompt');
+    return (
+      this.speech?.speakApproved(raw, rates, prompt) ??
+      fail('UNAVAILABLE', 'Speech adapters are disabled')
+    );
+  }
   speechConfigured() {
     return !!this.speech;
   }
   requestCapture(raw: unknown, rates: number[]) {
+    this.sweepTeaching();
+    if (this.session?.teaching && !this.session.teaching.entityId)
+      return fail('UNAVAILABLE', 'Choose another activity or finish; no eligible teaching topic');
     if (this.configurationChanges.size)
       return fail('REVISION_CONFLICT', 'Configuration save is pending');
     if (this.activity && this.activity.phase !== 'ended')
@@ -95,18 +249,23 @@ export class SessionCoordinator {
     return result;
   }
   acceptCaptureChunk(raw: unknown) {
+    this.sweepTeaching();
     return this.speech?.chunk(raw) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
   }
   async finishCapture(raw: unknown): Promise<Result<ConversationTextResult>> {
+    this.sweepTeaching();
     return this.speech?.end(raw) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
   }
   playbackReceipt(raw: unknown) {
+    this.sweepTeaching();
     return this.speech?.receipt(raw) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
   }
   speechOutputInfo() {
+    this.sweepTeaching();
     return this.speech?.outputInfo() ?? null;
   }
   drainSpeechOutput() {
+    this.sweepTeaching();
     return this.speech?.drain() ?? null;
   }
   sweepSpeech() {
@@ -121,6 +280,8 @@ export class SessionCoordinator {
     promise: Promise<Result<ConversationTextResult>>;
   } | null = null;
   private profile = structuredClone(caregiverProfile);
+  private privacyRevision = 0;
+  private policyRevision = 0;
   private approvedFacts: string[] = [];
   private supportSelections: SupportSelection[] = [];
   private supportReceipts = new Map<string, { fingerprint: string; generation: number }>();
@@ -148,7 +309,7 @@ export class SessionCoordinator {
       return fail('VALIDATION_ERROR', 'Invalid communication support apply request');
     const input = parsed.data,
       session = this.session;
-    if (input.profileId !== DEMO_PROFILE_ID || profile.id !== input.profileId)
+    if (input.profileId !== this.profile.id || profile.id !== input.profileId)
       return fail('FORBIDDEN', 'Profile is not assigned');
     if (profile.revision !== input.expectedProfileRevision)
       return fail('REVISION_CONFLICT', 'Reload the saved profile before applying support');
@@ -177,6 +338,7 @@ export class SessionCoordinator {
         ...this.context,
         presentationPolicy: structuredClone(profile.communicationSupport),
       };
+    if (this.session.teaching) this.refreshTeachingPrompt();
     this.recordSupportSelection(actorSubject);
     this.supportReceipts.set(input.commandId, { fingerprint, generation: this.session.generation });
     return ok(this.snapshot()!);
@@ -194,8 +356,15 @@ export class SessionCoordinator {
     });
   }
   private activityContext(sessionId: string): ActivityContext {
+    const context = contextFor(sessionId);
     return {
-      ...contextFor(sessionId),
+      ...context,
+      eligibility: {
+        ...context.eligibility,
+        profileId: this.profile.id,
+        policyRevision: this.policyRevision,
+        ...(this.mode === 'live' ? { permittedEntityIds: [], available: false } : {}),
+      },
       presentationPolicy: structuredClone(this.session!.communicationSupport),
     };
   }
@@ -215,9 +384,19 @@ export class SessionCoordinator {
       ...caregiver
     } = profile;
     this.profile = structuredClone(caregiver);
+    if (syncPausedRevision) this.teachingEligibility = null;
+    this.privacyRevision = _privacy;
+    this.policyRevision = _policy;
+    this.journal.profileId = profile.id;
     this.approvedFacts = approvedFacts.map((fact) => fact.value);
     if (syncPausedRevision && this.session?.phase === 'paused')
-      this.session = { ...this.session, profileRevision: profile.revision };
+      this.session = {
+        ...this.session,
+        profileRevision: profile.revision,
+        privacyRevision: profile.privacyRevision,
+        policyRevision: profile.policyRevision,
+      };
+    if (syncPausedRevision && this.session?.teaching) this.refreshTeachingPrompt();
   }
   persistenceSnapshot() {
     const session = this.snapshot();
@@ -239,9 +418,24 @@ export class SessionCoordinator {
   private cache = new Map<string, { body: string; result: Result<unknown> }>();
   private count = 0;
   snapshot() {
-    return this.session ? structuredClone(this.session) : null;
+    if (!this.session) return null;
+    const snapshot = structuredClone(this.session);
+    if (snapshot.teaching && snapshot.teaching.entityId)
+      snapshot.teaching.phase =
+        snapshot.phase === 'paused'
+          ? 'paused'
+          : snapshot.phase === 'listening'
+            ? 'listening'
+            : snapshot.phase === 'processing'
+              ? 'processing'
+              : 'ready';
+    return snapshot;
+  }
+  bindEndpoint(deviceId: string) {
+    if (this.session) this.session = { ...this.session, activeEndpointId: deviceId };
   }
   isCurrentTextReply(turnId: string): boolean {
+    this.sweepTeaching();
     // A result can have resolved before an interrupt, with its socket callback still queued.
     // Clear-on-interrupt receipt ownership closes that race even when mute keeps generation.
     return (
@@ -268,11 +462,12 @@ export class SessionCoordinator {
     raw: unknown,
     speechOwner?: object,
   ): Promise<Result<ConversationTextResult>> {
+    this.sweepTeaching();
     const parsed = ConversationTextCommandSchema.safeParse(raw);
     if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid participant text command');
     const input = parsed.data;
     const session = this.session;
-    if (this.mode !== 'live')
+    if (this.mode !== 'live' && session?.conversationMode !== 'teach_lemmi')
       return fail('UNAVAILABLE', 'Live text conversation is unavailable in mock mode');
     if (this.configurationChanges.size)
       return fail('REVISION_CONFLICT', 'Configuration save is pending');
@@ -314,6 +509,8 @@ export class SessionCoordinator {
         mode: 'real',
       }) as Result<ConversationTextResult>;
     const fixed = fixedInputReply(route, input.language);
+    if (route === 'topic_refusal' && session.teaching?.entityId)
+      this.teachingHidden.add(session.teaching.entityId);
     const interrupts = [
       'urgent',
       'unwell',
@@ -342,6 +539,7 @@ export class SessionCoordinator {
           replyTurnId = fixedTurn;
         } else pause();
       } else this.session = { ...session, phase: 'waiting', captureGrant: null };
+      if (route === 'topic_refusal') this.refreshTeachingPrompt();
       const result = ok<ConversationTextResult>({
         kind: 'reply',
         reply: { turnId: replyTurnId, text: fixed, language: input.language, source: 'fixed' },
@@ -351,6 +549,38 @@ export class SessionCoordinator {
       // Publish the new paused generation before awaiting its fixed TTS.
       if (speechOwner && replyTurnId !== input.commandId) this.onFixedReply();
       return structuredClone(result);
+    }
+    const teachingIntent = session.teaching
+      ? teachingTextIntent(input.text, session.teaching.entityId ?? undefined)
+      : 'explanation';
+    if (teachingIntent !== 'explanation') {
+      const action = `teaching.${teachingIntent}` as
+        | 'teaching.next'
+        | 'teaching.not_sure'
+        | 'teaching.prefer'
+        | 'teaching.avoid';
+      const changed = this.handle('session.command', {
+        sessionId: session.id,
+        expectedGeneration: session.generation,
+        commandId: input.commandId,
+        action: { type: action },
+      });
+      if (!changed.ok) return changed;
+      const result = ok<ConversationTextResult>({
+        kind: 'reply',
+        reply: {
+          turnId: input.commandId,
+          language: input.language,
+          source: 'fixed',
+          text:
+            teachingIntent === 'prefer'
+              ? 'You can keep sharing if you like. Preferences are only used in this session.'
+              : 'We can leave that topic. You can choose another topic or finish.',
+        },
+        session: this.snapshot()!,
+      });
+      this.lastChat = { commandId: input.commandId, result };
+      return result;
     }
     if (
       this.pendingChat ||
@@ -364,15 +594,23 @@ export class SessionCoordinator {
     this.lastChat = null;
     if (!this.chatAdapter)
       return fail('UNAVAILABLE', 'Configure the server LLM key/model before chatting');
+    const teachingTopic = session.teaching
+      ? teachingTopics.find((t) => t.entityId === session.teaching?.entityId)
+      : null;
+    if (session.teaching && (!teachingTopic || input.language !== 'en'))
+      return fail('UNAVAILABLE', 'No eligible reviewed teaching topic in this language');
     const prepared = companionInput({
       text: input.text,
       language: input.language,
       preset: session.communicationSupport.preset,
       preferredName: this.profile.preferredName,
       history: this.dialogue,
-      approvedFacts: this.approvedFacts,
+      approvedFacts: session.teaching ? [] : this.approvedFacts,
     });
     if (!prepared.ok) return prepared;
+    if (teachingTopic)
+      prepared.data.system +=
+        '\n' + teachingInstructions(teachingTopic, session.communicationSupport.preset);
     this.session = { ...session, phase: 'processing', captureGrant: null };
     const pending = {
       commandId: input.commandId,
@@ -383,15 +621,19 @@ export class SessionCoordinator {
     };
     this.pendingChat = pending;
     const signal = AbortSignal.any([pending.controller.signal, AbortSignal.timeout(20000)]);
-    const current = () =>
-      this.pendingChat === pending &&
-      this.session?.id === session.id &&
-      this.session.phase === 'processing' &&
-      this.session.generation === session.generation &&
-      this.session.leaseId === session.leaseId &&
-      this.session.profileRevision === session.profileRevision &&
-      this.session.privacyRevision === session.privacyRevision &&
-      this.session.policyRevision === session.policyRevision;
+    const current = () => {
+      this.sweepTeaching();
+      return (
+        this.pendingChat === pending &&
+        this.session?.id === session.id &&
+        this.session.phase === 'processing' &&
+        this.session.generation === session.generation &&
+        this.session.leaseId === session.leaseId &&
+        this.session.profileRevision === session.profileRevision &&
+        this.session.privacyRevision === session.privacyRevision &&
+        this.session.policyRevision === session.policyRevision
+      );
+    };
     pending.promise = (async () => {
       let result: Result<ConversationTextResult>;
       try {
@@ -424,6 +666,14 @@ export class SessionCoordinator {
           result = fail('UNAVAILABLE', 'Invalid conversation reply');
         else if (!permittedModelReply(response.data.text, session.communicationSupport))
           result = fail('UNAVAILABLE', 'Response did not meet the configured conversation policy');
+        else if (
+          teachingTopic &&
+          !teachingReplyWithinTopic(response.data.text, teachingTopic.entityId)
+        )
+          result = fail(
+            'UNAVAILABLE',
+            'Response left the reviewed teaching topic; choose another topic or finish',
+          );
         else {
           this.dialogue = [
             ...this.dialogue,
@@ -436,7 +686,7 @@ export class SessionCoordinator {
               turnId: input.commandId,
               text: response.data.text,
               language: input.language,
-              source: 'model',
+              source: this.mode === 'mock' ? 'scripted' : 'model',
             },
             session: this.snapshot()!,
           });
@@ -478,6 +728,7 @@ export class SessionCoordinator {
     }
   }
   private interrupt(input: Extract<ActivitySystemInput, { type: 'system.pause' | 'system.end' }>) {
+    this.freezeTeaching();
     this.cancelChat();
     if (!this.session || this.session.phase === 'ended') return;
     this.session = {
@@ -487,6 +738,12 @@ export class SessionCoordinator {
       captureGrant: null,
     };
     this.system(input);
+    if (input.type === 'system.end') {
+      this.teachingRun = null;
+      this.teachingHidden.clear();
+      this.teachingPreferred.clear();
+      this.session = { ...this.session, conversationMode: 'open', teaching: null };
+    }
   }
   disconnect() {
     this.interrupt({ type: 'system.pause', reason: 'disconnect' });
@@ -495,17 +752,27 @@ export class SessionCoordinator {
     this.interrupt({ type: 'system.end', reason: 'revoked' });
   }
   handle(operation: string, raw: unknown): Result<unknown> {
+    this.sweepTeaching();
     if (!Object.hasOwn(operations, operation))
       return fail('NOT_FOUND', 'Unknown service operation');
     const op = operation as Operation;
     const parsed = operations[op].input.safeParse(raw);
     if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid command shape');
     const input = parsed.data;
+    if (op === 'conversation.submit')
+      return fail('UNAVAILABLE', 'Use the asynchronous conversation submission path');
     if (
       this.configurationChanges.size &&
       (op === 'session.start' ||
         (op === 'session.command' &&
-          SessionCommandSchema.safeParse(input).data?.action.type === 'resume'))
+          [
+            'resume',
+            'teaching.start',
+            'teaching.next',
+            'teaching.not_sure',
+            'teaching.prefer',
+            'teaching.avoid',
+          ].includes(SessionCommandSchema.safeParse(input).data?.action.type ?? '')))
     )
       return fail('REVISION_CONFLICT', 'Configuration save is pending; interaction stays paused');
     if (
@@ -514,9 +781,9 @@ export class SessionCoordinator {
     )
       return fail('UNAVAILABLE', 'Only authenticated device controls are implemented');
     // Parsed keys/values only; never accept a client-selected scope or preview profile as live.
-    if ('profileId' in input && input.profileId !== DEMO_PROFILE_ID)
-      return fail('FORBIDDEN', 'Only Alex is functional; examples are preview-only');
-    if ('profile' in input && input.profile.id !== DEMO_PROFILE_ID)
+    if ('profileId' in input && input.profileId !== this.profile.id)
+      return fail('FORBIDDEN', 'Profile is not assigned to this session');
+    if ('profile' in input && input.profile.id !== this.profile.id)
       return fail('FORBIDDEN', 'Profile is not assigned');
     const body = JSON.stringify(input);
     const key =
@@ -575,12 +842,16 @@ export class SessionCoordinator {
         );
         if (changedContext) this.interrupt({ type: 'system.pause', reason: 'config_change' });
         this.profile = { ...input.profile, revision: this.profile.revision + 1 };
+        if (changedContext) {
+          this.teachingEligibility = null;
+          this.refreshTeachingPrompt();
+        }
         return ok(this.profile);
       case 'profile.applySupport':
         return this.applyCommunicationSupport(input, this.profile, 'fixture-caregiver');
       case 'profile.support':
         return ok({
-          profileId: DEMO_PROFILE_ID,
+          profileId: this.profile.id,
           profileRevision: this.profile.revision,
           saved: this.profile.communicationSupport,
           session: this.session?.phase === 'ended' ? null : this.snapshot(),
@@ -600,15 +871,19 @@ export class SessionCoordinator {
         this.cancelChat();
         this.speech?.reset();
         this.chatIds.clear();
+        this.teachingRun = null;
+        this.teachingHidden.clear();
+        this.teachingPreferred.clear();
+        this.teachingEligibility = null;
         this.supportSelections = [];
         this.supportReceipts.clear();
         this.session = SessionSnapshotSchema.parse({
           id: this.mode === 'live' ? `session-${crypto.randomUUID()}` : `session-${++this.count}`,
-          profileId: DEMO_PROFILE_ID,
+          profileId: this.profile.id,
           generation: 0,
           profileRevision: this.profile.revision,
-          privacyRevision: 0,
-          policyRevision: 0,
+          privacyRevision: this.privacyRevision,
+          policyRevision: this.policyRevision,
           phase: 'ready',
           endpoint: input.endpoint,
           leaseId: this.mode === 'live' ? `lease-${crypto.randomUUID()}` : `lease-${this.count}`,
@@ -655,6 +930,48 @@ export class SessionCoordinator {
               captureGrant: null,
               profileRevision: this.profile.revision,
             };
+            if (this.teachingRun && this.session.teaching?.entityId)
+              this.teachingRun.since = this.now();
+            this.refreshTeachingPrompt();
+            break;
+          case 'teaching.start':
+            if (
+              this.session.phase === 'paused' ||
+              this.session.conversationMode === 'teach_lemmi' ||
+              (this.activity && this.activity.phase !== 'ended')
+            )
+              return fail('REVISION_CONFLICT', 'Resume or leave the current activity first');
+            this.cancelChat();
+            this.teachingRun = { elapsed: 0, since: this.now(), seen: [] };
+            this.chooseTeachingTopic();
+            break;
+          case 'teaching.next':
+          case 'teaching.not_sure':
+          case 'teaching.avoid':
+          case 'teaching.prefer':
+            if (!this.teachingRun || !this.session.teaching || this.session.phase === 'paused')
+              return fail('REVISION_CONFLICT', 'Use a current active teaching presentation');
+            const entity = this.session.teaching.entityId;
+            if (action.type !== 'teaching.next' && !entity)
+              return fail('UNAVAILABLE', 'No teaching topic is presented');
+            this.cancelChat();
+            if (action.type === 'teaching.prefer') {
+              this.teachingPreferred.add(entity!);
+              this.session = {
+                ...this.session,
+                generation: this.session.generation + 1,
+                phase: 'ready',
+                captureGrant: null,
+              };
+              this.refreshTeachingPrompt();
+            } else {
+              if (action.type !== 'teaching.next') this.teachingHidden.add(entity!);
+              this.chooseTeachingTopic();
+            }
+            break;
+          case 'teaching.finish':
+            if (!this.teachingRun) return fail('REVISION_CONFLICT', 'Teaching is not active');
+            this.finishTeaching();
             break;
           case 'mute':
             if (action.muted || this.session.captureGrant !== null) {
@@ -674,7 +991,8 @@ export class SessionCoordinator {
             this.session = {
               ...this.session,
               endpoint: action.endpoint,
-              leaseId: `lease-${++this.count}`,
+              leaseId:
+                this.mode === 'live' ? `lease-${crypto.randomUUID()}` : `lease-${++this.count}`,
             };
             break;
           default:
@@ -696,6 +1014,8 @@ export class SessionCoordinator {
       case 'activities.start':
         if (!this.session || this.session.id !== input.sessionId)
           return fail('NOT_FOUND', 'Session not found');
+        if (this.session.teaching)
+          return fail('REVISION_CONFLICT', 'Finish teaching before starting another activity');
         if (this.session.phase === 'paused' || this.session.phase === 'ended')
           return fail('REVISION_CONFLICT', 'Session must be ready');
         if (input.activityId !== 'music_playlist' || input.packId !== musicPack.id)
@@ -749,7 +1069,7 @@ export class SessionCoordinator {
         if (!this.help || ['canceled', 'resolved', 'expired'].includes(this.help.status))
           this.help = {
             id: `help-${++this.count}`,
-            profileId: DEMO_PROFILE_ID,
+            profileId: this.profile.id,
             status: 'created',
             mode: 'simulation',
             reason: 'manual',

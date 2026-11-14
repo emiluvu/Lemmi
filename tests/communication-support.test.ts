@@ -776,3 +776,156 @@ test('caregiver support HTTP is POST-only, rejects forged actors/device tokens, 
     '/v1/profiles/profile-alex/communication-support',
   ]);
 });
+
+dbtest(
+  'per-profile support apply and context writes cancel only their own pending turns',
+  async () => {
+    await sql`TRUNCATE lemmi.profiles CASCADE`;
+    const pending: Array<{ signal: AbortSignal; finish: (value: any) => void }> = [];
+    const { SessionRegistry } = await import('../packages/server/src/session-registry');
+    let changes = 0;
+    const registry = new SessionRegistry({
+      complete(_input, signal) {
+        return new Promise((finish) => pending.push({ signal, finish }));
+      },
+    });
+    const data = new PersistentData(
+      repo,
+      'fixture-caregiver',
+      registry,
+      Date.now,
+      () => {},
+      () => {
+        changes++;
+      },
+    );
+    try {
+      await data.start();
+      const other = await repo.createProfile(
+        'fixture-caregiver',
+        { preferredName: 'Casey', avatarId: 'cat' },
+        true,
+        data.devices.bootId,
+      );
+      registry.acceptPersistentProfile(other);
+      const alex = registry.forProfile('profile-alex');
+      const casey = registry.forProfile(other.id);
+      for (const [id, coordinator] of [
+        ['profile-alex', alex],
+        [other.id, casey],
+      ] as const) {
+        expect(
+          coordinator.handle('session.start', {
+            profileId: id,
+            endpoint: 'robot',
+            commandId: crypto.randomUUID(),
+          }).ok,
+        ).toBe(true);
+      }
+      function submit(coordinator: SessionCoordinator) {
+        const session = coordinator.snapshot()!;
+        return coordinator.submitText({
+          sessionId: session.id,
+          expectedGeneration: session.generation,
+          commandId: crypto.randomUUID(),
+          text: 'A fictional garden greeting',
+          language: 'en',
+        });
+      }
+      const alexTurn = submit(alex),
+        caseyTurn = submit(casey);
+      for (let i = 0; i < 10 && pending.length < 2; i++) await Promise.resolve();
+      expect(pending).toHaveLength(2);
+      const beforeAlex = alex.snapshot()!;
+      const saved = await data.handle(
+        {
+          operation: 'profile.update',
+          input: {
+            profileId: other.id,
+            expectedRevision: 0,
+            commandId: crypto.randomUUID(),
+            patch: { communicationSupport: { preset: 'quiet', configVersion: 1 } },
+          },
+        },
+        'fixture-caregiver',
+        undefined,
+      );
+      expect(saved.ok).toBe(true);
+      expect(pending.every((entry) => !entry.signal.aborted)).toBe(true);
+      const read = await data.handle(
+        { operation: 'support.read', profileId: other.id },
+        'fixture-caregiver',
+        undefined,
+      );
+      expect(read.ok).toBe(true);
+      const { CommunicationSupportStateSchema } = await import('@lemmi/contracts');
+      if (!read.ok) throw new Error('Scoped support read failed');
+      expect(CommunicationSupportStateSchema.parse(read.data)).toMatchObject({
+        profileId: other.id,
+        saved: { preset: 'quiet' },
+        session: { profileId: other.id, communicationSupport: { preset: 'guided' } },
+      });
+      const caseyBeforeApply = casey.snapshot()!;
+      const apply = await data.handle(
+        {
+          operation: 'support.apply',
+          input: {
+            profileId: other.id,
+            expectedProfileRevision: 1,
+            sessionId: caseyBeforeApply.id,
+            expectedGeneration: caseyBeforeApply.generation,
+            commandId: crypto.randomUUID(),
+          },
+        },
+        'fixture-caregiver',
+        undefined,
+      );
+      expect(apply.ok).toBe(true);
+      expect(casey.snapshot()).toMatchObject({
+        profileId: other.id,
+        phase: 'paused',
+        communicationSupport: { preset: 'quiet' },
+      });
+      expect(pending[1]!.signal.aborted).toBe(true);
+      expect(pending[0]!.signal.aborted).toBe(false);
+      expect(alex.snapshot()).toEqual(beforeAlex);
+      expect((await caseyTurn).ok).toBe(false);
+      const selections =
+        await sql`SELECT profile_id,preset,source FROM lemmi.session_support_selections WHERE source='caregiver_apply'`;
+      expect(selections).toHaveLength(1);
+      expect(selections[0]).toMatchObject({ profile_id: other.id, preset: 'quiet' });
+      expect(control(casey, 'resume').ok).toBe(true);
+      const secondCaseyTurn = submit(casey);
+      for (let i = 0; i < 10 && pending.length < 3; i++) await Promise.resolve();
+      expect(pending).toHaveLength(3);
+      const changed = await data.handle(
+        {
+          operation: 'profile.update',
+          input: {
+            profileId: 'profile-alex',
+            expectedRevision: 0,
+            commandId: crypto.randomUUID(),
+            patch: { preferredName: 'Alex fixture' },
+          },
+        },
+        'fixture-caregiver',
+        undefined,
+      );
+      expect(changed.ok).toBe(true);
+      expect(pending[0]!.signal.aborted).toBe(true);
+      expect(pending[2]!.signal.aborted).toBe(false);
+      expect(alex.snapshot()?.phase).toBe('paused');
+      expect(casey.snapshot()?.phase).toBe('processing');
+      expect((await alexTurn).ok).toBe(false);
+      pending[2]!.finish(ok({ text: 'Flowers can be lovely.', language: 'en' }));
+      expect((await secondCaseyTurn).ok).toBe(true);
+      pending[0]!.finish(ok({ text: 'Late obsolete reply.', language: 'en' }));
+      pending[1]!.finish(ok({ text: 'Late obsolete reply.', language: 'en' }));
+      expect(casey.snapshot()?.phase).toBe('waiting');
+      expect(changes).toBeGreaterThan(0);
+    } finally {
+      registry.disconnect();
+      await data.close();
+    }
+  },
+);

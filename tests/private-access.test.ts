@@ -79,6 +79,29 @@ test('unlock requires same-origin form POST, bounds guessing and supports explic
   expect((await unlock(key)).status).toBe(429);
   expect((await handler(new Request(origin + '/access'), null, origin, now)).status).toBe(503);
 });
+test('access pages preserve native form origins while rejecting opaque and missing origins', async () => {
+  const handler = createPrivateAccessHandler();
+  const page = await handler(new Request(origin + '/access'), key, origin, now);
+  expect(page.headers.get('referrer-policy')).toBe('same-origin');
+  for (const from of ['null', undefined]) {
+    const headers = new Headers({ 'content-type': 'application/x-www-form-urlencoded' });
+    if (from !== undefined) headers.set('origin', from);
+    for (const path of ['/access', '/access/logout']) {
+      const response = await handler(
+        new Request(origin + path, {
+          method: 'POST',
+          headers,
+          body: new URLSearchParams({ key }),
+        }),
+        key,
+        origin,
+        now,
+      );
+      expect(response.status).toBe(403);
+      expect(response.headers.has('set-cookie')).toBe(false);
+    }
+  }
+});
 test('outer access alone does not authorize a device or expose the private gateway seam', async () => {
   const gateway = startControlGateway({
     publicOrigin: origin,

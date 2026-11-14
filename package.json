@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "upload:alex-music": "bun scripts/upload-alex-music.ts",
     "dev": "bun scripts/dev.ts",
     "dev:web": "bun run --filter @lemmi/web dev",
     "dev:gateway": "bun --watch apps/realtime/src/index.ts",
@@ -25,7 +26,9 @@
     "db:migrate": "bun scripts/database.ts migrate",
     "db:bootstrap": "bun scripts/database.ts bootstrap",
     "test:data": "bun test tests/data.test.ts",
-    "smoke:data": "bun scripts/smoke-data.ts"
+    "smoke:data": "bun scripts/smoke-data.ts",
+    "smoke:participant": "bun scripts/smoke-participant.ts",
+    "enroll-device": "bun scripts/enroll-device.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
