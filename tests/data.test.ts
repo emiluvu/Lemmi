@@ -21,8 +21,6 @@ import {
 } from '@lemmi/server';
 import {
   ProfileDetailSchema,
-  DeviceEventSchema,
-  ServerEventSchema,
   ParticipantProfileSchema,
   createClients,
   createHttpTransport,
@@ -222,7 +220,7 @@ dbtest(
   },
 );
 dbtest(
-  'device issuance is committed as hashes, revoke retries spare replacements and restart requires re-pairing',
+  'device issuance is committed as hashes, revoke retries spare replacements and restart preserves enrollment',
   async () => {
     await reset();
     let invalidations = 0;
@@ -291,7 +289,12 @@ dbtest(
     const restart = new DatabaseDeviceAuthority(repo, Date.now, () => {});
     await restart.start();
     expect(await authority.authenticate(c2.data.credential)).toBeNull();
-    expect(await restart.authenticate(c2.data.credential)).toBeNull();
+    expect(await restart.authenticate(c2.data.credential)).not.toBeNull();
+    await restart.revoke('fixture-caregiver', {
+      deviceId: 'stackchan-alex',
+      commandId: 'revoke-1',
+    });
+    expect(await restart.authenticate(c2.data.credential)).not.toBeNull();
     expect(invalidations).toBeGreaterThan(0);
   },
 );
@@ -592,7 +595,7 @@ dbtest(
         caregiver: false,
         credential,
       });
-      expect(preview.status).toBe(400);
+      expect(preview.status).toBe(403);
       await internal('control/revoke', {
         actor: 'fixture-caregiver',
         input: { deviceId: 'stackchan-alex', commandId: randomUUID() },
@@ -725,17 +728,22 @@ dbtest('revocation cancels local access immediately while SQL is blocked', async
     locked = resolve;
   });
   const lock = sql.begin(async (tx) => {
-    await tx`SELECT 1 FROM lemmi.profiles FOR UPDATE`;
+    await tx`SELECT 1 FROM lemmi.devices FOR UPDATE`;
     locked();
     await new Promise<void>((resolve) => {
       unlock = resolve;
     });
   });
   await acquired;
-  const revoke = authority.revoke('fixture-caregiver', {
-    deviceId: 'stackchan-alex',
-    commandId: randomUUID(),
+  const command = { deviceId: 'stackchan-alex', commandId: randomUUID() };
+  const revoke = authority.revoke('fixture-caregiver', command);
+  const duplicate = authority.revoke('fixture-caregiver', command);
+  let acknowledged = false;
+  void duplicate.then(() => {
+    acknowledged = true;
   });
+  await Bun.sleep(10);
+  expect(acknowledged).toBe(false);
   expect(authority.current(identity!)).toBe(false);
   unlock();
   await lock;
@@ -916,399 +924,192 @@ dbtest(
   },
 );
 
-async function persistentKey(authority: DatabaseDeviceAuthority) {
-  const pair = await authority.pair('fixture-caregiver', {
-    deviceId: 'stackchan-alex',
-    profileId: 'profile-alex',
-    commandId: randomUUID(),
-    credentialMode: 'persistent',
-  });
-  if (!pair.ok) throw new Error('Persistent fixture pairing failed');
-  const claim = await authority.claim({
-    pairingId: pair.data.pairingId,
-    code: pair.data.code,
-    localConfirmed: true,
-  });
-  if (!claim.ok) throw new Error('Persistent fixture claim failed');
-  expect(claim.data.expiresAt).toBeNull();
-  return claim.data;
-}
-
 dbtest(
-  'persistent key survives gateway restart and long idle time, with old sessions/authorities ended',
+  'fictional profiles and browser/robot enrollment remain isolated through restart and switching',
   async () => {
     await reset();
-    let now = Date.now();
-    const old = new DatabaseDeviceAuthority(
+    const { SessionRegistry } = await import('@lemmi/server');
+    const sessions = new SessionRegistry();
+    const invalidated: string[] = [];
+    const data = new PersistentData(repo, 'fixture-caregiver', sessions, Date.now, (id) => {
+      if (id) invalidated.push(id);
+    });
+    await data.start();
+    let browser: any, robot: any, other: any;
+    try {
+      const list = await data.demoHandle({ operation: 'profile.list' });
+      expect(list.ok && list.data).toMatchObject([{ id: 'profile-alex', preferredName: 'Alex' }]);
+      const created = await data.demoHandle({
+        operation: 'profile.create',
+        input: { preferredName: 'Taylor', avatarId: 'dog' },
+      });
+      if (!created.ok || !('id' in created.data)) throw new Error('create fixture');
+      const id = created.data.id;
+      expect(id).not.toBe('profile-alex');
+      expect(id).not.toStartWith('preview-');
+      expect(
+        sessions
+          .forProfile(id)
+          .handle('session.start', { profileId: id, endpoint: 'robot', commandId: randomUUID() })
+          .ok,
+      ).toBe(true);
+      expect(sessions.forProfile('profile-alex').snapshot()).toBeNull();
+      const own = await data.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId: 'profile-alex',
+        endpoint: 'browser',
+      });
+      const second = await data.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId: id,
+        endpoint: 'robot',
+      });
+      if (!own.ok || !second.ok) throw new Error('enroll fixture');
+      browser = own.data;
+      robot = second.data;
+      expect(browser.deviceId).not.toBe(robot.deviceId);
+      expect(JSON.stringify(await sql`SELECT * FROM lemmi.devices`)).not.toContain(
+        browser.credential,
+      );
+      const principal = await data.principal(undefined, browser.credential);
+      expect((await repo.profile(principal, 'profile-alex')).id).toBe('profile-alex');
+      await expect(repo.profile(principal, id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(repo.profile(principal, 'profile-alex', true)).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.current',
+          credential: robot.credential,
+          endpoint: 'browser',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.enroll',
+          profileId: id,
+          endpoint: 'browser',
+          previousCredential: robot.credential,
+          previousEndpoint: 'browser',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(await data.devices.authenticate(robot.credential)).not.toBeNull();
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.enroll',
+          profileId: 'preview-sam',
+          endpoint: 'robot',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const privateProfile = await repo.createProfile('fixture-caregiver', {
+        preferredName: 'Private fixture',
+      });
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.enroll',
+          profileId: privateProfile.id,
+          endpoint: 'robot',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect((await repo.listProfiles('unassigned-caregiver')).length).toBe(0);
+      // Reassignment rotates this endpoint only; other participant credentials remain valid.
+      const changed = await data.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId: id,
+        endpoint: 'browser',
+        previousCredential: browser.credential,
+      });
+      if (!changed.ok) throw new Error('switch fixture');
+      other = changed.data;
+      expect(await data.devices.authenticate(browser.credential)).toBeNull();
+      expect(await data.devices.authenticate(robot.credential)).not.toBeNull();
+      expect(invalidated).toContain(browser.deviceId);
+      await data.checkpoint(sessions.forProfile(id).persistenceSnapshot());
+    } finally {
+      await data.close();
+    }
+    const replacementSessions = new SessionRegistry();
+    const replacement = new PersistentData(
       repo,
-      () => now,
+      'fixture-caregiver',
+      replacementSessions,
+      Date.now,
       () => {},
     );
-    await old.start();
-    const key = await persistentKey(old);
-    const identity = (await old.authenticate(key.credential))!;
-    const coordinator = new SessionCoordinator('live');
-    const started = coordinator.handle('session.start', {
-      profileId: 'profile-alex',
-      endpoint: 'robot',
-      commandId: randomUUID(),
-    });
-    if (!started.ok) throw new Error('Fixture session failed');
-    await repo.saveSession(coordinator.snapshot()!, [], old.bootId);
-    const stored = JSON.stringify(await sql`SELECT * FROM lemmi.devices`);
-    expect(stored).not.toContain(key.credential);
-    expect(stored).toContain(sha256(key.credential));
-    const next = new DatabaseDeviceAuthority(
-      repo,
-      () => now,
-      () => {},
-    );
-    await next.start();
-    now += 365 * 24 * 60 * 60_000;
-    expect((await next.authenticate(key.credential))?.credentialId).toBe(identity.credentialId);
-    expect(await next.verifyCurrent()).toBe(true);
-    expect(await old.authenticate(key.credential)).toBeNull();
-    await expect(
-      repo.profile(
-        {
-          kind: 'participant',
-          deviceId: identity.deviceId,
-          profileId: identity.profileId,
-          credentialId: identity.credentialId,
-          bootId: old.bootId,
-        },
-        'profile-alex',
-      ),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    const principal: DataPrincipal = {
-      kind: 'participant',
-      deviceId: identity.deviceId,
-      profileId: identity.profileId,
-      credentialId: identity.credentialId,
-      bootId: next.bootId,
-    };
-    expect((await repo.profile(principal, 'profile-alex')).id).toBe('profile-alex');
-    await expect(repo.profile(principal, 'profile-alex', true)).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-    });
-    expect((await sql`SELECT phase FROM lemmi.sessions`)[0].phase).toBe('ended');
-    expect(
-      (
-        await next.pair('fixture-caregiver', {
-          deviceId: 'stackchan-alex',
-          profileId: 'profile-alex',
-          commandId: randomUUID(),
-          credentialMode: 'persistent',
-        })
-      ).ok,
-    ).toBe(false);
+    await replacement.start();
+    try {
+      expect(await replacement.devices.authenticate(browser.credential)).toBeNull();
+      expect(await replacement.devices.authenticate(robot.credential)).not.toBeNull();
+      expect(await replacement.devices.authenticate(other.credential)).not.toBeNull();
+      expect(replacementSessions.forProfile(robot.profileId).snapshot()).toBeNull();
+      expect((await sql`SELECT phase FROM lemmi.sessions`)[0].phase).toBe('ended');
+      // A durable device can be revoked before its first post-restart authentication.
+      const fresh = new DatabaseDeviceAuthority(repo, Date.now, () => {});
+      await fresh.start();
+      expect(
+        (
+          await fresh.revoke('fixture-caregiver', {
+            deviceId: robot.deviceId,
+            commandId: 'restart-revoke',
+          })
+        ).ok,
+      ).toBe(true);
+      expect(await fresh.authenticate(robot.credential)).toBeNull();
+      expect(await fresh.authenticate(other.credential)).not.toBeNull();
+    } finally {
+      await replacement.close();
+    }
   },
 );
 
 dbtest(
-  'persistent revocation and its retry receipt survive restarts without revoking a replacement',
+  'the final admitted revocation receipt persists at capacity and restart cannot reopen enrollment',
   async () => {
     await reset();
-    const first = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await first.start();
-    const key = await persistentKey(first);
-    const revoke = { deviceId: 'stackchan-alex', commandId: randomUUID() };
-    expect((await first.revoke('fixture-caregiver', revoke)).ok).toBe(true);
-    const second = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await second.start();
-    expect(await second.authenticate(key.credential)).toBeNull();
-    const replacement = await persistentKey(second);
-    const third = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await third.start();
-    expect((await third.revoke('fixture-caregiver', revoke)).ok).toBe(true);
-    expect(await third.authenticate(replacement.credential)).not.toBeNull();
-    expect(await third.verifyCurrent()).toBe(true);
-    expect(
-      (await third.revoke('fixture-caregiver', { ...revoke, commandId: randomUUID() })).ok,
-    ).toBe(true);
-    const fourth = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await fourth.start();
-    expect(await fourth.authenticate(replacement.credential)).toBeNull();
-  },
-);
-
-dbtest(
-  'stale gateway cannot revoke a retained key or enroll a replacement after ownership changes',
-  async () => {
-    await reset();
-    const old = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await old.start();
-    const key = await persistentKey(old);
-    const next = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await next.start();
-    expect(
-      (
-        await old.revoke('fixture-caregiver', {
-          deviceId: 'stackchan-alex',
-          commandId: randomUUID(),
-        })
-      ).ok,
-    ).toBe(false);
-    expect(await next.authenticate(key.credential)).not.toBeNull();
-    expect(
-      (
-        await old.pair('fixture-caregiver', {
-          deviceId: 'stackchan-alex',
-          profileId: 'profile-alex',
-          commandId: randomUUID(),
-        })
-      ).ok,
-    ).toBe(false);
-    expect((await sql`SELECT boot_id FROM lemmi.devices`)[0].boot_id).toBe(next.bootId);
-  },
-);
-
-dbtest(
-  'pending enrollment never survives restart, and profile deletion cannot resurrect a durable key',
-  async () => {
-    await reset();
-    const old = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await old.start();
-    const pending = await old.pair('fixture-caregiver', {
-      deviceId: 'stackchan-alex',
-      profileId: 'profile-alex',
-      commandId: randomUUID(),
-      credentialMode: 'persistent',
-    });
-    if (!pending.ok) throw new Error('Fixture pairing failed');
-    const next = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await next.start();
-    expect(
-      (
-        await next.claim({
-          pairingId: pending.data.pairingId,
-          code: pending.data.code,
-          localConfirmed: true,
-        })
-      ).ok,
-    ).toBe(false);
-    const key = await persistentKey(next);
-    await sql`UPDATE lemmi.profiles SET deletion_state='deleting'`;
-    expect(await next.authenticate(key.credential)).toBeNull();
-    expect(await next.verifyCurrent()).toBe(false);
-    await sql`DELETE FROM lemmi.profiles WHERE id='profile-alex'`;
-    await repo.bootstrap('fixture-caregiver');
-    const fresh = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await fresh.start();
-    expect(await fresh.authenticate(key.credential)).toBeNull();
-  },
-);
-
-dbtest(
-  'revocation history capacity blocks new keys but never blocks ending current access',
-  async () => {
-    await reset();
+    // Populate actual durable history so restart exercises the admission boundary.
+    await sql`INSERT INTO lemmi.device_revocations(device_id,actor,command_id) SELECT 'stackchan-alex','fixture-caregiver','capacity-'||n FROM generate_series(1,9999) n`;
     const authority = new DatabaseDeviceAuthority(repo, Date.now, () => {});
     await authority.start();
-    const key = await persistentKey(authority);
-    await sql`INSERT INTO lemmi.device_revocations (profile_id,subject,command_id) SELECT 'profile-alex','fixture-caregiver','old-'||n FROM generate_series(1,256) AS n`;
-    expect(
-      (
-        await authority.revoke('fixture-caregiver', {
-          deviceId: 'stackchan-alex',
-          commandId: randomUUID(),
-        })
-      ).ok,
-    ).toBe(true);
-    expect(await authority.authenticate(key.credential)).toBeNull();
-    const next = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await next.start();
-    expect(
-      (
-        await next.pair('fixture-caregiver', {
-          deviceId: 'stackchan-alex',
-          profileId: 'profile-alex',
-          commandId: randomUUID(),
-          credentialMode: 'persistent',
-        })
-      ).ok,
-    ).toBe(false);
-    expect((await sql`SELECT count(*)::int AS n FROM lemmi.device_revocations`)[0].n).toBe(256);
-  },
-);
-
-dbtest(
-  'durable claim rechecks caregiver assignment and database key invariants fail closed',
-  async () => {
-    await reset();
-    const authority = new DatabaseDeviceAuthority(repo, Date.now, () => {});
-    await authority.start();
-    await expect(sql`UPDATE lemmi.devices SET credential_persistent=true`).rejects.toThrow();
     const pair = await authority.pair('fixture-caregiver', {
       deviceId: 'stackchan-alex',
       profileId: 'profile-alex',
-      commandId: randomUUID(),
-      credentialMode: 'persistent',
+      commandId: 'capacity-pair',
     });
-    if (!pair.ok) throw new Error('Fixture pairing failed');
-    await sql`DELETE FROM lemmi.profile_access WHERE profile_id='profile-alex'`;
+    if (!pair.ok) throw new Error('Pairing before capacity must work');
+    const claim = await authority.claim({
+      pairingId: pair.data.pairingId,
+      code: pair.data.code,
+      localConfirmed: true,
+    });
+    if (!claim.ok) throw new Error('Claim before capacity must work');
+    const command = { deviceId: 'stackchan-alex', commandId: 'last-admitted-revoke' };
+    expect((await authority.revoke('fixture-caregiver', command)).ok).toBe(true);
+    expect((await sql`SELECT count(*)::int AS n FROM lemmi.device_revocations`)[0].n).toBe(10000);
+    expect(
+      await sql`SELECT 1 FROM lemmi.device_revocations WHERE device_id='stackchan-alex' AND command_id='last-admitted-revoke'`,
+    ).toHaveLength(1);
+    const replacement = new DatabaseDeviceAuthority(repo, Date.now, () => {});
+    await replacement.start();
+    expect((await replacement.revoke('fixture-caregiver', command)).ok).toBe(true);
     expect(
       (
-        await authority.claim({
-          pairingId: pair.data.pairingId,
-          code: pair.data.code,
-          localConfirmed: true,
+        await replacement.pair('fixture-caregiver', {
+          deviceId: 'stackchan-alex',
+          profileId: 'profile-alex',
+          commandId: 'after-capacity',
         })
       ).ok,
     ).toBe(false);
-    expect((await sql`SELECT credential_id FROM lemmi.devices`)[0].credential_id).toBeNull();
-  },
-);
-
-dbtest(
-  'real gateway accepts the same key after restart with no restored session or automatic capture',
-  async () => {
-    await reset();
-    const internalToken = randomUUID(),
-      accessKey = randomUUID();
-    let gateway = startControlGateway({
-      publicOrigin: 'https://durable.invalid',
-      internalToken,
-      accessKey,
-      port: 0,
-      repository: repo,
-      caregiverSubject: 'fixture-caregiver',
-    });
-    let ws: WebSocket | undefined;
-    const until = async (predicate: () => boolean) => {
-      const deadline = Date.now() + 2000;
-      while (!predicate()) {
-        if (Date.now() > deadline) throw new Error('Persistent gateway fixture timed out');
-        await Bun.sleep(5);
-      }
-    };
-    const stop = async () => {
-      if (ws) {
-        ws.close();
-        await until(() => ws!.readyState === WebSocket.CLOSED);
-        ws = undefined;
-      }
-      gateway.stop();
-      await gateway.flush();
-      await gateway.data!.close();
-    };
-    const call = async (action: string, body: unknown) => {
-      const response = await fetch(
-        `http://127.0.0.1:${gateway.server.port}/internal/control/${action}`,
-        {
-          method: 'POST',
-          headers: { authorization: `Bearer ${internalToken}`, 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-      );
-      const result = (await response.json()) as any;
-      if (!result.ok) throw new Error('Persistent gateway fixture operation failed');
-      return result.data;
-    };
-    const connect = async (credential: string) => {
-      const events: ReturnType<typeof ServerEventSchema.parse>[] = [];
-      ws = new WebSocket(`ws://127.0.0.1:${gateway.server.port}/v1/device-stream`, {
-        headers: {
-          host: 'durable.invalid',
-          'x-forwarded-proto': 'https',
-          authorization: `Bearer ${credential}`,
-          'X-Lemmi-Access-Key': accessKey,
-        },
-      });
-      ws.onmessage = (e) => events.push(ServerEventSchema.parse(JSON.parse(String(e.data))));
-      await until(() => ws!.readyState === WebSocket.OPEN);
-      let sequence = 0;
-      const send = (type: string, sessionId: string | null = null, generation = 0) =>
-        ws!.send(
-          JSON.stringify(
-            DeviceEventSchema.parse({
-              protocol_version: 1,
-              event_id: randomUUID(),
-              session_id: sessionId,
-              turn_id: null,
-              generation,
-              sequence: sequence++,
-              type,
-              payload:
-                type === 'device.hello'
-                  ? {
-                      firmwareVersion: 'persistent-fixture',
-                      cameraSupported: false,
-                      pettingSupported: false,
-                      audio: { supported: false },
-                    }
-                  : {},
-            }),
-          ),
-        );
-      send('device.hello');
-      await until(() => events.some((e) => e.type === 'device.ready'));
-      const ready = events.find((e) => e.type === 'device.ready')!;
-      expect(ready.payload).toHaveProperty('credentialExpiresAt', null);
-      return { events, send };
-    };
-    try {
-      await gateway.ready;
-      const paired = await call('pair', {
-        actor: 'fixture-caregiver',
-        input: {
+    expect(await replacement.authenticate(claim.data.credential)).toBeNull();
+    // Revocation remains available after capacity; receipts cannot grow without bound.
+    expect(
+      (
+        await replacement.revoke('fixture-caregiver', {
           deviceId: 'stackchan-alex',
-          profileId: 'profile-alex',
-          commandId: randomUUID(),
-          credentialMode: 'persistent',
-        },
-      });
-      const key = await call('claim', {
-        pairingId: paired.pairingId,
-        code: paired.code,
-        localConfirmed: true,
-      });
-      expect(key.expiresAt).toBeNull();
-      const first = await connect(key.credential);
-      first.send('input.start');
-      await until(() =>
-        first.events.some(
-          (e) => e.type === 'state.changed' && e.payload.session?.phase === 'ready',
-        ),
-      );
-      await stop();
-      gateway = startControlGateway({
-        publicOrigin: 'https://durable.invalid',
-        internalToken,
-        accessKey,
-        port: 0,
-        repository: repo,
-        caregiverSubject: 'fixture-caregiver',
-      });
-      await gateway.ready;
-      const second = await connect(key.credential);
-      await until(() => second.events.some((e) => e.type === 'state.changed'));
-      expect(
-        second.events
-          .filter((e) => e.type === 'state.changed')
-          .every((e) => e.type === 'state.changed' && e.payload.session === null),
-      ).toBe(true);
-      expect((await sql`SELECT phase FROM lemmi.sessions`)[0].phase).toBe('ended');
-      second.send('input.start');
-      await until(() =>
-        second.events.some(
-          (e) => e.type === 'state.changed' && e.payload.session?.phase === 'ready',
-        ),
-      );
-      const snapshot = second.events.find(
-        (e) => e.type === 'state.changed' && e.payload.session?.phase === 'ready',
-      );
-      if (snapshot?.type !== 'state.changed') throw new Error('Missing fixture state');
-      expect(snapshot.payload.session?.micMuted).toBe(true);
-      expect(snapshot.payload.session?.captureGrant).toBeNull();
-      await call('revoke', {
-        actor: 'fixture-caregiver',
-        input: { deviceId: 'stackchan-alex', commandId: randomUUID() },
-      });
-      await until(() => ws!.readyState === WebSocket.CLOSED);
-      expect(await gateway.data!.devices.authenticate(key.credential)).toBeNull();
-    } finally {
-      await stop();
-    }
+          commandId: 'uncached-safety-revoke',
+        })
+      ).ok,
+    ).toBe(true);
+    expect((await sql`SELECT count(*)::int AS n FROM lemmi.device_revocations`)[0].n).toBe(10000);
   },
 );

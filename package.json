@@ -25,7 +25,9 @@
     "db:migrate": "bun scripts/database.ts migrate",
     "db:bootstrap": "bun scripts/database.ts bootstrap",
     "test:data": "bun test tests/data.test.ts",
-    "smoke:data": "bun scripts/smoke-data.ts"
+    "smoke:data": "bun scripts/smoke-data.ts",
+    "smoke:participant": "bun scripts/smoke-participant.ts",
+    "enroll-device": "bun scripts/enroll-device.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",

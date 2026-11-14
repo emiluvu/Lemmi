@@ -38,6 +38,7 @@ export const SessionSnapshotSchema = z
     policyRevision: RevisionSchema,
     phase: SessionPhaseSchema,
     endpoint: EndpointSchema,
+    activeEndpointId: IdSchema.optional(),
     leaseId: IdSchema,
     micMuted: z.boolean(),
     captureGrant: CaptureGrantSchema.nullable(),

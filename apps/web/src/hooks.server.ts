@@ -22,8 +22,15 @@ export const handle: Handle = async ({ event, resolve }) => {
     /^\/v1\/(profiles\/[^/]+(?:\/(?:(photos|assets)(?:\/[^/]+)?|communication-support(?:\/apply)?))?|participant\/profiles\/[^/]+|assets\/[^/]+(?:\/metadata)?)$/.test(
       event.url.pathname,
     );
+  const participantRoute =
+    event.url.pathname === '/participant' ||
+    event.url.pathname.startsWith('/v1/demo/') ||
+    event.url.pathname.startsWith('/_app/');
   const accessRoute = event.url.pathname === '/access' || event.url.pathname === '/access/logout';
-  if (process.env.LEMMI_MODE === 'live' && (deviceRoute || dataRoute || accessRoute)) {
+  if (
+    process.env.LEMMI_MODE === 'live' &&
+    (deviceRoute || dataRoute || accessRoute || participantRoute)
+  ) {
     try {
       const config = controlConfig();
       if (
@@ -34,11 +41,17 @@ export const handle: Handle = async ({ event, resolve }) => {
       )
         return new Response('Trusted HTTPS proxy required', { status: 403 });
       if (accessRoute) return accessHandler(event.request, config.accessKey, config.publicOrigin);
-      if (!hasPrivateAccess(event.request, config.accessKey))
+      if (!hasPrivateAccess(event.request, config.accessKey)) {
+        if (event.url.pathname === '/participant')
+          return new Response(null, {
+            status: 303,
+            headers: { Location: '/access', 'Cache-Control': 'no-store' },
+          });
         return Response.json(
           { ok: false, error: { code: 'UNAUTHORIZED', message: 'Private access key required' } },
           { status: 401, headers: { 'Cache-Control': 'no-store' } },
         );
+      }
       const response = await resolve(event);
       response.headers.set('Cache-Control', 'no-store');
       return response;

@@ -73,8 +73,10 @@ dbtest(
     ).toEqual([
       '001_foundation.sql',
       '002_media_collections.sql',
+      '002_multi_profile_endpoints.sql',
       '003_communication_support.sql',
       '003_persistent_device_credentials.sql',
+      '004_endpoint_revocations.sql',
     ]);
     expect(
       (await sql`SELECT sha256 FROM public.lemmi_migrations WHERE name='001_foundation.sql'`)[0]

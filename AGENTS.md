@@ -8,7 +8,7 @@ The repository contains planning documents and a runnable local mock starter. Re
 
 ## Demo profile scope
 
-The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
+The user authorized full fictional multi-profile support on November 14. Alex remains the initial profile; additional live fictional profiles must be explicitly created/enrolled with isolated context, assets, access and sessions. Each profile has one active audio endpoint with explicit handoff. Existing example cards remain labeled **Example profile — preview only** and cannot reuse live data or enroll endpoints. No real biography/contacts are implied by demo creation. Resource authorization must enforce each profile/device assignment outside the model.
 
 ## Read the relevant specifications
 

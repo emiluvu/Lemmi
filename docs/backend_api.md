@@ -4,9 +4,53 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 
 **Runtime scope:** the speech pipeline and fixed concern-response correction are deployed in `d067ac0`, including persistent-key and chat/support squash commits `c402edc`/`430269f`. The host’s public speech opt-in remains disabled; implementation/fixture readiness does not authorize microphone capture or prove hardware acceptance. See [backend status](backend-status.md).
 
-**Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
+**Scope:** the user authorized full fictional multi-profile support on November 14. The endpoint integration candidate keeps Alex (`profile-alex`) as the initial profile, permits explicitly created fictional profiles with isolated context/access/sessions, and permits separately enrolled browser/robot endpoints. Existing preview cards remain presentation-only and cannot enroll or borrow live data. The deployed runtime shown below remains the source of current host availability until a new deployment observation is recorded. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
 
 **Deployed runtime baseline:** `d067ac0` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
+
+## Endpoint integration candidate — frontend and robot contracts
+
+**Preparation status: not yet deployed.** This candidate merges `anay/multi-profile-endpoints` (`284dcb7`) with the later persistent-key and chat/support changes. Existing host/runtime acceptance below remains historical evidence for `d067ac0`, not proof that new setup routes are publicly available. A deployment must enable `LEMMI_DEMO_ENROLLMENT=1`, apply the reconciled migrations and install the proxy allowlist before the new flows can be used.
+
+The candidate adds one `SessionRegistry` inside the existing gateway, with an existing coordinator per authorized profile. A profile has one active session/audio owner, not a parallel model/session backend. Different profiles can interact independently. Multiple endpoints for one profile can connect, but only the owner submits conversation/media/resume/microphone controls; other assigned endpoints can observe safe state, Stop/Pause/Help, or explicitly request handoff. Session/output state never transfers automatically.
+
+### Fictional demo setup HTTP
+
+These are explicitly enabled **fictional demo** routes, protected by the independent outer access key/cookie and current configured caregiver assignment. They do not turn a participant key into a caregiver credential. Caregiver biography/support/asset edits still require verified caregiver Bearer identity and database membership. The demo selector cannot access contacts, private guidance, journals or camera consent.
+
+| Method / path | Body / transport | Safe result |
+| --- | --- | --- |
+| `GET /v1/demo/profiles` | Private gate | Participant-safe profiles assigned to the configured caregiver and marked `is_demo` |
+| `POST /v1/demo/profiles` | `{preferredName,avatarId?}` | New fictional `ParticipantProfile`, distinct generated ID and empty context |
+| `POST /v1/demo/enroll` | `{profileId,endpoint:'browser'|'robot'}` | Browser: safe endpoint metadata and HttpOnly cookie. Robot: scoped credential returned once with metadata |
+| `GET /v1/demo/current` | Browser endpoint cookie | Current safe endpoint/profile metadata |
+| `POST /v1/demo/release` | `{}` and browser endpoint cookie | `{released:true}` and cookie removal/revocation |
+
+All use the existing Result envelope and `Cache-Control: no-store`. Mutation requests require the exact configured Origin; native provisioning may use the private access-key header. Reject query credentials, caller-supplied actors, preview IDs, foreign profiles and unsupported endpoint kinds. Browser `__Host-lemmi_endpoint` cookies are Secure/HttpOnly/SameSite=Strict; enrollment lasts 30 days. No browser JavaScript bearer token is returned. The separately signed `/access` cookie remains the outer gate. `POST /internal/demo` is the independently authenticated SvelteKit → gateway seam and must never be proxied publicly.
+
+### Frontend quickstart
+
+After deployment, open `/access`, unlock, then `/participant`. Import `createParticipantSetup` and `ParticipantConnection` from `@lemmi/contracts`. Use `profiles()`/`create(name)`/`current()`/`enroll(profileId)`/`release()` for setup; use `ParticipantConnection` for existing validated protocol-v1 WSS events and controls. The client uses same-origin cookies, maintains sequence/heartbeat and one transient current snapshot, rejects stale connection events and exposes `close()` for local teardown. Do not add a second session store or embed device/admin/provider secrets in browser code.
+
+One cookie context identifies one browser endpoint. Independent test participants need separate browser profiles/contexts, not extra tabs sharing a cookie. Before changing profile, cancel local capture/playback, close the old socket, release the enrollment and clear the old projection. New profiles must not copy Alex's biography/context. Handle 401 by unlocking/re-enrolling explicitly; handle 403 as scope/origin rejection, 409 as connection/state conflict and 503 as unavailable/disabled/busy, never as permission to fall back to mock success.
+
+### Robot quickstart and existing persistent keys
+
+After deployment, native fictional setup can run `bun run enroll-device profile-alex .data/alex-robot.json` (or the new profile ID and a different private file). This returns a **separate** robot identity with finite 30-day expiry and reuses the saved file later. Each physical robot/test endpoint needs its own enrollment/device ID for independent concurrent connections. Provision/save it privately, including the selected origin/profile, and reconnect with `X-Lemmi-Access-Key` plus `Authorization: Bearer <credential>`; TLS verification stays enabled. Browser endpoint cookies and robot tokens are not interchangeable.
+
+The existing `pair-stackchan.py` flow remains available for the assigned legacy `stackchan-alex` endpoint and its indefinite persistent key. Persistent claim/ready expiry is `null`; do not interpret it as expired. Finite timestamps retain their meaning. An existing shared key represents one endpoint, so sharing that key does **not** create multiple independent WSS reservations. The integration must preserve the current persistent hash/revocation history, not auto-rotate or shorten it. Endpoint enrollment adds no raw-key recovery endpoint.
+
+### Handoff and ownership
+
+`SessionSnapshot.activeEndpointId` identifies the owner; `endpoint` remains browser/robot. `device.hello.payload.endpoint` is optional for legacy robot clients and must match authenticated enrollment if supplied. Send `input.handoff` with `{}` plus the current session/generation; it cancels old work, pauses, rotates the lease and assigns the caller as owner. Wait for the authoritative new state, then require explicit participant Resume to capture-off ready. Handoff/Resume never grants capture. Only the submitting/owning endpoint receives its text/PCM output. Observer disconnect/revoke must not pause the owner; owner disconnect/watchdog pauses that profile and owner revocation ends its session.
+
+Each device has one atomic connection reservation; duplicate connections for the same identity conflict. Existing frame/control/rate/deadline/receipt and generation/lease/revision rules below continue to apply per endpoint/profile. Shared private STT/TTS adapters use a bounded FIFO with eight waiting jobs; cancellation removes queued work for that participant only, and overload fails explicitly without a provider fallback.
+
+### Migration and acceptance boundary
+
+Retain applied `001_foundation.sql`, `002_media_collections.sql`, `003_communication_support.sql` and `003_persistent_device_credentials.sql` unchanged. Add `002_multi_profile_endpoints.sql` for demo flags/device kinds/gateway epoch and the reconciled `004_endpoint_revocations.sql` to preserve the existing revoke history while adding device scope. Do **not** apply the branch's conflicting `003_device_revocation_receipts.sql` over the existing table. Apply only the tested normal migration set after backup; no full SQL proposal or profile reseed is required for the upgrade.
+
+The candidate bounds profile/endpoint/session work and supplies fixtures, but hardware audio, browser permission/autoplay, keyboard/zoom/error recovery, human speech quality, firmware storage and venue/reboot acceptance remain separate checks. Public voice is still a separate explicit opt-in; a browser Speak control or negotiated schema does not prove it is enabled. Teach Lemmi in `codex/teach-lemmi` has been reviewed separately and is **not integrated or deployed by this endpoint candidate**; do not send teaching commands yet. See the [endpoint handoff](handoffs/anay-multi-profile-endpoints.md) and [backend status](backend-status.md) for actual acceptance.
 
 ## 1. Availability and ownership
 
@@ -32,15 +76,15 @@ Anay edits canonical backend/contracts. Kylie renders safe projections and submi
 
 **Deployed media schema:** migration `002_media_collections.sql` is applied on the host. It adds stable, scoped album/photo and playlist/track metadata only. No new HTTP/client/catalog authorization surface is enabled; collection CRUD and reviewed-pack hosting remain A05. Journal/consent/contact/jobs/deletion/camera portions of the full draft remain inactive proposals. See [review](handoffs/anay-app-data-schema-review.md), [database setup](../db/README.md) and [deployment acceptance](backend-status.md).
 
-[Database/profile/assets handoff](handoffs/anay-database-profile-assets.md) and [database setup](../db/README.md) define the current exact fields, permissions, format limits and restart behavior. PostgreSQL is opt-in via private `LEMMI_DATABASE_URL`/`LEMMI_PRIVATE_MEDIA_DIR` plus the configured caregiver subject. `bun run db:migrate` / `db:bootstrap` prepare only fictional Alex. One gateway owns the database; boot checks reject stale writes. Credential hashes and bounded session/factual-event checkpoints are persisted; restart deliberately revokes pairing credentials and ends old sessions. Full contact/policy/journal/deletion workflows remain pending despite schema foundations.
+[Database/profile/assets handoff](handoffs/anay-database-profile-assets.md) and [database setup](../db/README.md) define the current exact fields, permissions, format limits and restart behavior. PostgreSQL is opt-in via private `LEMMI_DATABASE_URL`/`LEMMI_PRIVATE_MEDIA_DIR` plus the configured caregiver subject. `bun run db:migrate` / `db:bootstrap` prepare only fictional Alex. One gateway owns the database; boot checks reject stale writes. Credential hashes and bounded session/factual-event checkpoints are persisted; restart ends old sessions and pairing codes; credential retention follows the explicit lifetime/persistence rules below. Full contact/policy/journal/deletion workflows remain pending despite schema foundations.
 
 Public additions: caregiver GET/PATCH `/v1/profiles/:id`, POST `/v1/profiles/:id/photos` or `/assets`, GET `/v1/profiles/:id/assets/:assetId`; paired-device GET `/v1/participant/profiles/:id`, `/v1/assets/:assetId`, `/v1/assets/:assetId/metadata`. All reject example/unassigned scope, verify credentials server-side and disable caching. Device tokens never go to managed-identity introspection. Private `POST /internal/data` is solely the authenticated SvelteKit → existing gateway adapter, never a public route. Proxy only the new explicit resource paths and keep internal routes/services private.
 
 Set production `BODY_SIZE_LIMIT=29M` and upload-proxy limits; handlers still bound profile JSON to 32 KiB, device control to 4 KiB and asset JSON to 28 MiB. Supported media is plain RGB/RGBA PNG (5 MiB/4096 dimensions/8 million pixels) or metadata-free PCM16 WAV (20 MiB/5 minutes); JPEG/SVG/MP3/range support is unavailable. Upload only approved static assets, not microphone/camera/generated-speech data. Authorized byte reads return actual media; metadata excludes storage paths and private discussion context. Caregiver context-changing edits cancel/pause the current session before COMMIT; support-only saves preserve its effective preset. Approved biography facts remain caregiver-provided; remembering/excerpt enablement is rejected pending its own workflows.
 
-### Communication support — feature branch
+### Communication support — preserved implementation
 
-Caregiver-only routes require the same outer private gate plus verified assigned caregiver Bearer token as profile edits. Responses use `Result<T>`, `Cache-Control: no-store`, same-origin checks and Alex scope. Device credentials grant no caregiver access.
+Caregiver-only routes require the same outer private gate plus verified assigned caregiver Bearer token as profile edits. Responses use `Result<T>`, `Cache-Control: no-store`, same-origin checks and assigned profile scope. The deployed baseline is Alex-only; the endpoint candidate generalizes these handlers without weakening caregiver membership or revision checks. Device credentials grant no caregiver access.
 
 | Method/path | Client / input | Result data |
 | --- | --- | --- |
@@ -54,7 +98,7 @@ Conversational/Guided/Quiet model reply bounds are 600/360/240 characters and 1/
 
 ### Profile/media HTTP route inventory
 
-These routes are enabled on the current deployment and require the outer access key/cookie **and** the stated Bearer credential. Only `profile-alex` is assigned; asset IDs are UUIDs scoped and authorized by the backend. `assets`/`photos` accept validated JSON with bounded base64 data, not multipart uploads. Use the shared schemas for exact bodies.
+These routes are enabled on the current deployment and require the outer access key/cookie **and** the stated Bearer credential. Alex-only assignment describes the deployed baseline. The endpoint candidate generalizes profile paths to an explicitly assigned `:profileId` and keeps the same asset authorization; asset IDs are UUIDs scoped and authorized by the backend. `assets`/`photos` accept validated JSON with bounded base64 data, not multipart uploads. Use the shared schemas for exact bodies.
 
 | Method / URL | Bearer identity | Result |
 | --- | --- | --- |
@@ -94,7 +138,7 @@ Credentials are **not interchangeable**:
 - Speech: independent service credential shared only by trusted backend/engine wrapper.
 - Mock: `LEMMI_MOCK_TOKEN` defaults to `local-mock-only`; development convention, not pairing/authentication for real users/data.
 
-No tokens, pairing codes, private media, provider errors, prompts or contact destinations belong in query strings/logs/source/fixtures. Pairing codes and active authority remain transient. With database mode, credential hashes and factual/session checkpoints persist, but startup explicitly revokes tokens and ends interrupted sessions; restart still requires re-pairing. Complete journal/deletion workflows remain pending.
+No tokens, pairing codes, private media, provider errors, prompts or contact destinations belong in query strings/logs/source/fixtures. Pairing codes and active authority remain transient. With database mode, credential hashes and factual/session checkpoints persist, and startup ends interrupted sessions. Explicit persistent keys retain their lifetime across restart; the endpoint candidate also retains unexpired 30-day demo enrollment. Reconnect still requires a fresh hello and explicit Start, never restored capture/output. Complete journal/deletion workflows remain pending.
 
 ### Explicit VoidAuth token binding
 
@@ -232,7 +276,7 @@ Revocation clears pending enrollment/current credential, ends the session and cl
 
 Run `python3 scripts/pair-stackchan.py` (Python 3.10+, standard library only). It reads the private root `.env` plus environment overrides, performs caregiver VoidAuth code/PKCE login through the registered loopback callback, requests persistent enrollment by default, and **claims it on this computer**. It saves one mode-0600 file at ignored `.data/stackchan-access.json`. The helper's local claim creates a computer/team-test device credential; it does not prove physical robot confirmation or authorize mic/camera capture.
 
-Send that file privately to authorized teammates. It contains `backendUrl`, `websocketUrl`, `deviceId`, `profileId`, reusable `credential`, `expiresAt`, and ready-to-use `headers` (`Authorization: Bearer ...` and `X-Lemmi-Access-Key`). It deliberately excludes caregiver tokens, OIDC secrets, provider credentials, internal control tokens and consumed pairing codes. Clients attach the supplied headers to device HTTPS requests and the WSS upgrade. This is Alex-scoped device access, not caregiver/admin authorization; the one-active-WSS endpoint limit is unchanged.
+Send that file privately to authorized teammates. It contains `backendUrl`, `websocketUrl`, `deviceId`, `profileId`, reusable `credential`, `expiresAt`, and ready-to-use `headers` (`Authorization: Bearer ...` and `X-Lemmi-Access-Key`). It deliberately excludes caregiver tokens, OIDC secrets, provider credentials, internal control tokens and consumed pairing codes. Clients attach the supplied headers to device HTTPS requests and the WSS upgrade. This is Alex-scoped device access, not caregiver/admin authorization. The file identifies one endpoint; even with the endpoint candidate, two simultaneous connections reusing that same identity conflict. Enroll separate identities for independently connected clients.
 
 The output file is reserved exclusively before sign-in/enrollment; existing files are never overwritten. If it already exists, reuse it rather than enrolling again. `--output PATH` selects a different protected destination. `--pair-only` preserves the original robot-side workflow by printing an unclaimed five-minute pairing ID/code instead of claiming/saving a credential. `--short-lived` requests the original one-hour key; `--persistent` is an explicit alias for the default. `--token` prompts privately for an existing caregiver token; `--env-file PATH` selects another settings file. No automatic revocation, provider retry or key recovery is performed. If a successful claim response is lost, explicitly revoke/re-enroll. Never commit or paste the access file into logs/chat.
 
@@ -242,7 +286,7 @@ Ten Python fixture tests pass, including state/PKCE, mode flags, HTTP redaction,
 
 ## 6. Firmware / authenticated WebSocket protocol
 
-Connect `wss://<configured-host-or-IP>[:port]/v1/device-stream` using `Authorization: Bearer <paired-device-credential>` in the upgrade request. Same gateway/session as HTTP controls; no dependency on an open browser tab. One connection at a time, reserved atomically during upgrade. No URL tokens, insecure certificate bypass or caregiver/provider credentials on the device.
+Connect `wss://<configured-host-or-IP>[:port]/v1/device-stream` using `Authorization: Bearer <paired-device-credential>` in the upgrade request. Same gateway/session as HTTP controls; no dependency on an open browser tab. The deployed baseline allows one endpoint connection. The endpoint candidate reserves one connection per device identity, permitting other separately enrolled devices concurrently with one active audio owner per profile. No URL tokens, insecure certificate bypass or caregiver/provider credentials on the device.
 
 Protocol envelope, validated by `DeviceEventSchema` / `ServerEventSchema`:
 
@@ -274,6 +318,7 @@ An alternative audio capability shape permits `{encoding:'pcm_s16le',sampleRate:
 | Incoming type | Payload | Session/behavior |
 | --- | --- | --- |
 | `heartbeat` | `{}` | About every 2 seconds; works without session; refreshes heartbeat deadline |
+| `input.handoff` (endpoint candidate) | `{}` | Current session/generation; cancels/pauses and assigns the caller as active endpoint, then requires explicit participant Resume |
 | `input.start` | `{}` | `session_id:null`, `generation:0`, `turn_id:null`; explicit participant start, never automatic hello/reconnect behavior |
 | `input.pause` | `{}` | Current session/generation; cancels pending response and pauses |
 | `input.resume` | `{}` | Current paused session/generation; explicit return to ready, no capture/playback |
@@ -293,7 +338,7 @@ Session-bound controls require the latest generation and assigned active session
 | `error` | `{code,message,commandId?}`; sanitized stable error |
 | `response.text` | `{turnId,text,language:'en'|'de',source:'model'|'fixed'}`; envelope `turn_id` matches reply turn |
 
-Socket maximum payload 4,096 bytes; maximum 60 capture frames plus 30 other messages/second (90 total); output backpressure limit 16 KiB. Heartbeat timeout is six seconds, checked every 500 ms (other controls do not substitute for heartbeat). Disconnect/watchdog pauses and clears pending turns; reconnect never resumes capture/media. Credential expiry/revoke ends session and closes access. Firmware must independently stop capture/playback/camera/motion under local Stop/watchdog even when no server acknowledgment can arrive; that hardware behavior is not established by a fake-device test.
+Socket maximum payload 4,096 bytes; maximum 60 capture frames plus 30 other messages/second (90 total); output backpressure limit 16 KiB. Heartbeat timeout is six seconds, checked every 500 ms (other controls do not substitute for heartbeat). Disconnect/watchdog pauses and clears pending turns; reconnect never resumes capture/media. Credential expiry/revoke closes that endpoint access. In the endpoint candidate, only owner expiry/revocation ends its profile session; observer expiry/revocation does not interrupt the owner. Firmware must independently stop capture/playback/camera/motion under local Stop/watchdog even when no server acknowledgment can arrive; that hardware behavior is not established by a fake-device test.
 
 ### Text turn behavior
 
@@ -452,14 +497,14 @@ The following come from the technical/integration/robot/personalization specs an
 
 | Planned surface | Target routes / missing integration | Owner / task |
 | --- | --- | --- |
-| Profile creation/privacy/deletion | Profile collection/create, session privacy and deletion jobs; Alex read/PATCH and approved-media uploads already exist (A18/A19 above) | Anay A25; Kylie views |
-| Browser session/text/audio | Profile session start, `/v1/sessions/:id/commands`, authorized read/event/text and audio grant/stream/end | Anay A12/A13; Kylie/Emilia consumers; do not reuse caregiver/device credentials across roles |
+| Profile privacy/deletion and non-demo creation | The endpoint candidate adds fictional-only creation through `/v1/demo/profiles`; caregiver-managed non-demo creation, privacy and deletion jobs remain pending. Authorized read/PATCH/media already exist | Anay A25; Kylie views |
+| Alternate browser REST transport | The endpoint candidate uses authenticated cookie WSS for browser sessions/text/controls and optional bounded audio. `/v1/sessions/:id/commands` REST aliases and full browser/hardware acceptance remain pending | Anay A12/A13; Kylie/Emilia consumers; do not reuse caregiver/device credentials across roles |
 | Activities/playback | `/v1/activity-packs`, `/v1/sessions/:id/activities`, instance view/actions, pack catalog and effects/receipt executor; authorized `/v1/assets/:id` byte reads already exist (A19 above) | Anay A05 + Lukas logic + Kylie view |
 | Journal/summary/overview | Profile/session journal, observation and summary review/edit/delete, `/v1/profiles/:id/overview` | Anay A23/A27; Kylie |
 | Contacts/help/jobs | Verified contacts/test, `/v1/help-requests` plus status/acknowledge/cancel/resolve, signed notification callbacks and durable jobs | Anay A21/A22; real opted-in team tests |
 | Preferences | Profile preference load/edit/forget/remembering and presentation-bound signals | Anay A24/A25; Lukas eligibility/effects; Kylie controls |
 | Camera | Device check-in request, `/v1/check-ins/:id` status/end, nonce-bound control and separate bounded media relay | Anay A28–A32; Emilia/Kylie; F13 before F14 |
-| Teaching/scene/overview refinements | Session teaching actions/prompt selection, approved photo scene packs and source-linked highlights | Anay A26/A27; reuse conversation/four-activity seams |
+| Teaching/scene/overview refinements | `codex/teach-lemmi` reviewed but not integrated/deployed here; session teaching, approved scene packs and source-linked highlights still require explicit integration | Anay A26/A27; reuse conversation/four-activity seams |
 | Device health | Freshness/validated measured telemetry after secure F13 gate | Anay A33 + Emilia/Kylie |
 
 Camera is default-off and requires current local Allow for each request; request/relay/state/expiry are not made functional by preliminary headers. End video leaves activities paused; mic mute is not camera-off. Raw frame data never enters models/journal/jobs. Matching retirement and remembered preferences need separate consent/storage/late-write protection; schemas alone do not implement policy. No automatic biography/support-preset writes, clinical scoring or model-chosen actions/contact destinations are part of the API.

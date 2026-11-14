@@ -2,6 +2,8 @@
 
 Shared mock starter, November 13, 2026. This is the baseline for parallel development, not the completed product or a production deployment.
 
+**Multi-profile feature branch:** `anay/multi-profile-endpoints` adds per-profile sessions, persistent browser/robot enrollment and a live participant selector. Follow [the integration handoff](handoffs/anay-multi-profile-endpoints.md); this is separate from the loopback mock starter below and is not deployed by changing source.
+
 ## Clone and run
 
 Install Bun **1.4.4** using the [official installation instructions](https://bun.sh/docs/installation). No database, API account or real credentials are needed for the starter.

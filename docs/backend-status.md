@@ -10,6 +10,25 @@ Maintain this deployment/acceptance record alongside the [backend API reference]
 
 **Media collections deployed:** migration `002_media_collections.sql` has been applied to the existing host database after a private backup. It adds corrected album/playlist metadata only; collection APIs, reviewed-pack hosting and deferred consent/journal/help/jobs/deletion/camera workflows remain unavailable. See [schema review](handoffs/anay-app-data-schema-review.md).
 
+## Multi-profile endpoint integration — preparation, not yet deployed
+
+The user explicitly authorized full fictional multi-profile support on November 14. The isolated candidate integrates `anay/multi-profile-endpoints` (`284dcb7`) with the later persistent-key and chat/support implementation. It permits separately created fictional profiles, scoped browser/robot enrollments and independent per-profile session coordinators inside the same gateway. Existing preview cards remain static; no profile may borrow Alex's context or credentials.
+
+| Candidate surface | Integration contract / acceptance status |
+| --- | --- |
+| Frontend setup | `/access` → `/participant`; explicitly enabled `LEMMI_DEMO_ENROLLMENT=1`; safe list/create/enroll/current/release routes. Not yet public deployment acceptance. |
+| Browser client | `createParticipantSetup` and `ParticipantConnection`; 30-day HttpOnly endpoint cookie, same-origin WSS, explicit Start and local teardown. Actual browser permission/autoplay/keyboard/zoom recovery still unrun here. |
+| Robot setup | `bun run enroll-device PROFILE_ID PRIVATE_FILE`; separate device identity/file for each endpoint, 30-day demo enrollment. Firmware storage/flash acceptance remains Emilia's work. |
+| Existing shared key | Indefinite persistent legacy key remains valid until revoked, with null expiry; migration/integration must preserve it. Sharing one identity still permits one simultaneous connection for that identity. |
+| Session ownership | Multiple authorized endpoints may connect; each profile retains one active audio owner. `activeEndpointId` plus explicit handoff/Resume guards conversation/media. Different profiles remain isolated. |
+| Caregiver support | Existing hardening, profile membership, save/apply cancellation and revision behavior must be preserved independently for each profile. |
+| Speech | Existing bounded transport and shared eight-waiter adapter queue; public speech configuration is unchanged during preparation. Hardware/quality acceptance is not established by fixtures. |
+| Teach Lemmi | `codex/teach-lemmi` and its handoff reviewed; no merge or deployment in this prioritized endpoint candidate. Shared schema/coordinator/protocol/UI conflicts require a separate integration. |
+
+The migration candidate retains all existing checksummed migrations, adds `002_multi_profile_endpoints.sql`, and replaces the branch's incompatible receipt-table creation with `004_endpoint_revocations.sql`. The latter preserves legacy revoke history while introducing per-device receipts; no checksum edit/rename of an already applied migration is permitted. Source and tests are being reconciled in an isolated checkout. No candidate test count, production migration, new browser deployment or unchanged-key live proof is claimed until the deployment owner records it below.
+
+Frontend/robot integration entry point: [endpoint contract and quickstart](backend_api.md#endpoint-integration-candidate--frontend-and-robot-contracts), [endpoint handoff](handoffs/anay-multi-profile-endpoints.md). Current running deployment remains `d067ac0` until a later explicit deployment record replaces it.
+
 ## Persistent credentials and chat support — deployed
 
 Persistent enrollment and chat/support hardening are deployed together. Migrations `003_communication_support.sql` and `003_persistent_device_credentials.sql` have been applied in addition to existing `001`/`002`. Both full filenames are independently tracked/checksummed; no applied migration was renamed or edited. The proxy now allows the protected communication-support read/apply paths.

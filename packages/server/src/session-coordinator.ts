@@ -121,6 +121,8 @@ export class SessionCoordinator {
     promise: Promise<Result<ConversationTextResult>>;
   } | null = null;
   private profile = structuredClone(caregiverProfile);
+  private privacyRevision = 0;
+  private policyRevision = 0;
   private approvedFacts: string[] = [];
   private supportSelections: SupportSelection[] = [];
   private supportReceipts = new Map<string, { fingerprint: string; generation: number }>();
@@ -148,7 +150,7 @@ export class SessionCoordinator {
       return fail('VALIDATION_ERROR', 'Invalid communication support apply request');
     const input = parsed.data,
       session = this.session;
-    if (input.profileId !== DEMO_PROFILE_ID || profile.id !== input.profileId)
+    if (input.profileId !== this.profile.id || profile.id !== input.profileId)
       return fail('FORBIDDEN', 'Profile is not assigned');
     if (profile.revision !== input.expectedProfileRevision)
       return fail('REVISION_CONFLICT', 'Reload the saved profile before applying support');
@@ -194,8 +196,15 @@ export class SessionCoordinator {
     });
   }
   private activityContext(sessionId: string): ActivityContext {
+    const context = contextFor(sessionId);
     return {
-      ...contextFor(sessionId),
+      ...context,
+      eligibility: {
+        ...context.eligibility,
+        profileId: this.profile.id,
+        policyRevision: this.policyRevision,
+        ...(this.mode === 'live' ? { permittedEntityIds: [], available: false } : {}),
+      },
       presentationPolicy: structuredClone(this.session!.communicationSupport),
     };
   }
@@ -215,6 +224,9 @@ export class SessionCoordinator {
       ...caregiver
     } = profile;
     this.profile = structuredClone(caregiver);
+    this.privacyRevision = _privacy;
+    this.policyRevision = _policy;
+    this.journal.profileId = profile.id;
     this.approvedFacts = approvedFacts.map((fact) => fact.value);
     if (syncPausedRevision && this.session?.phase === 'paused')
       this.session = { ...this.session, profileRevision: profile.revision };
@@ -240,6 +252,9 @@ export class SessionCoordinator {
   private count = 0;
   snapshot() {
     return this.session ? structuredClone(this.session) : null;
+  }
+  bindEndpoint(deviceId: string) {
+    if (this.session) this.session = { ...this.session, activeEndpointId: deviceId };
   }
   isCurrentTextReply(turnId: string): boolean {
     // A result can have resolved before an interrupt, with its socket callback still queued.
@@ -514,9 +529,9 @@ export class SessionCoordinator {
     )
       return fail('UNAVAILABLE', 'Only authenticated device controls are implemented');
     // Parsed keys/values only; never accept a client-selected scope or preview profile as live.
-    if ('profileId' in input && input.profileId !== DEMO_PROFILE_ID)
-      return fail('FORBIDDEN', 'Only Alex is functional; examples are preview-only');
-    if ('profile' in input && input.profile.id !== DEMO_PROFILE_ID)
+    if ('profileId' in input && input.profileId !== this.profile.id)
+      return fail('FORBIDDEN', 'Profile is not assigned to this session');
+    if ('profile' in input && input.profile.id !== this.profile.id)
       return fail('FORBIDDEN', 'Profile is not assigned');
     const body = JSON.stringify(input);
     const key =
@@ -580,7 +595,7 @@ export class SessionCoordinator {
         return this.applyCommunicationSupport(input, this.profile, 'fixture-caregiver');
       case 'profile.support':
         return ok({
-          profileId: DEMO_PROFILE_ID,
+          profileId: this.profile.id,
           profileRevision: this.profile.revision,
           saved: this.profile.communicationSupport,
           session: this.session?.phase === 'ended' ? null : this.snapshot(),
@@ -604,11 +619,11 @@ export class SessionCoordinator {
         this.supportReceipts.clear();
         this.session = SessionSnapshotSchema.parse({
           id: this.mode === 'live' ? `session-${crypto.randomUUID()}` : `session-${++this.count}`,
-          profileId: DEMO_PROFILE_ID,
+          profileId: this.profile.id,
           generation: 0,
           profileRevision: this.profile.revision,
-          privacyRevision: 0,
-          policyRevision: 0,
+          privacyRevision: this.privacyRevision,
+          policyRevision: this.policyRevision,
           phase: 'ready',
           endpoint: input.endpoint,
           leaseId: this.mode === 'live' ? `lease-${crypto.randomUUID()}` : `lease-${this.count}`,
@@ -674,7 +689,8 @@ export class SessionCoordinator {
             this.session = {
               ...this.session,
               endpoint: action.endpoint,
-              leaseId: `lease-${++this.count}`,
+              leaseId:
+                this.mode === 'live' ? `lease-${crypto.randomUUID()}` : `lease-${++this.count}`,
             };
             break;
           default:
@@ -749,7 +765,7 @@ export class SessionCoordinator {
         if (!this.help || ['canceled', 'resolved', 'expired'].includes(this.help.status))
           this.help = {
             id: `help-${++this.count}`,
-            profileId: DEMO_PROFILE_ID,
+            profileId: this.profile.id,
             status: 'created',
             mode: 'simulation',
             reason: 'manual',
