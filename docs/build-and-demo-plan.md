@@ -1,6 +1,6 @@
 # Lemmi — Build and demo plan
 
-Use the [shared task board](tasks.md) for daily checkboxes, current blockers and agent file claims. This document retains detailed ownership, milestones and observed acceptance results.
+Use [Anay's task checklist](anay_tasks.md) for backend checkboxes, teammate blockers and Anay-agent file claims. This document retains team ownership, milestones and observed acceptance results.
 
 **Status:** Shared mock starter implemented; named feature work and live/hardware acceptance pending
 **Version:** 0.6  

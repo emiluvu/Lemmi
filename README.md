@@ -1,6 +1,6 @@
 # Lemmi
 
-Team checklist: [Shared task board](docs/tasks.md) — current blockers, owners, checkboxes and agent claims.
+Backend checklist: [Anay's tasks](docs/anay_tasks.md) — teammate blockers, backend work and agent claims.
 
 A personalized companion for familiar conversation, enjoyable activities, and connection with family.
 
