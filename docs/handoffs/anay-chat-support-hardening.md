@@ -1,5 +1,7 @@
 # Chat hardening and communication support — Anay handoff
 
+**Deployment follow-up:** both features were squash-merged into main and deployed as backend runtime `d067ac0` on November 14, 2026. The original branch-only observations below are historical. Both new migrations and the actual support-route proxy allowlist are installed; persistent same-key authentication after a live gateway restart passed. See [current backend status](../backend-status.md) for verification scope and remaining hardware/UI limits.
+
 November 14, 2026. Branch: `anay/chat-support-hardening`, initially based on speech commit `151ebc3`, then merged with the server-agent fix `3fb561d` and main `a6f7ff9` (approved media schema). This branch adds A16's English backend fixtures/hardening and A20's server policy/save/apply seam. It does not modify `anay/speech-pipeline` or `anay/app-data-schema`. No deployment or remote-host changes were performed; the last verified deployment record remains in [backend status](../backend-status.md).
 
 ## Chat changes

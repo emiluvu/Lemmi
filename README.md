@@ -4,11 +4,11 @@ Backend checklist: [Anay's tasks](docs/anay_tasks.md) — teammate blockers, bac
 
 Current deployment: [backend status](docs/backend-status.md) — running services, verified live paths and remaining limitations.
 
-Undeployed persistent-device-key work: [enroll once and retain a scoped key across backend restarts](docs/handoffs/anay-persistent-device-credentials.md). Explicit opt-in, migration and later deployment required; firmware storage belongs to Emilia.
+Deployed persistent-device-key support: [enroll once and retain a scoped key across backend restarts](docs/handoffs/anay-persistent-device-credentials.md). The helper requests persistent enrollment by default; the API defaults to one-hour keys when mode is omitted. Both migrations are applied here; firmware storage/null-expiry handling belongs to Emilia.
 
 Backend integration reference: [backend_api.md](docs/backend_api.md) — current routes, clients, events, auth, speech interfaces, limits and pending handoffs; maintained with backend changes.
 
-Undeployed backend increment: [chat hardening and communication support](docs/handoffs/anay-chat-support-hardening.md) provides reviewed English scenarios, central presets and caregiver read/save/apply with cancellation and explicit continuation. Runtime migration `003` and proxy routing are documented; frontend/device acceptance remains pending.
+Deployed backend increment: [chat hardening and communication support](docs/handoffs/anay-chat-support-hardening.md) provides reviewed English scenarios, central presets and caregiver read/save/apply with cancellation and explicit continuation. Runtime migration `003` and proxy routing are documented; frontend/device acceptance remains pending.
 
 Deployed storage increment (`002_media_collections.sql`): [Emilia schema review](docs/handoffs/anay-app-data-schema-review.md) and [migration setup](db/README.md) cover the corrected album/playlist storage migration. No new collection API or journal/notification workflow is enabled.
 

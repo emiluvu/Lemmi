@@ -2,11 +2,11 @@
 
 This is the current implementation reference for **Kylie's frontend, Emilia's firmware, Lukas's activities and Anay's speech/services**. Update it whenever a backend-facing route, schema, event, authorization rule, configuration key or availability changes. Runtime schemas/source remain authoritative; a proposed interface is not permission to invent a parallel backend.
 
-**Runtime scope:** the speech pipeline and fixed concern-response correction are deployed in `275de72`, integrating main `24e7fe2`. The host’s public speech opt-in remains disabled; implementation/fixture readiness does not authorize microphone capture or prove hardware acceptance. See [backend status](backend-status.md).
+**Runtime scope:** the speech pipeline and fixed concern-response correction are deployed in `d067ac0`, including persistent-key and chat/support squash commits `c402edc`/`430269f`. The host’s public speech opt-in remains disabled; implementation/fixture readiness does not authorize microphone capture or prove hardware acceptance. See [backend status](backend-status.md).
 
 **Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
 
-**Deployed runtime baseline:** `275de72` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
+**Deployed runtime baseline:** `d067ac0` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
 
 ## 1. Availability and ownership
 
@@ -208,7 +208,7 @@ The following table covers every current `operations` entry in [services.ts](../
 
 ## 5. Live enrollment, claim and revocation HTTP
 
-**Undeployed branch increment:** `anay/persistent-device-credentials` adds explicit persistent enrollment in PostgreSQL mode. Migration `003_persistent_device_credentials.sql` is required. The deployed runtime/status remains separate; see [persistent-key handoff](handoffs/anay-persistent-device-credentials.md).
+**Deployed persistent enrollment:** migration `003_persistent_device_credentials.sql` is installed on this host. PostgreSQL-backed persistent keys are available through the existing routes below; see [persistent-key handoff](handoffs/anay-persistent-device-credentials.md) and [current acceptance](backend-status.md).
 
 All are SvelteKit handlers on the configured HTTPS origin; JSON requests/responses ≤4 KiB and `Cache-Control:no-store`. Same Origin is checked when supplied; no URL query credentials. Mutations require POST; GET/link previews do not perform them. All three routes also require `X-Lemmi-Access-Key` or the signed access cookie. Include `Content-Type: application/json`; any supplied `Origin` must exactly match the configured public origin.
 
@@ -470,3 +470,7 @@ For each backend integration increment:
 4. Link the focused handoff and next owner in [Anay's tasks](anay_tasks.md). A task/schema/fixture marked ready never implies hardware or real delivery acceptance.
 
 No OpenAPI document is generated yet. The `operations` registry covers the typed client seam, not every private/public route and not an implemented production REST catalog. Treat this file as the navigable integration inventory and import source schemas for exact executable validation.
+
+### Deployment checkpoint — persistent credentials and support
+
+Runtime `d067ac0` includes both features and both new migrations. The live proxy allows `GET /v1/profiles/profile-alex/communication-support` and `POST /v1/profiles/profile-alex/communication-support/apply`, retaining the 4 KiB body ceiling and caregiver/domain gates. No new client-side permission bypass or public inference endpoint was added. API `credentialMode` omission still means one-hour credentials; the Python helper explicitly requests persistent mode by default. Null expiry is valid and must not be treated as an expired key. Live same-key reconnect after a real gateway restart passed; explicit Start remains required and the test key was revoked. See [backend status](backend-status.md) for fixture versus live verification and failures observed before GLM configuration was aligned with the handoff.

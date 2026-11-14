@@ -2,7 +2,7 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed backend runtime revision: **`275de72`**, integrating `main` at `24e7fe2`. Later documentation-only commits do not require a runtime restart.
+Deployed backend runtime revision: **`d067ac0`**, integrating main squash commits `c402edc` (persistent keys) and `430269f` (chat/support). Later documentation-only commits do not require a runtime restart.
 
 The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictional Alex integration deployment, not completed P0 scope or readiness for unattended care.
 
@@ -10,13 +10,16 @@ Maintain this deployment/acceptance record alongside the [backend API reference]
 
 **Media collections deployed:** migration `002_media_collections.sql` has been applied to the existing host database after a private backup. It adds corrected album/playlist metadata only; collection APIs, reviewed-pack hosting and deferred consent/journal/help/jobs/deletion/camera workflows remain unavailable. See [schema review](handoffs/anay-app-data-schema-review.md).
 
-## Undeployed persistent-key branch
+## Persistent credentials and chat support — deployed
 
-`anay/persistent-device-credentials` adds caregiver-selected persistent enrollment for `stackchan-alex` / fictional Alex in PostgreSQL mode. Keys remain valid until revoked and only their hashes persist across gateway restarts; codes/sessions/capture/output do not resume. Default one-hour credentials retain their previous behavior. Migration `003_persistent_device_credentials.sql` and a one-time `python3 scripts/pair-stackchan.py` enrollment (persistent by default; `--short-lived` opts out) are required after an authorized deployment. Revocation retries persist safely across restarts. Emilia owns firmware storage and nullable `expiresAt` / `credentialExpiresAt` handling. Observed locally: 130 Bun tests / 2,533 expectations, six Python helper tests (including the later persistent-default CLI change), type/build/format and production data/control fixture smokes passed; the data smoke also passed explicit persistent enrollment. This branch does not change the deployed runtime above, its private configuration or running services. [Exact contract, checks and handoff](handoffs/anay-persistent-device-credentials.md).
+Persistent enrollment and chat/support hardening are deployed together. Migrations `003_communication_support.sql` and `003_persistent_device_credentials.sql` have been applied in addition to existing `001`/`002`. Both full filenames are independently tracked/checksummed; no applied migration was renamed or edited. The proxy now allows the protected communication-support read/apply paths.
+
+Run `python3 scripts/pair-stackchan.py` for a fresh persistent enrollment by default (`--short-lived` opts out). Stackchan must accept null claim/ready expiry and store its returned key privately. Existing short-lived keys are not upgraded. Persistent keys survive gateway restart; sessions, pending codes, capture and output do not. Successful revocation remains durable, and a lost claim response still requires revoke/re-enrollment. Firmware storage and real hardware acceptance remain Emilia's handoff. [Persistent contract](handoffs/anay-persistent-device-credentials.md), [chat/support handoff](handoffs/anay-chat-support-hardening.md).
+
 
 ## Deployment
 
-**Separate local increment, November 14:** `anay/chat-support-hardening` adds English chat hardening and caregiver support read/save/apply with central policy, immediate cancellation, explicit continuation and private PostgreSQL configuration provenance. It includes speech fix `3fb561d` and main `a6f7ff9`; neither existing feature branch nor the deployed host was modified by this work. Final live text regression passed 15/15 after a Quiet prompt mismatch was found and fixed. No microphone/speaker/K151 acceptance follows. See [handoff and test scope](handoffs/anay-chat-support-hardening.md); the host observations below remain the last verified deployment record.
+**Historical branch evidence, before deployment:** `anay/chat-support-hardening` adds English chat hardening and caregiver support read/save/apply with central policy, immediate cancellation, explicit continuation and private PostgreSQL configuration provenance. It includes speech fix `3fb561d` and main `a6f7ff9`; neither existing feature branch nor the deployed host was modified by this work. Final live text regression passed 15/15 after a Quiet prompt mismatch was found and fixed. No microphone/speaker/K151 acceptance follows. See [handoff and test scope](handoffs/anay-chat-support-hardening.md); current host acceptance is recorded in the deployment follow-up below.
 
 Public origin: **https://lemmi.chaoswarrior.dev**. Open **[/access](https://lemmi.chaoswarrior.dev/access)** to unlock the outer domain gate. `/` intentionally returns 404. The shared access key is stored privately in the host's root `.env`; it does not replace caregiver authentication or device pairing.
 
@@ -42,7 +45,7 @@ User lingering is enabled. Application/tunnel/speech services are enabled; conta
 - The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper saved the verified subject/database configuration without retaining tokens. It is setup tooling, not production browser sign-in.
 - Migrations and fictional Alex bootstrap completed. The running gateway uses PostgreSQL for the implemented profile, credential-hash and bounded factual/session-checkpoint storage. Private approved media uses protected local storage.
 - Revision `04d050e` fences pairing/claim writes to the current database boot owner. Stale authorities cannot overwrite a replacement gateway’s ownership or issue usable credentials.
-- Gateway restart invalidates issued device credentials and ends interrupted sessions. It does not resume listening, playback or a conversation. Explicit re-pairing/start is required.
+- Gateway restart retains explicitly persistent active keys in PostgreSQL mode, clears short-lived keys/pending codes and ends sessions. Persistent devices reconnect with a fresh hello/sequence and explicit Start; no listening/playback/conversation is restored. Short-lived devices re-pair.
 - Root and speech environment files are mode 0600. Provider credentials, identity identifiers, tunnel credential JSON, certificates, models, databases and private media are excluded from source control.
 
 ## Observed verification
@@ -51,18 +54,18 @@ User lingering is enabled. Application/tunnel/speech services are enabled; conta
 | --- | --- |
 | Pinned frozen-lockfile install | Passed; Bun lockfile unchanged |
 | Type/Svelte, production build, formatting, diff whitespace | Passed |
-| Bun automated suite | **122 tests passed, 2,480 expectations**, including real isolated `lemmi_test` PostgreSQL |
+| Bun automated suite | **151 tests passed, 3,371 expectations**, including real isolated `lemmi_test` PostgreSQL |
 | Production control/chat smoke | Passed with certificate-verified HTTPS/WSS and explicit identity/model fixtures |
 | Production data smoke | Passed with real isolated PostgreSQL/private media and fixture identity |
 | Python speech boundary suite | **7 tests passed**; fixture inference worker |
-| Python pairing helper | **4 fixture tests passed**; no live pairing made by this helper |
+| Python pairing helper | **6 fixture tests passed**; no live pairing made by this helper |
 | Speech WSS fixtures | Six-second output/window/receipt smoke passed; playback simulated |
 | Actual private speech engines | Three synthetic CPU turns passed through an isolated verified WSS gateway; fixture LLM and simulated playback; not a recognition-accuracy or hardware check |
 | Public access boundary | Verified HTTPS unlock, secure cookie exchange/logout, missing-key/device rejection and internal/mock route denial |
 | Hostname resolution | Earlier DNS issue cleared; normal system lookup and hostname-only verified HTTPS unlock passed during redeployment |
 | Actual identity provider | VoidAuth code/PKCE login and introspection passed; tokens discarded |
 | Actual model provider | OpenRouter fictional greeting passed; standalone request approximately 3.6 seconds; reply/credentials not logged |
-| Public computer-device path | Real persistent pairing authority → public HTTPS claim/profile → verified WSS Start → real model greeting → Pause → Resume → Stop passed; rehearsal credential revoked |
+| Public computer-device path | Persistent public claim with null expiry → actual gateway restart → same-key HTTPS profile/WSS, no restored active session → Start/model greeting/Pause/Resume/Stop passed; rehearsal credential revoked |
 
 The live computer rehearsal created its pairing through the private authenticated server authority. It did **not** exercise a public caregiver-bearer pairing request; real caregiver verification was tested separately. No physical robot, microphone, camera, real contact or notification was used. Fixture tests remain distinct from these live observations.
 
@@ -71,7 +74,7 @@ The live computer rehearsal created its pairing through the private authenticate
 **Speech code deployed, opt-in disabled:** bounded capture grants, PCM ingestion, STT→chat→TTS and output/receipt execution are present in the runtime. The recognized concern/refusal fix is included: fresh fixed-output authority keeps capture off and the session paused, with cancellation preserved. The public gateway has not enabled `LEMMI_SPEECH_ENABLED=1`; existing text-only behavior remains available. See the [protocol/handoff](handoffs/anay-speech-pipeline.md) before enabling voice.
 
 1. **Speech:** synthetic English recognition was intermittent. The backend speech transport is implemented and the engines run privately, but public voice remains disabled pending recognition quality, counterpart review and actual device/browser capture/playback acceptance. Music execution remains incomplete. No robot voice-readiness claim follows from engine startup.
-2. **Product work:** production browser OIDC sign-in/participant text transport, full journal/summary, notification/outbox, preferences/deletion workflows, completed activities, camera and physical K151 acceptance remain pending as described in the [API inventory](backend_api.md) and team plan.
+2. **Product work:** production browser OIDC sign-in/participant text transport, caregiver selector/browser UI, full journal/summary, notification/outbox, preferences/deletion workflows, completed activities, camera and physical K151 acceptance remain pending as described in the [API inventory](backend_api.md) and team plan.
 3. **Review:** Anay reviews access/storage/deployment changes; Emilia verifies real firmware headers, pairing and independent local controls. The remote merge-verification handoff reviewed this credential fix with a regression test. Actual firmware compatibility, broader shared-boundary counterpart review and reboot/network-failure rehearsal remain outstanding.
 
 Operations, private provisioning and service commands: [host setup](host-setup.md). General deployment topology and acceptance checklist: [backend deployment](backend-deploy.md). Observed team acceptance record: [build and demo plan](build-and-demo-plan.md).
@@ -101,3 +104,15 @@ A private custom-format PostgreSQL backup and previous source/build were retaine
 Public gate/cookie/logout/internal/mock/device-denial checks and normal hostname HTTPS unlock passed. The real persistent computer-client rehearsal passed public claim/profile → verified WSS → real OpenRouter greeting → Pause → Resume → Stop; temporary credential revoked. As before, pairing creation used private server authority and no real caregiver bearer request was repeated. Three additional synthetic CPU STT/TTS turns passed an isolated verified WSS gateway with a fixture LLM and simulated consumption; numeric STT totals 869 ms and TTS totals 242 ms across three turns. No audio/dialogue was saved or printed.
 
 No physical microphone/speaker/camera, production voice session, human recognition-quality test, fresh VoidAuth browser login, notification, reboot or venue-network rehearsal was performed. Existing devices must explicitly pair again after restart.
+
+## Persistent-key/chat deployment acceptance — November 14, 2026
+
+Published separate squash commits to main: persistent credentials first (`c402edc`), then chat hardening/support (`430269f`). Integrated them into backend-deploy as runtime `d067ac0`. Resolved overlapping helper additions using the tested persistent-default version; the backend integration tree exactly matched the tested main candidate. Kept both branches' verification records; the production smoke message and migration ledger expectation were reconciled to cover both features.
+
+Persistent-only preparation passed 130 Bun tests / 2,533 expectations, six helper tests, type/build checks and the persistent production data smoke. Combined release passed 151 Bun tests / 3,371 expectations with separate runtime/schema/support PostgreSQL 17 databases, six helper Python tests, seven speech Python tests, type/Svelte, build, format, default/persistent data/support smokes, control/chat fixture smoke and six-second speech fixture output. No dependencies changed.
+
+Backed up private PostgreSQL/source/build/proxy state, applied both new discovered migrations, installed the verified build, and validated/reloaded the real Nginx allowlist. No reseed/reset, historical full SQL proposal, public voice enablement or physical device action occurred. Post-deployment public gate/cookie/logout/route denials passed. Support GET and same-origin JSON apply without a key returned 401; the initial bodyless POST probe hit SvelteKit's 403 form-origin protection. Full support save/apply/cancellation acceptance used fixture identity and real isolated PostgreSQL, not a fresh real caregiver login.
+
+A temporary persistent computer credential returned null expiry and survived a real gateway restart. Public scoped profile and WSS authentication passed with no active session restored. Final Start → real model reply → Pause → Resume → Stop passed, then the test key was revoked. Two initial model turns returned sanitized provider-unavailable errors under the old GLM 160-token/default-reasoning settings. A separate fictional metadata-only diagnostic returned HTTP 200/stop, 100 completion tokens including 78 reasoning tokens. Following the handoff's documented GLM configuration, the host now uses low reasoning and 512 maximum tokens; the subsequent complete live rehearsal passed. This is not proof that every earlier failure was budget exhaustion or broad semantic acceptance. Previous private configuration is retained in the rollback directory. No prompt/reply/key was logged. One immediate test attempt raced startup and created no pairing; the readiness-delayed check passed.
+
+Persistent-key downgrade warning: old gateway code is incompatible with an active new persistent marker. Revoke persistent keys with the new implementation before downgrade, or perform a separately reviewed migration/restore. No automatic downgrade is supplied. Hardware key storage/null-expiry handling, recognition quality, actual caregiver UI and reboot/venue tests remain open.

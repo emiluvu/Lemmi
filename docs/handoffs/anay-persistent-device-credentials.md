@@ -1,5 +1,7 @@
 # Persistent Stackchan device credentials
 
+**Deployment follow-up:** both features were squash-merged into main and deployed as backend runtime `d067ac0` on November 14, 2026. The original branch-only observations below are historical. Both new migrations and the actual support-route proxy allowlist are installed; persistent same-key authentication after a live gateway restart passed. See [current backend status](../backend-status.md) for verification scope and remaining hardware/UI limits.
+
 Branch: `anay/persistent-device-credentials`, based on `backend-deploy` at `618bec2`. **Not deployed.** Anay requested the backend change in a separate worktree while another agent owns the running backend redeployment. This branch does not change production configuration/services/database or firmware.
 
 ## Behavior and setup
