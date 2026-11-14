@@ -86,6 +86,25 @@ Review split: Anay reviews authorization/data/notification work; Emilia reviews 
 
 ## 5. Individual Codex briefs
 
+### Lukas terminal experiment — observed November 13, 2026
+
+User-requested Python hidden-subject 20 Questions prototype lives in
+`packages/activities/prototypes/twenty_questions/`; its README provides run and
+simulation commands. This experiment uses the explicitly requested assumed-No
+timeouts, rather than the integrated participant activity's patient-paced rules.
+It does not establish completion of the shared `twenty_questions` reducer or M2.
+No LLM, audio, policy persistence, app/backend or robot integration is present.
+The deterministic catalog is bounded and cannot identify arbitrary subjects.
+
+Observed on Windows with the official portable Python 3.13.2 runtime: 10 unittest
+checks passed, including complete-round pipe input, actual pipe deadlines,
+20-question/no-repeat bounds, invalid answers, replay, and timeout/reset behavior.
+Run: `.\\.tools\\python-3.13.2\\python.exe -m unittest discover -s packages/activities/prototypes/twenty_questions -v`.
+Interactive Windows console typing/editing and POSIX terminal checks remain pending;
+no hardware or integrated activity acceptance is implied. Next handoff: Lukas
+rehearses terminal gameplay; Anay/Kylie review shared guessing contracts before
+any app integration.
+
 These prompts are implementation entry points after the relevant foundation exists. Keep them in the same repository/spec context, inspect current files, and do not recreate the project if another teammate already scaffolded it. Each person can use small follow-up tasks within their slice.
 
 ### Anay — backend, speech, database and integration
