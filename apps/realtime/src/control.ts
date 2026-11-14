@@ -26,6 +26,7 @@ import {
   type DeviceIdentity,
   type ChatAdapter,
   PersistentData,
+  DataError,
   dataFailure,
   boundedJson,
   type DataRepository,
@@ -139,7 +140,23 @@ export function startControlGateway(options: Options) {
     if (!checkpoints.length) return Promise.resolve();
     persisting = (async () => {
       try {
-        while (checkpoints.length) await data.checkpoint(checkpoints.shift()!);
+        while (checkpoints.length) {
+          const snapshot = checkpoints.shift()!;
+          try {
+            await data.checkpoint(snapshot);
+          } catch (error) {
+            if (!(error instanceof DataError) || error.code !== 'NOT_FOUND') throw error;
+            // Host-admin deletion has already removed dependent rows. Forget only
+            // that profile's authority; never recreate it or interrupt other profiles.
+            for (let i = checkpoints.length - 1; i >= 0; i--)
+              if (checkpoints[i]!.session.profileId === snapshot.session.profileId)
+                checkpoints.splice(i, 1);
+            sessions.removeProfile(snapshot.session.profileId);
+            for (const socket of sockets)
+              if (socket.data.identity.profileId === snapshot.session.profileId)
+                socket.close(1008, 'Device access ended');
+          }
+        }
       } catch {
         checkpoints.length = 0;
         sessions.disconnect();

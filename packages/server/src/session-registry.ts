@@ -7,6 +7,7 @@ import { SessionCoordinator } from './session-coordinator';
 
 // One gateway authority, with isolated coordinator state per authorized profile.
 export class SessionRegistry {
+  private readonly retired = new Set<string>();
   private readonly entries = new Map<string, SessionCoordinator>();
   constructor(
     private readonly chat?: ChatAdapter,
@@ -30,10 +31,17 @@ export class SessionRegistry {
   authorizePhotoDemoProfile(profileId: string, enabled: boolean) {
     this.forProfile(profileId).authorizePublicPhotoDemo(this.publicPhotoStory && enabled);
   }
+  removeProfile(profileId: string) {
+    this.entries.get(profileId)?.disconnect();
+    this.retired.add(profileId);
+  }
   all() {
-    return [...this.entries.values()];
+    return [...this.entries]
+      .filter(([id]) => !this.retired.has(id))
+      .map(([, coordinator]) => coordinator);
   }
   acceptPersistentProfile(profile: ProfileDetail, contextChanged?: boolean) {
+    this.retired.delete(profile.id);
     let coordinator = this.entries.get(profile.id);
     if (!coordinator) {
       if (this.entries.size >= 100) throw new Error('Profile session capacity reached');

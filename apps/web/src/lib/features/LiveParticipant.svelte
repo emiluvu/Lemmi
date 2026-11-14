@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { BrowserAudio } from './browser-audio.ts';
   import AvatarArt from './AvatarArt.svelte';
-  import TeachingChoices from './TeachingChoices.svelte';
+  import VoiceTeaching from './VoiceTeaching.svelte';
   import { mayPresentReply } from '#lib/participant-presentation.ts';
   import {
     createParticipantSetup,
@@ -45,6 +45,9 @@
   let replyBlocked = true;
   let outputAfterGeneration: number | null = null;
   let listening = $state(false);
+  let speaking = $state(false);
+  let voiceTeaching = $state(false);
+  let teachingView = $state<{ stopForExit: () => Promise<boolean> }>();
   let audio: BrowserAudio | null = null;
   let connectionEpoch = 0;
   let connection: ParticipantConnection | null = null;
@@ -149,6 +152,29 @@
     if (!connection?.send(type, payload, independent))
       message = 'Connection unavailable. Reconnect when ready.';
   }
+  function sessionNeedsStop() {
+    return !!session && session.phase !== 'ended';
+  }
+  async function startVoiceTeaching() {
+    if (ownsEndpoint && session && session.phase !== 'ended') {
+      control('input.stop');
+      const deadline = Date.now() + 3000;
+      while (sessionNeedsStop() && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      if (sessionNeedsStop()) {
+        message = 'Stop could not be confirmed. Reconnect before starting Teach Lemmi.';
+        return;
+      }
+    }
+    audio?.close();
+    audio = null;
+    connectionEpoch++;
+    connection?.close();
+    connection = null;
+    connected = false;
+    session = null;
+    voiceTeaching = true;
+  }
   function photoAction(action: ActivityAction) {
     if (!photo) return;
     control('input.photo.action', {
@@ -222,6 +248,9 @@
       },
       (value) => {
         message = value;
+      },
+      (value) => {
+        speaking = value;
       },
     );
     connection.connect();
@@ -335,238 +364,261 @@
   });
 </script>
 
-<section class="conversation-screen live-companion" aria-labelledby="conversation-title">
-  <div class="conversation-wordmark">Lemmi</div>
+{#if voiceTeaching && assignment && currentProfile}
+  <VoiceTeaching
+    bind:this={teachingView}
+    live
+    profile={currentProfile}
+    deviceId={assignment.deviceId}
+  />
   <button
-    class="conversation-exit"
-    onclick={leaveConversation}
-    aria-label="Return to caregiver workspace"
-    title="Pause and return to caregiver workspace">✕</button
+    class="quiet"
+    onclick={async () => {
+      if (await teachingView?.stopForExit()) {
+        voiceTeaching = false;
+        connect();
+      }
+    }}>Return to conversation</button
   >
-  <header class="conversation-center live-companion-heading">
-    <p class="eyebrow">Your companion</p>
-    <h1 id="conversation-title">Talk with Lemmi</h1>
-    {#if currentProfile}<div class="conversation-avatar live-avatar">
-        <AvatarArt avatarId={currentProfile.avatarId} />
-      </div>{/if}
-    <h2>
-      {session?.phase === 'paused'
-        ? 'Take your time'
-        : session?.phase === 'ended'
-          ? 'Here when you need me'
-          : 'Ready when you are'}
-    </h2>
-    <p class="conversation-capture" aria-live="polite">
-      {listening ? 'Microphone listening — tap Finish speaking when ready.' : 'Microphone off'} · Camera
-      off
-    </p>
-  </header>
-  <div class="conversation-workspace">
-    {#if assignment}
-      <section class="connection-status" aria-label="Conversation connection">
-        <p class="participant-name">
-          <strong>{currentProfile?.preferredName ?? assignment.profileId}</strong>
-        </p>
-        <p>
-          {connected ? 'Connected' : 'Disconnected'} · Session: {session?.phase ?? 'not started'}
-        </p>
-        {#if session && session.phase !== 'ended'}
-          <p>
-            {ownsEndpoint
-              ? 'This browser is the active endpoint.'
-              : session.endpoint === 'robot'
-                ? 'The robot is currently active.'
-                : 'Another browser is currently active.'}
+{:else}
+  <section class="conversation-screen live-companion" aria-labelledby="conversation-title">
+    <div class="conversation-wordmark">Lemmi</div>
+    <button
+      class="conversation-exit"
+      onclick={leaveConversation}
+      aria-label="Return to caregiver workspace"
+      title="Pause and return to caregiver workspace">✕</button
+    >
+    <header class="conversation-center live-companion-heading">
+      <p class="eyebrow">Your companion</p>
+      <h1 id="conversation-title">Talk with Lemmi</h1>
+      {#if currentProfile}<div class="conversation-avatar live-avatar">
+          <AvatarArt avatarId={currentProfile.avatarId} animated talking={speaking} />
+        </div>{/if}
+      <h2>
+        {session?.phase === 'paused'
+          ? 'Take your time'
+          : session?.phase === 'ended'
+            ? 'Here when you need me'
+            : 'Ready when you are'}
+      </h2>
+      <p class="conversation-capture" aria-live="polite">
+        {listening ? 'Microphone listening — tap Finish speaking when ready.' : 'Microphone off'} · Camera
+        off
+      </p>
+    </header>
+    <div class="conversation-workspace">
+      {#if assignment}
+        <section class="connection-status" aria-label="Conversation connection">
+          <p class="participant-name">
+            <strong>{currentProfile?.preferredName ?? assignment.profileId}</strong>
           </p>
-          {#if !ownsEndpoint}<button onclick={() => control('input.handoff')} disabled={!connected}
-              >Use this browser</button
+          <p>
+            {connected ? 'Connected' : 'Disconnected'} · Session: {session?.phase ?? 'not started'}
+          </p>
+          {#if session && session.phase !== 'ended'}
+            <p>
+              {ownsEndpoint
+                ? 'This browser is the active endpoint.'
+                : session.endpoint === 'robot'
+                  ? 'The robot is currently active.'
+                  : 'Another browser is currently active.'}
+            </p>
+            {#if !ownsEndpoint}<button
+                onclick={() => control('input.handoff')}
+                disabled={!connected}>Use this browser</button
+              >{/if}
+          {:else}<button onclick={() => control('input.start', {}, true)} disabled={!connected}
+              >Start conversation</button
             >{/if}
-        {:else}<button onclick={() => control('input.start', {}, true)} disabled={!connected}
-            >Start conversation</button
-          >{/if}
-        {#if !connected}<button onclick={connect} disabled={busy}>Reconnect</button>{/if}
-        <button class="quiet" onclick={changeParticipant} disabled={busy}>Change participant</button
-        >
-      </section>
-      {#if session && session.phase !== 'ended'}
-        <div class="controls session-controls" aria-label="Session controls">
-          <button
-            onclick={() => {
-              control(session?.phase === 'paused' ? 'input.resume' : 'input.pause');
-            }}
-            disabled={!connected || (session.phase === 'paused' && !ownsEndpoint)}
-            >{session.phase === 'paused' ? 'Resume to ready' : 'Pause'}</button
+          {#if !connected}<button onclick={connect} disabled={busy}>Reconnect</button>{/if}
+          <button class="quiet" onclick={changeParticipant} disabled={busy}
+            >Change participant</button
           >
-          <button
-            onclick={() => {
-              control('input.stop');
-            }}
-            disabled={!connected}>Stop</button
-          >
-          <button
-            onclick={() => {
-              control('input.mute', { muted: !session?.micMuted });
-            }}
-            disabled={!connected || !ownsEndpoint}
-            >{session.micMuted ? 'Unmute (capture stays off)' : 'Mute microphone'}</button
-          >
-          <button
-            onclick={() => {
-              control('input.help');
-            }}
-            disabled={!connected}>Ask for help</button
-          >
-        </div>
-        {#if photoAvailable && (!photo || photo.phase === 'ended')}
-          <button
-            onclick={() => control('input.photo.start')}
-            disabled={!connected ||
-              !ownsEndpoint ||
-              !!session.teaching ||
-              !['ready', 'waiting'].includes(session.phase)}
-          >
-            Start Photo Story
-          </button>
-        {/if}
-        {#if photo && photo.phase !== 'ended'}
-          <section class="card public-photo" aria-labelledby="photo-story-title">
-            <h2 id="photo-story-title">Photo Story</h2>
-            <p>Reviewed illustrations · Caption-based conversation · No image analysis</p>
-            {#if photo.currentAssetId}
-              {#key photo.currentAssetId}
-                <img
-                  src={`/v1/demo/photo-assets/${encodeURIComponent(photo.currentAssetId)}`}
-                  alt={photo.caption ?? 'Reviewed illustration'}
-                  onerror={() => {
-                    photoLoadError = true;
-                    audio?.cancel();
-                    if (ownsEndpoint) control('input.pause');
-                  }}
-                />
-              {/key}
-              <p>{photo.caption}</p>
-            {/if}
-            {#if photoLoadError}<p role="alert">
-                The picture could not be loaded. Resume and skip it, or finish Photo Story.
-              </p>{/if}
-            <p>{photo.phase === 'paused' ? 'Paused. Resume when ready.' : photo.prompt}</p>
-            <div class="controls">
-              {#each photo.choices as choice}
+        </section>
+        {#if session && session.phase !== 'ended'}
+          <div class="controls session-controls" aria-label="Session controls">
+            <button
+              onclick={() => {
+                control(session?.phase === 'paused' ? 'input.resume' : 'input.pause');
+              }}
+              disabled={!connected || (session.phase === 'paused' && !ownsEndpoint)}
+              >{session.phase === 'paused' ? 'Resume to ready' : 'Pause'}</button
+            >
+            <button
+              onclick={() => {
+                control('input.stop');
+              }}
+              disabled={!connected}>Stop</button
+            >
+            <button
+              onclick={() => {
+                control('input.mute', { muted: !session?.micMuted });
+              }}
+              disabled={!connected || !ownsEndpoint}
+              >{session.micMuted ? 'Unmute (capture stays off)' : 'Mute microphone'}</button
+            >
+            <button
+              onclick={() => {
+                control('input.help');
+              }}
+              disabled={!connected}>Ask for help</button
+            >
+          </div>
+          {#if photoAvailable && (!photo || photo.phase === 'ended')}
+            <button
+              onclick={() => control('input.photo.start')}
+              disabled={!connected ||
+                !ownsEndpoint ||
+                !!session.teaching ||
+                !['ready', 'waiting'].includes(session.phase)}
+            >
+              Start Photo Story
+            </button>
+          {/if}
+          {#if photo && photo.phase !== 'ended'}
+            <section class="card public-photo" aria-labelledby="photo-story-title">
+              <h2 id="photo-story-title">Photo Story</h2>
+              <p>Reviewed illustrations · Caption-based conversation · No image analysis</p>
+              {#if photo.currentAssetId}
+                {#key photo.currentAssetId}
+                  <img
+                    src={`/v1/demo/photo-assets/${encodeURIComponent(photo.currentAssetId)}`}
+                    alt={photo.caption ?? 'Reviewed illustration'}
+                    onerror={() => {
+                      photoLoadError = true;
+                      audio?.cancel();
+                      if (ownsEndpoint) control('input.pause');
+                    }}
+                  />
+                {/key}
+                <p>{photo.caption}</p>
+              {/if}
+              {#if photoLoadError}<p role="alert">
+                  The picture could not be loaded. Resume and skip it, or finish Photo Story.
+                </p>{/if}
+              <p>{photo.phase === 'paused' ? 'Paused. Resume when ready.' : photo.prompt}</p>
+              <div class="controls">
+                {#each photo.choices as choice}
+                  <button
+                    onclick={() => photoAction(choice.action)}
+                    disabled={!connected ||
+                      !ownsEndpoint ||
+                      session.phase === 'paused' ||
+                      (photoLoadError && choice.action.type === 'photo.talk')}
+                    >{choice.label}</button
+                  >
+                {/each}
                 <button
-                  onclick={() => photoAction(choice.action)}
+                  onclick={() => control('input.photo.repeat')}
                   disabled={!connected ||
                     !ownsEndpoint ||
-                    session.phase === 'paused' ||
-                    (photoLoadError && choice.action.type === 'photo.talk')}>{choice.label}</button
+                    photo.viewingMode !== 'talk' ||
+                    photoBlocksConversation ||
+                    !['ready', 'waiting'].includes(session.phase)}>Repeat question</button
                 >
-              {/each}
-              <button
-                onclick={() => control('input.photo.repeat')}
+                <button
+                  onclick={() => photoAction({ type: 'activity.leave' })}
+                  disabled={!connected || !ownsEndpoint || session.phase === 'paused'}
+                  >Finish Photo Story</button
+                >
+              </div>
+            </section>
+          {/if}
+          {#if !photo || photo.phase === 'ended'}
+            <button
+              onclick={startVoiceTeaching}
+              disabled={!connected ||
+                !ownsEndpoint ||
+                !teachingAvailable ||
+                !speechAvailable ||
+                !['ready', 'waiting'].includes(session.phase)}>Play Teach Lemmi</button
+            >
+          {/if}
+          {#if speechAvailable && ownsEndpoint}
+            {#if listening}<button onclick={() => audio?.finish()}>Finish speaking</button>
+            {:else}<button
+                onclick={() => {
+                  outputBlocked = false;
+                  replyBlocked = false;
+                  outputAfterGeneration = null;
+                  reply = '';
+                  void audio?.speak();
+                }}
+                disabled={!connected ||
+                  session.micMuted ||
+                  photoBlocksConversation ||
+                  !['ready', 'waiting'].includes(session.phase)}>Speak now</button
+              >{/if}
+          {/if}
+          <details class="type-instead" open={!speechAvailable}>
+            <summary>Type instead</summary>
+            <form onsubmit={sendText} class="card">
+              <label for="participant-text">Message to Lemmi</label>
+              <textarea
+                id="participant-text"
+                bind:value={text}
+                maxlength="1000"
+                rows="3"
                 disabled={!connected ||
                   !ownsEndpoint ||
-                  photo.viewingMode !== 'talk' ||
                   photoBlocksConversation ||
-                  !['ready', 'waiting'].includes(session.phase)}>Repeat question</button
-              >
+                  !['ready', 'waiting'].includes(session.phase) ||
+                  !textAvailable ||
+                  (!!session.teaching && !session.teaching.entityId)}
+              ></textarea>
               <button
-                onclick={() => photoAction({ type: 'activity.leave' })}
-                disabled={!connected || !ownsEndpoint || session.phase === 'paused'}
-                >Finish Photo Story</button
+                type="submit"
+                disabled={!connected ||
+                  !ownsEndpoint ||
+                  photoBlocksConversation ||
+                  !['ready', 'waiting'].includes(session.phase) ||
+                  (!!session.teaching && !session.teaching.entityId) ||
+                  !textAvailable ||
+                  !text.trim()}>Send</button
               >
-            </div>
-          </section>
+              {#if !textAvailable}<p>Conversation service is not configured.</p>{/if}
+            </form>
+          </details>
+          {#if reply}<section class="card" aria-live="polite">
+              <h2>Lemmi</h2>
+              <p>{reply}</p>
+            </section>{/if}
         {/if}
-        {#if !photo || photo.phase === 'ended'}
-          <TeachingChoices
-            {session}
-            available={teachingAvailable}
-            disabled={!connected || !ownsEndpoint}
-            command={control}
+      {:else if demoEnrollment}
+        <section class="card" aria-label="Participant profiles">
+          <h2>Choose a participant</h2>
+          {#each profiles as profile}<button onclick={() => select(profile.id)} disabled={busy}
+              >{profile.preferredName}</button
+            >{/each}
+          {#if !profiles.length}<p>No profiles available.</p>{/if}
+        </section>
+        <form
+          class="card"
+          onsubmit={(event) => {
+            event.preventDefault();
+            void createProfile();
+          }}
+        >
+          <label for="participant-name">New fictional participant name</label>
+          <input
+            id="participant-name"
+            bind:value={newName}
+            maxlength="80"
+            required
+            autocomplete="off"
           />
-        {/if}
-        {#if speechAvailable && ownsEndpoint}
-          {#if listening}<button onclick={() => audio?.finish()}>Finish speaking</button>
-          {:else}<button
-              onclick={() => {
-                outputBlocked = false;
-                replyBlocked = false;
-                outputAfterGeneration = null;
-                reply = '';
-                void audio?.speak();
-              }}
-              disabled={!connected ||
-                session.micMuted ||
-                photoBlocksConversation ||
-                !['ready', 'waiting'].includes(session.phase)}>Speak now</button
-            >{/if}
-        {/if}
-        <details class="type-instead" open={!speechAvailable}>
-          <summary>Type instead</summary>
-          <form onsubmit={sendText} class="card">
-            <label for="participant-text">Message to Lemmi</label>
-            <textarea
-              id="participant-text"
-              bind:value={text}
-              maxlength="1000"
-              rows="3"
-              disabled={!connected ||
-                !ownsEndpoint ||
-                photoBlocksConversation ||
-                !['ready', 'waiting'].includes(session.phase) ||
-                !textAvailable ||
-                (!!session.teaching && !session.teaching.entityId)}
-            ></textarea>
-            <button
-              type="submit"
-              disabled={!connected ||
-                !ownsEndpoint ||
-                photoBlocksConversation ||
-                !['ready', 'waiting'].includes(session.phase) ||
-                (!!session.teaching && !session.teaching.entityId) ||
-                !textAvailable ||
-                !text.trim()}>Send</button
-            >
-            {#if !textAvailable}<p>Conversation service is not configured.</p>{/if}
-          </form>
-        </details>
-        {#if reply}<section class="card" aria-live="polite">
-            <h2>Lemmi</h2>
-            <p>{reply}</p>
-          </section>{/if}
+          <button disabled={busy || !newName.trim()}>Create fictional profile</button>
+        </form>
       {/if}
-    {:else if demoEnrollment}
-      <section class="card" aria-label="Participant profiles">
-        <h2>Choose a participant</h2>
-        {#each profiles as profile}<button onclick={() => select(profile.id)} disabled={busy}
-            >{profile.preferredName}</button
-          >{/each}
-        {#if !profiles.length}<p>No profiles available.</p>{/if}
-      </section>
-      <form
-        class="card"
-        onsubmit={(event) => {
-          event.preventDefault();
-          void createProfile();
-        }}
-      >
-        <label for="participant-name">New fictional participant name</label>
-        <input
-          id="participant-name"
-          bind:value={newName}
-          maxlength="80"
-          required
-          autocomplete="off"
-        />
-        <button disabled={busy || !newName.trim()}>Create fictional profile</button>
-      </form>
-    {/if}
-    <p role="status" aria-live="polite">{busy ? 'Working…' : message}</p>
-    <p class="helper">
-      Fictional demo. Listening uses local speech processing and an external language model. Audio
-      is not saved.
-    </p>
-  </div>
-</section>
+      <p role="status" aria-live="polite">{busy ? 'Working…' : message}</p>
+      <p class="helper">
+        Fictional demo. Listening uses local speech processing and an external language model. Audio
+        is not saved.
+      </p>
+    </div>
+  </section>
+{/if}
 
 <style>
   .conversation-screen {

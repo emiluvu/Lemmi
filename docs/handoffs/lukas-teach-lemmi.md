@@ -24,15 +24,23 @@ No auth routes, credential scopes, database migrations, provider selection or de
 
 ## Remaining integration
 
+Latest voice continuity work: [the focused handoff](teach-lemmi-voice-continuity.md) describes the reproduced missing spoken-control acknowledgments, fresh-authority backend patch, explicitly started question/listen mode and review/deployment gates. Two consecutive ordinary hands-free turns passed on the live browser. The new server control-specific patch still requires Anay integration/deployment; do not infer it from that ordinary-turn check.
+
+**Browser voice follow-up:** `/participant/voice` now implements browser capture, PCM framing and receipt-backed speaker playback through the existing device protocol, with an exact-origin loopback-only Vite dev proxy. Credentials remain server-side in private environment configuration. See [voice setup and test instructions](../teach-lemmi-voice-demo.md). This is a local demo client, not a newly deployed public browser/auth surface. The actual Alex human voice path passed one approved English rehearsal after Anay's deployment; broader quality/firmware acceptance is pending. The scripted `/participant` page remains available separately.
+
 Anay: review timing/cancellation and the new shared fields/events; merge deliberately with backend work; supply authoritative persisted policy and durable, consent-aware signal/observation handling when those services exist. This branch performs no durable teaching memory, retirement, excerpt, observation or summary writes, and it does not count silence/answer length as negative feedback. The catalog guard covers listed English topic aliases, not unrestricted semantic safety; extending topics/languages needs review and safeguards. Rehearse actual model output before deployment acceptance.
 
-Kylie: review the minimal participant-shell text demo and adapt its teaching panel to the final conversation surface. It uses the shared typed clients and session snapshots, never a competing activity state. Browser STT/TTS remains outside this text demo.
+Kylie: review the participant-shell text demo and new browser voice controls, then adapt them to the final conversation surface. They use shared clients/protocol/session snapshots, never a competing activity state. Browser voice is a transport/player for backend STT/TTS; it does not introduce browser speech providers.
 
 Emilia: consume `teaching:true` and new snapshot fields, emit the new commands, enforce local Stop/mute/watchdog and verify real capture/output indicators. Voice Next/Not sure/Like currently invalidate the old voice turn and publish the new snapshot; replacement-topic narration is not automatically synthesized on that canceled voice turn. Use an explicit topic button command for narrated selection. English teaching only in this increment; no German-content acceptance claimed.
 
 Camera remains unavailable in this checkout. The common external pause path freezes teaching and cancels pending output; connect and verify actual F13 camera orchestration before claiming camera acceptance. Ending a check-in must not resume teaching automatically.
 
 ## Verification and launch
+
+**Question/endpoint upgrade:** working voice commit `16e263a` is preserved on the separate GitHub branch `codex/teach-lemmi-voice-baseline-16e263a`. The main browser question now displays the latest backend reply and stays visible while answering. Local silence detection ends an explicitly granted capture after two seconds of quiet following sustained speech; user-selectable Quick/Extra time use 1.2/four seconds for the next turn. Done and the original capture bound remain available. Initial silence is not negative feedback or automatic submission. No backend API, speech service, auth or firmware change is required. A separately approved live sentence auto-submitted, updated the primary question to the AI follow-up and then changed to the seaside invitation on Next. Stop left all audio off; automated silence/cancellation/presentation checks accompany it. See the voice manual for limits.
+
+Browser voice live follow-up: Anay's teaching deployment now advertises audio/teaching, and the actual Alex microphone → STT → live AI → TTS → speaker path passed one approved fictional English turn. The user confirmed hearing the follow-up. Topic narration, Pause/keyboard Resume, capture-off unmute and Stop passed this rehearsal. Client progress receipts batch every two consumed PCM frames to stay under the deployed 30-control/sec limit; the initial live disconnect was diagnosed and fixed with a regression test. No extra backend change was required for that correction. See the [voice manual](../teach-lemmi-voice-demo.md) for exact launch/status and remaining broader acceptance.
 
 Changed-code formatting and diff whitespace checks passed. Repository-wide `format:check` reports 83 unchanged files with existing formatting differences; no unrelated formatting rewrite was made.
 

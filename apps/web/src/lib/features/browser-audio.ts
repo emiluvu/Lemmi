@@ -16,6 +16,19 @@ export class BrowserAudio {
   // Paused playback requires an application-owned fixed text reply at the exact
   // current authority snapshot. Pause alone never grants permission for audio.
   private fixedReply: { token: SessionSnapshot; turnId: string } | null = null;
+  private playbackTimer: ReturnType<typeof setInterval> | null = null;
+  private speaking = false;
+  private syncPlayback() {
+    const now = this.context?.currentTime ?? -1;
+    const speaking =
+      this.context?.state === 'running' &&
+      !!this.output &&
+      [...this.output.spans.values()].some(([start, end]) => now >= start && now < end);
+    if (speaking !== this.speaking) {
+      this.speaking = speaking;
+      this.playbackState(speaking);
+    }
+  }
   private output: {
     meta: SpeechOutputStart;
     token: SessionSnapshot;
@@ -25,11 +38,13 @@ export class BrowserAudio {
     started: boolean;
     next: number;
     nodes: Set<AudioBufferSourceNode>;
+    spans: Map<AudioBufferSourceNode, [number, number]>;
   } | null = null;
   constructor(
     private readonly connection: ParticipantConnection,
     private readonly state: (listening: boolean) => void,
     private readonly error: (message: string) => void,
+    private readonly playbackState: (speaking: boolean) => void = () => {},
   ) {}
   async speak() {
     this.cancelInput();
@@ -162,6 +177,9 @@ export class BrowserAudio {
     this.cancelInput();
     const output = this.output;
     this.output = null;
+    if (this.playbackTimer) clearInterval(this.playbackTimer);
+    this.playbackTimer = null;
+    this.syncPlayback();
     if (output)
       for (const node of output.nodes) {
         node.onended = null;
@@ -193,6 +211,9 @@ export class BrowserAudio {
       this.receipt('completed', output.played);
       this.output = null;
       this.fixedReply = null;
+      if (this.playbackTimer) clearInterval(this.playbackTimer);
+      this.playbackTimer = null;
+      this.syncPlayback();
     }
   }
   private sameAuthority(token: SessionSnapshot, session: SessionSnapshot) {
@@ -292,6 +313,7 @@ export class BrowserAudio {
         started: false,
         next: this.context.currentTime + 0.03,
         nodes: new Set(),
+        spans: new Map(),
       };
     }
     if (event.type === 'audio.chunk' || event.type === 'audio.end') {
@@ -347,9 +369,13 @@ export class BrowserAudio {
       output.received++;
       const playAt = Math.max(output.next, context.currentTime);
       output.next = playAt + buffer.duration;
+      output.spans.set(source, [playAt, output.next]);
+      this.playbackTimer ??= setInterval(() => this.syncPlayback(), 30);
       source.onended = () => {
         if (this.output !== output) return;
         output.nodes.delete(source);
+        output.spans.delete(source);
+        this.syncPlayback();
         source.disconnect();
         buffer.getChannelData(0).fill(0);
         if (!output.started) {

@@ -1113,3 +1113,107 @@ dbtest(
     expect((await sql`SELECT count(*)::int AS n FROM lemmi.device_revocations`)[0].n).toBe(10000);
   },
 );
+
+dbtest(
+  'deleted rehearsal profile checkpoints do not disconnect or block another profile',
+  async () => {
+    await reset();
+    const removed = await repo.createProfile(
+      'fixture-caregiver',
+      { preferredName: 'Removed fictional rehearsal' },
+      true,
+    );
+    const gateway = startControlGateway({
+      publicOrigin: 'https://lemmi.test',
+      internalToken: randomUUID(),
+      port: 0,
+      repository: repo,
+      caregiverSubject: 'fixture-caregiver',
+      demoEnrollment: true,
+    });
+    await gateway.ready;
+    const sockets: WebSocket[] = [];
+    async function endpoint(profileId: string) {
+      const enrolled = await gateway.data!.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId,
+        endpoint: 'robot',
+      });
+      if (!enrolled.ok) throw new Error('enrollment fixture');
+      const credential = (enrolled.data as { credential: string }).credential;
+      const ws = new WebSocket(`ws://127.0.0.1:${gateway.server.port}/v1/device-stream`, {
+        headers: {
+          authorization: `Bearer ${credential}`,
+          host: 'lemmi.test',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      sockets.push(ws);
+      let seq = 0;
+      let snapshot: any;
+      let closed = false;
+      let ready = false;
+      ws.onclose = () => {
+        closed = true;
+      };
+      ws.onmessage = (e) => {
+        const x = JSON.parse(String(e.data));
+        if (x.type === 'device.ready') ready = true;
+        if (x.type === 'state.changed') snapshot = x.payload.session;
+      };
+      const until = async (p: () => boolean) => {
+        const end = Date.now() + 3000;
+        while (!p()) {
+          if (Date.now() > end || closed) throw new Error('deleted profile socket regression');
+          await Bun.sleep(5);
+        }
+      };
+      const send = (type: string, payload: unknown = {}) =>
+        ws.send(
+          JSON.stringify({
+            protocol_version: 1,
+            event_id: randomUUID(),
+            session_id: type === 'input.start' ? null : (snapshot?.id ?? null),
+            generation: type === 'input.start' ? 0 : (snapshot?.generation ?? 0),
+            turn_id: null,
+            sequence: seq++,
+            type,
+            payload,
+          }),
+        );
+      await until(() => ws.readyState === WebSocket.OPEN);
+      send('device.hello', {
+        firmwareVersion: 'fixture',
+        cameraSupported: false,
+        pettingSupported: false,
+        audio: { supported: false },
+      });
+      await until(() => ready);
+      send('input.start');
+      await until(() => snapshot?.phase === 'ready');
+      await gateway.flush();
+      return { send, until, closed: () => closed, snapshot: () => snapshot };
+    }
+    try {
+      await endpoint(removed.id);
+      await sql`DELETE FROM lemmi.profiles WHERE id=${removed.id}`;
+      const current = await endpoint('profile-alex');
+      await gateway.flush();
+      current.send('input.pause');
+      await current.until(() => current.snapshot()?.phase === 'paused');
+      await gateway.flush();
+      expect(current.closed()).toBe(false);
+      expect(await sql`SELECT id FROM lemmi.profiles WHERE id=${removed.id}`).toHaveLength(0);
+      expect(await sql`SELECT id FROM lemmi.sessions WHERE profile_id=${removed.id}`).toHaveLength(
+        0,
+      );
+      expect(await sql`SELECT phase FROM lemmi.sessions WHERE profile_id='profile-alex'`).toEqual([
+        expect.objectContaining({ phase: 'paused' }),
+      ]);
+    } finally {
+      for (const ws of sockets) ws.close();
+      gateway.stop();
+      await Bun.sleep(30);
+    }
+  },
+);

@@ -11,3 +11,11 @@ User supplied and explicitly requested these generic character images for Lemmi'
 | lemming / lemming.png | 1312 × 1199 | 536716 | Tiny caramel lemming mascot.png         | Caramel lemming with cream face and belly |
 
 `apps/web/src/lib/avatars.ts` maps the shared AvatarId values to these public app assets. Profile saves use the existing shared profile client and revisions; the conversation screen loads only the participant-safe profile projection. All animals share controls and voice. Six-state artwork and Emilia's hardware-format/memory validation remain pending.
+
+The five `*-strip.png` files reuse Emilia’s existing generated artwork studies
+from `firmware/stackchan/assets/avatars/v1` in the firmware-foundation checkout
+(November 14). Three horizontal cells: closed mouth, open mouth, pet acknowledgment.
+The browser uses only the first two, on square participant avatar surfaces.
+The original static profile artwork stays unchanged. These generated frames may
+have slight silhouette differences; visual review and real voice rehearsal remain
+necessary. No firmware export/hardware acceptance is implied.

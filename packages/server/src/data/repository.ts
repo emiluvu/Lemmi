@@ -361,7 +361,11 @@ export class DataRepository {
     await this.sql.begin(async (tx) => {
       const profile =
         await tx`SELECT 1 FROM lemmi.profiles WHERE id=${snapshot.profileId} AND deletion_state='active' AND revision>=${snapshot.profileRevision} AND privacy_revision=${snapshot.privacyRevision} AND policy_revision=${snapshot.policyRevision} FOR UPDATE`;
-      if (!profile.length) throw new DataError('REVISION_CONFLICT', 'Session profile changed');
+      if (!profile.length) {
+        const exists = await tx`SELECT 1 FROM lemmi.profiles WHERE id=${snapshot.profileId}`;
+        if (!exists.length) throw new DataError('NOT_FOUND', 'Session profile was removed');
+        throw new DataError('REVISION_CONFLICT', 'Session profile changed');
+      }
       if (bootId) {
         const epoch =
           await tx`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${bootId}::uuid FOR SHARE`;
