@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+### Kylie published UI merge acceptance — November 14, 2026
+
+Merged requested `d8a6fe4` into backend-deploy as `733fb1c` and installed its isolated production web build. Existing integration already contained the same designed components/styles/artwork; conflict resolution retained live/mock separation, enrollment, teaching and Alex context. Final source diff is documentation/font-license whitespace only. Thirty-eight focused tests / 392 expectations, production build and actual-workspace type/Svelte checks passed. Isolated checking failed to resolve route types through shared dependency symlinks; actual-workspace check passed with zero errors/warnings. Public access/unlock/participant/profile-list, twenty matching JS/CSS bundles and three matching font/surface files passed. Restarted only web; gateway remained running with existing connections. Browser visual/hardware/counterpart UI acceptance was not repeated; caregiver/mock pages remain local. See [backend status](backend-status.md#kylie-ui-publication-merge--november-14-2026).
+
 ### Browser unlock repair acceptance — November 14, 2026
 
 Deployed web-only fix `7ad2de1` for the native form Origin suppression caused by `Referrer-Policy: no-referrer`; policy is now `same-origin`, with strict POST Origin checks retained. Five access tests / 39 expectations, type/Svelte checks, focused formatting and isolated production build passed. Public HTTPS access/header/unlock/cookie/participant/profile-list/logout passed; opaque Origin remains rejected. Only web restarted; gateway `f5724a0`, credentials and database preserved. The user subsequently confirmed Emilia's Chrome unlock worked. Broader counterpart review remains pending. See [backend status](backend-status.md#browser-unlock-repair--november-14-2026).

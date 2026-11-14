@@ -2,7 +2,13 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed web runtime revision: **`7ad2de1`** (browser access-form fix); gateway remains **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
+Deployed web runtime revision: **`733fb1c`** (Kylie UI merge, retaining the browser access-form fix); gateway remains **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
+
+## Kylie UI publication merge — November 14, 2026
+
+Merged requested `codex/kylie-ui-refinements` commit `d8a6fe4` as `733fb1c` into `backend-deploy`. Its designed components, CSS and binary artwork were already present via the earlier local-UI integration. Reconciled conflicts by preserving live/mock route separation, live enrollment/transport, scripted Teach Lemmi and approved Alex context; retained both teams' documentation. The resulting diff from prior deployment source contains only the UI publication record and whitespace in the font license: there is no new visual/behavior change. Caregiver/mock previews remain local, not newly public routes.
+
+Built in an isolated worktree and installed that build, retaining the previous build/manifest under `.data/releases` with pointer `.data/kylie-ui-rollback-path`. Restarted only web; gateway PID/start time and active test connections were preserved. Thirty-eight focused access/browser/teaching tests / 392 expectations passed, production build passed, and the actual workspace type/Svelte check passed with zero errors/warnings. Isolated symlinked-worktree checking could not resolve generated route types; the unchanged source passed in the actual workspace. Public verified HTTPS unlock, participant/profile-list and twenty JS/CSS bundles passed; all twenty bundles and the three checked font/surface assets byte-match installed files. No session commands or real model calls were sent. No new visual browser/hardware acceptance was performed.
 
 ## Browser unlock repair — November 14, 2026
 
