@@ -11,7 +11,11 @@ function fixture() {
     },
   };
   const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
+  let context;
   class Context {
+    constructor() {
+      context = this;
+    }
     state = 'running';
     sampleRate = 48000;
     currentTime = 0;
@@ -68,10 +72,12 @@ function fixture() {
     },
   };
   const states = [];
+  const playback = [];
   const audio = new BrowserAudio(
     connection,
     (value) => states.push(value),
     () => {},
+    (value) => playback.push(value),
   );
   return {
     audio,
@@ -80,6 +86,10 @@ function fixture() {
     listeners,
     session,
     states,
+    playback,
+    get context() {
+      return context;
+    },
     restore() {
       audio.close();
       globalThis.AudioContext = original;
@@ -201,6 +211,46 @@ test('late microphone permission cannot reopen capture after local cancellation'
     await work;
     expect(f.track.stopped).toBe(true);
     expect(f.sent).toHaveLength(0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('avatar follows consumed playback time and closes on gaps and cancellation', async () => {
+  const f = fixture();
+  try {
+    await f.audio.speak();
+    f.audio.cancelInput();
+    f.audio.receive(event('response.start', meta), 'browser');
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(f.playback).toEqual([]);
+    f.audio.receive(
+      event('audio.chunk', {
+        leaseId: 'lease',
+        streamId: 'output',
+        chunkIndex: 0,
+        encoding: 'pcm_s16le',
+        data: btoa('\0'.repeat(882)),
+      }),
+      'browser',
+    );
+    // Scheduled audio has not reached the speaker yet.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(f.playback).toEqual([]);
+    f.context.currentTime = 0.04;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(f.playback.at(-1)).toBe(true);
+    f.context.currentTime = 0.2;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(f.playback.at(-1)).toBe(false);
+    f.context.currentTime = 0.04;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(f.playback.at(-1)).toBe(true);
+    f.audio.cancel();
+    expect(f.playback.at(-1)).toBe(false);
+    const count = f.playback.length;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(f.playback).toHaveLength(count);
   } finally {
     f.restore();
   }

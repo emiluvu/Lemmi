@@ -28,6 +28,7 @@
   let replyBlocked = true;
   let outputAfterGeneration: number | null = null;
   let listening = $state(false);
+  let speaking = $state(false);
   let audio: BrowserAudio | null = null;
   let connectionEpoch = 0;
   let connection: ParticipantConnection | null = null;
@@ -171,6 +172,9 @@
       (value) => {
         message = value;
       },
+      (value) => {
+        speaking = value;
+      },
     );
     connection.connect();
   }
@@ -284,7 +288,7 @@
         : 'Choose a participant'}
     </h1>
     {#if currentProfile}<div class="live-avatar">
-        <AvatarArt avatarId={currentProfile.avatarId} />
+        <AvatarArt avatarId={currentProfile.avatarId} animated talking={speaking} />
       </div>{/if}
   </header>
   <p>
@@ -343,6 +347,8 @@
       <TeachingChoices
         {session}
         available={teachingAvailable}
+        {speechAvailable}
+        {listening}
         disabled={!connected || !ownsEndpoint}
         command={control}
       />
@@ -361,30 +367,30 @@
               !['ready', 'waiting'].includes(session.phase)}>Speak now</button
           >{/if}
       {/if}
-      <form onsubmit={sendText} class="card">
-        <label for="participant-text">Message to Lemmi</label>
-        <textarea
-          id="participant-text"
-          bind:value={text}
-          maxlength="1000"
-          rows="3"
-          disabled={!connected ||
-            !ownsEndpoint ||
-            !['ready', 'waiting'].includes(session.phase) ||
-            !textAvailable ||
-            (!!session.teaching && !session.teaching.entityId)}
-        ></textarea>
-        <button
-          type="submit"
-          disabled={!connected ||
-            !ownsEndpoint ||
-            !['ready', 'waiting'].includes(session.phase) ||
-            (!!session.teaching && !session.teaching.entityId) ||
-            !textAvailable ||
-            !text.trim()}>Send</button
-        >
-        {#if !textAvailable}<p>Conversation service is not configured.</p>{/if}
-      </form>
+      {#if !session.teaching}
+        <form onsubmit={sendText} class="card">
+          <label for="participant-text">Message to Lemmi</label>
+          <textarea
+            id="participant-text"
+            bind:value={text}
+            maxlength="1000"
+            rows="3"
+            disabled={!connected ||
+              !ownsEndpoint ||
+              !['ready', 'waiting'].includes(session.phase) ||
+              !textAvailable}
+          ></textarea>
+          <button
+            type="submit"
+            disabled={!connected ||
+              !ownsEndpoint ||
+              !['ready', 'waiting'].includes(session.phase) ||
+              !textAvailable ||
+              !text.trim()}>Send</button
+          >
+          {#if !textAvailable}<p>Conversation service is not configured.</p>{/if}
+        </form>
+      {/if}
       {#if reply}<section class="card" aria-live="polite">
           <h2>Lemmi</h2>
           <p>{reply}</p>
@@ -428,8 +434,8 @@
     text-align: center;
   }
   .live-avatar {
-    width: min(300px, 80%);
-    height: 220px;
+    width: min(420px, 85%);
+    aspect-ratio: 1;
     margin: 0 auto;
   }
   textarea,

@@ -442,3 +442,13 @@ On the separate `integration/frontend-backend` worktree, combined Teach Lemmi/Al
 Observed on this Mac with Bun 1.4.4: frozen install (lock unchanged), check with 0 Svelte errors/warnings, build and format check passed. Canonical `TMPDIR=/private/tmp` plus loopback access: **154 tests passed, 20 database tests skipped, 0 failed; 2,832 expectations**. Production fixture HTTPS/WSS control smoke and the existing web smoke with only its origin adapted to isolated port 5187 passed. Chrome mock text rehearsal verified the preserved dashboard/Alex background, teaching start/roses reply, Pause, keyboard Resume, Not sure/topic change and Stop. No live browser microphone/speaker, K151, combined PostgreSQL/migration or deployed acceptance is claimed. Anay must review the merge and run combined database/participant production smokes before deployment. Exact changes, environment failures, evidence and remaining gates: [frontend/backend integration handoff](handoffs/frontend-backend-integration.md).
 
 Final UI follow-up: preview logs exposed snapshot-driven resubscription in the imported mock component. Derived scalar session/activity IDs now keep subscriptions stable. A fresh Chrome Start → teaching/Gardening → Stop rehearsal passed; observed **3 session reads over 3 seconds**. Type/Svelte check (0 errors/warnings), production build and full format check passed again after this UI-only change. Owned previews were stopped; the original local servers and uncommitted UI/firmware were preserved.
+
+### November 14 — voice-led teaching UI increment
+
+The user requested voice participation without teaching action buttons. The integration checkout now presents the current teaching topic/prompt and real listening/pending/paused/unavailable states, hides teaching text entry, and removes topic/feedback/finish action buttons. Explicit entry, microphone and shared safety controls remain. See [voice UI handoff](handoffs/teach-lemmi-voice-ui.md) for remaining backend voice entry/finish/narration work. Twenty relevant automated tests, type/Svelte check and production build passed; visual/keyboard, real voice and deployment acceptance remain pending. F17 acceptance stays pending.
+
+November 14 avatar follow-up: enlarged the participant/teaching preview avatar and
+bound mouth frames to browser playback time, with immediate close on cancellation
+and no animation while awaiting audio. Six audio/presentation tests passed; checks
+and build passed; Chrome larger-avatar rendering observed. Real speech synchronization,
+all-avatar visual review and deployment remain pending; see voice UI handoff.
