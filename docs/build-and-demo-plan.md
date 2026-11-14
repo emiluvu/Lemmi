@@ -1,5 +1,27 @@
 # Lemmi — Build and demo plan
 
+## 17. Alex content preparation — November 14, 2026
+
+On `codex/alex-profile-assets`, based on main `a6f7ff9`, Lukas prepared the supplied
+fictional Alex profile, caption/context drafts, favorite-song metadata, pure
+revision-aware profile-update preparation and existing-contract pack bindings.
+See [handoff and remaining integration](handoffs/lukas-alex-profile.md). Shared
+caregiver mock interests/guidance changed; no API, backend, UI or deployment changed.
+Six private PNG derivatives and the full 276.26-second PCM WAV passed the existing
+media decoder; originals/watermarks remain intact. Media permission is missing,
+so files remain unapproved and ignored, not playable approved uploads. Bob/Jill
+remain authoritative over the Christmas filename's Jill/Joe; cooking is excluded.
+
+Observed: six new tests pass (34 assertions); type/Svelte checks, production build
+and scoped formatting/whitespace checks pass. Full Bun suite: 84 pass, 18 database
+tests skipped (no dedicated test database), one existing Windows POSIX-mode
+assertion fails (`0666` returned instead of `0600` in `tests/data.test.ts:117`).
+No live profile write, provider call, speech/music playback, UI acceptance or
+hardware check was run. Anay: review catalog IDs, authenticated profile/media
+import and A05 pack hosting; Kylie: integrate existing views after hosting is
+available. No automatic merge/deployment, no claim of a complete playable
+supplied-media demo.
+
 Use [Anay's task checklist](anay_tasks.md) for backend checkboxes, teammate blockers and Anay-agent file claims. This document retains team ownership, milestones and observed acceptance results.
 
 **Status:** Shared mock starter implemented; named feature work and live/hardware acceptance pending

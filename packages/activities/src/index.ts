@@ -1,3 +1,4 @@
+export * from './alex-profile';
 import {
   ActivityStateSchema,
   ActivityContextSchema,
