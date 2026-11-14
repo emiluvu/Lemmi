@@ -5,6 +5,7 @@ import {
   type SpeechOutputStart,
 } from '@lemmi/contracts';
 import { PcmFramer, pcmBase64, decodePcm } from './voice-pcm';
+import { SpeechEndpoint } from './voice-endpoint';
 
 export type VoiceState = {
   connected: boolean;
@@ -49,6 +50,8 @@ export class VoiceClient {
   private source: MediaStreamAudioSourceNode | null = null;
   private sink: GainNode | null = null;
   private framer: PcmFramer | null = null;
+  private endpoint: SpeechEndpoint | null = null;
+  private silenceWaitMs = 2000;
   private workletLoaded = false;
   private capture: SessionSnapshot['captureGrant'] = null;
   private capturePermission = 0;
@@ -62,6 +65,10 @@ export class VoiceClient {
   private awaitingGrant = false;
   private requestTimer: ReturnType<typeof setTimeout> | null = null;
   constructor(private readonly changed: (state: VoiceState) => void) {}
+  setSilenceWait(ms: number) {
+    if (![1200, 2000, 4000].includes(ms)) throw new Error('Unsupported listening pause');
+    this.silenceWaitMs = ms;
+  }
   private update(patch: Partial<VoiceState>) {
     this.state = { ...this.state, ...patch };
     this.changed({ ...this.state });
@@ -345,6 +352,7 @@ export class VoiceClient {
     this.stream = null;
     this.framer?.clear();
     this.framer = null;
+    this.endpoint = null;
     this.update({ listening: false });
   }
   async speak() {
@@ -359,7 +367,7 @@ export class VoiceClient {
     this.stopCapture();
     const permission = this.capturePermission;
     this.blocked = false;
-    this.update({ pending: true, reply: '', message: 'Preparing an explicit microphone turn…' });
+    this.update({ pending: true, message: 'Preparing an explicit microphone turn…' });
     try {
       await this.context.resume();
       if (!this.workletLoaded) {
@@ -406,6 +414,7 @@ export class VoiceClient {
       }
       this.stream = stream;
       this.framer = new PcmFramer(this.context.sampleRate);
+      this.endpoint = new SpeechEndpoint(this.context.sampleRate, this.silenceWaitMs);
       if (permission !== this.capturePermission || !this.stream) return;
       this.source = this.context.createMediaStreamSource(stream);
       this.mic = new AudioWorkletNode(this.context, 'lemmi-capture');
@@ -429,6 +438,7 @@ export class VoiceClient {
             this.stopCapture();
             return;
           }
+          const finished = this.endpoint?.push(data) ?? false;
           for (const bytes of this.framer.push(data)) {
             if (this.chunkCount >= 975) {
               bytes.fill(0);
@@ -448,13 +458,19 @@ export class VoiceClient {
             );
             bytes.fill(0);
           }
+          if (finished && this.capture) {
+            data.fill(0);
+            this.done();
+            return;
+          }
         }
         data.fill(0);
       };
       this.update({
         listening: true,
         pending: false,
-        message: 'Listening — microphone active. Choose Done speaking when ready.',
+        message:
+          'Listening — microphone active. A short pause after speech sends your reply; Done speaking sends it immediately.',
       });
     } catch {
       this.stopCapture();
@@ -490,7 +506,7 @@ export class VoiceClient {
     if (!micOnly) this.stopOutput();
     if (['stop', 'pause', 'teaching.finish'].includes(type)) this.blocked = true;
     else if (!micOnly) this.blocked = false;
-    this.update({ reply: '', pending: false });
+    this.update({ ...(micOnly ? {} : { reply: '' }), pending: false });
     try {
       this.send(
         `input.${type === 'unmute' ? 'mute' : type}`,
@@ -502,7 +518,7 @@ export class VoiceClient {
   }
   text(text: string) {
     if (!text.trim()) return;
-    this.update({ reply: '', pending: true });
+    this.update({ pending: true });
     try {
       this.send('input.text', { text, language: 'en' });
     } catch {

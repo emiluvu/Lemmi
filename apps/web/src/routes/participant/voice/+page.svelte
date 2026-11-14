@@ -5,6 +5,7 @@
   let configured = $state(false),
     checked = $state(false),
     answer = $state('');
+  let silenceWait = $state(2000);
   let voiceState = $state<VoiceState>({
     connected: false,
     ready: false,
@@ -62,8 +63,8 @@
   journal excerpt is saved by this demo.
 </p>
 <p>
-  Choose Speak now for each turn, then Done speaking. Listening stops after a short bounded turn.
-  You can pause or stop at any time.
+  Choose Speak now for each turn. A short pause after speech sends your reply automatically. Done
+  speaking sends it immediately. You can pause or stop at any time.
 </p>
 {#if checked && !configured}
   <section class="card">
@@ -105,10 +106,26 @@
           onclick={() => client.command('teaching.start')}>Start Teach Lemmi</button
         >
       {:else}
-        <h3>{voiceState.session.teaching.topicLabel ?? 'No eligible topic'}</h3>
-        <p>
-          {voiceState.session.teaching.prompt ?? 'You can finish, listen to music or just look.'}
+        <p class="tag">
+          Selected topic: {voiceState.session.teaching.topicLabel ?? 'No eligible topic'}
         </p>
+        <h3>Lemmi</h3>
+        <p class="current-question" aria-live="polite" aria-atomic="true">
+          {voiceState.reply ||
+            voiceState.session.teaching.prompt ||
+            'You can finish, listen to music or just look.'}
+        </p>
+        <label for="listening-pause">Pause before sending</label>
+        <select
+          id="listening-pause"
+          bind:value={silenceWait}
+          disabled={voiceState.listening || voiceState.pending}
+          onchange={(event) => client.setSilenceWait(Number(event.currentTarget.value))}
+        >
+          <option value={1200}>Quick — short pauses</option>
+          <option value={2000}>Balanced</option>
+          <option value={4000}>Extra time — longer pauses</option>
+        </select>
         <div class="controls">
           {#if voiceState.listening}<button onclick={() => client.done()}>Done speaking</button>
           {:else}<button disabled={!canSpeak} onclick={() => client.speak()}>Speak now</button>{/if}
@@ -134,7 +151,10 @@
         </p>
       {/if}
     {/if}
-    {#if voiceState.reply}<p><strong>Lemmi:</strong> {voiceState.reply}</p>{/if}
+    {#if voiceState.reply && !voiceState.session?.teaching}<p>
+        <strong>Lemmi:</strong>
+        {voiceState.reply}
+      </p>{/if}
   </section>
 {/if}
 <p role="status" aria-live="polite">{voiceState.message}</p>
@@ -193,5 +213,21 @@
   textarea:focus-visible {
     outline: 4px solid #a05218;
     outline-offset: 4px;
+  }
+  select {
+    font: inherit;
+    color: inherit;
+    padding: 10px;
+    border: 2px solid #315c4d;
+    border-radius: 12px;
+    max-width: 100%;
+    margin: 8px 0 16px;
+  }
+  select:focus-visible {
+    outline: 4px solid #a05218;
+    outline-offset: 4px;
+  }
+  .current-question {
+    font-size: 1.2rem;
   }
 </style>

@@ -34,6 +34,10 @@ class Socket {
   }
 }
 class Node {
+  static last: Node;
+  constructor() {
+    Node.last = this;
+  }
   buffer: any = null;
   onended: (() => void) | null = null;
   stopped = false;
@@ -260,6 +264,84 @@ test('disconnect closes capture and queued audio without automatic reconnection'
   expect(Context.last.state).toBe('closed');
   expect(d.ws.readyState).toBe(3);
   d.client.close();
+});
+
+test('the current Lemmi reply remains visible during the next input and updates on each response', async () => {
+  const d = await setup();
+  try {
+    d.emit(
+      'response.text',
+      { turnId: 'first', text: 'How do you care for roses?', language: 'en', source: 'model' },
+      'first',
+    );
+    expect(d.state().reply).toBe('How do you care for roses?');
+    await d.client.speak();
+    expect(d.state().reply).toBe('How do you care for roses?');
+    d.emit(
+      'response.text',
+      {
+        turnId: 'second',
+        text: 'What do you like about the sea?',
+        language: 'en',
+        source: 'model',
+      },
+      'second',
+    );
+    expect(d.state().reply).toBe('What do you like about the sea?');
+    d.emit('state.changed', {
+      mode: 'live',
+      session: { ...d.session, generation: d.session.generation + 1 },
+    });
+    expect(d.state().reply).toBe('');
+    d.emit(
+      'response.text',
+      { turnId: 'obsolete', text: 'Obsolete topic question', language: 'en', source: 'model' },
+      'obsolete',
+    );
+    expect(d.state().reply).toBe('');
+  } finally {
+    d.client.close();
+  }
+});
+
+test('a granted microphone turn auto-submits once after speech and quiet, closing hardware immediately', async () => {
+  let stopped = 0;
+  const d = await setup(async () => ({
+    getTracks: () => [
+      {
+        stop() {
+          stopped++;
+        },
+      },
+    ],
+  }));
+  try {
+    await d.client.speak();
+    const session = {
+      ...d.session,
+      phase: 'listening',
+      captureGrant: {
+        turnId: 'capture-turn',
+        streamId: 'capture-stream',
+        generation: d.session.generation,
+        leaseId: d.session.leaseId,
+        language: 'en',
+        expiresAt: '2026-11-14T20:00:00.000Z',
+      },
+    };
+    d.emit('state.changed', { mode: 'live', session });
+    await ticks();
+    const mic = Node.last;
+    for (let i = 0; i < 10; i++) mic.port.onmessage!({ data: new Float32Array(960).fill(0.1) });
+    for (let i = 0; i < 100; i++) mic.port.onmessage!({ data: new Float32Array(960) });
+    expect(d.ws.sent.filter((e) => e.type === 'audio.end')).toHaveLength(1);
+    expect(stopped).toBe(1);
+    expect(d.state().listening).toBe(false);
+    expect(d.state().pending).toBe(true);
+    expect(mic.port.onmessage).toBeNull();
+  } finally {
+    d.client.close();
+  }
 });
 
 test('playback progress receipts fit the deployed control budget without inventing consumed frames', async () => {

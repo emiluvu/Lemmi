@@ -53,11 +53,13 @@ This forwarding is intentionally local and development-only. The Vite server acc
 3. Choose **Start Alex session**, then **Start Teach Lemmi**. The reviewed topic invitation should play on the speaker with the microphone off.
 4. Choose **Unmute microphone (stays off)**. Unmute alone must not open capture.
 5. Choose **Speak now**, allow microphone access when the browser asks, and wait for **Listening — microphone active**.
-6. Say a short fictional explanation, such as “I enjoy growing roses in a garden,” then choose **Done speaking**. The microphone must stop before the backend response plays. The current speech contract bounds each turn to twenty seconds; the browser stops before that bound and discards any unfinished frame. It does not automatically detect sentence endings or continuously listen.
+6. Say a short fictional explanation, such as “I enjoy growing roses in a garden,” then pause. **Balanced** automatically sends after approximately two seconds of quiet following sustained speech; **Quick** uses 1.2 seconds and **Extra time** uses four seconds. Choose the pause setting before opening a turn. **Done speaking** still sends immediately. Initial silence or an isolated click does not trigger automatic send; a background noise/very quiet voice mismatch can still need Done or the existing twenty-second bound. The microphone stops before the backend response plays, and capture never restarts automatically.
 7. Hear the AI follow-up, then choose Speak now again for another turn. Prompt/reply completion never restarts capture.
 8. Try **Different topic**, **Not sure**, **Like this topic**, and **Don't ask about this**. These use the same backend teaching commands. The feedback remains session-only in this increment.
 9. Choose **Pause**, then **Resume to ready**. Neither capture nor playback resumes automatically.
 10. Choose **Stop** during listening and during speech. Local microphone tracks and queued speaker audio must stop immediately, independently of the backend round trip. No late response may restart sound. A recognized spoken Stop phrase uses the existing backend safety route; the visible button remains the immediate independent control.
+
+The main **Lemmi** text is the latest reply/question from the backend, replacing the opening invitation when a new question arrives. It remains visible while the participant answers. **Selected topic** is the separately labeled backend catalog choice, not an inferred summary of a free-form explanation. Different topic replaces the selected topic and its invitation; stale replies from an earlier generation cannot overwrite it.
 
 The backend enforces the existing fifteen-minute active teaching limit without a countdown. Pauses do not count. See the [general tester manual](teach-lemmi-tester-manual.md) for injected-clock checks and the distinction between Finish teaching and global Stop.
 
@@ -81,6 +83,12 @@ The expandable text fallback sends typed text through the same live session; typ
 Audio lives in bounded browser/backend processing buffers, not recordings or download files. The browser reports consumed playback frames from Web Audio completion callbacks rather than claiming playback on network receipt. Browser/native/OS memory copies and external-provider retention are not secure-erasure guarantees. No camera is requested. No teaching conversation text or preference is saved durably by this demo; existing session facts remain governed by backend retention.
 
 ## Verification scope
+
+**Question and endpoint upgrade:** the previous working commit `16e263a` is preserved locally and on GitHub as `codex/teach-lemmi-voice-baseline-16e263a`. The new local amplitude detector retains only bounded numeric levels/durations for the current capture. It detects a pause, not a diagnosis, mood, preference or semantic sentence end. It performs no STT or recording and does not change the server's capture grant, active-time limit or privacy rules. These pause settings are prototype interaction choices, not clinical thresholds.
+
+Observed upgrade rehearsal, November 14: one separately approved fictional spoken sentence auto-submitted without clicking Done, produced a live roses follow-up, and updated the main Lemmi text to that follow-up. Different topic then replaced it with the seaside invitation. Global Stop left the session ended with microphone/speaker off. Automated checks cover initial silence/noise/clicks, pauses inside an explanation, two-second ending, longer/shorter settings, per-turn reset, one-shot audio.end and hardware closure, question replacement and stale-reply rejection. Broader quiet-voice/noisy-room tuning remains unverified; use Done or Extra time when needed.
+
+Upgrade checks: types/Svelte and build passed; 150 automated tests passed, 18 database checks skipped, and the existing Windows POSIX-permission assertion still fails. The eleven focused browser/endpoint tests passed. Live default-silence and question-display checks passed; shorter/longer settings have synthetic coverage.
 
 Automated checks cover streaming PCM conversion at 16/22.05/44.1/48 kHz, the twenty-second bound, consumed-frame receipts, immediate local Stop, delayed microphone permissions, disconnect cleanup, private-header replacement, same-origin/loopback rejection and a real local WebSocket → Vite proxy → certificate-verified HTTPS fixture backend. Existing synthetic speech tests cover backend STT/model/TTS and teaching cancellation.
 
