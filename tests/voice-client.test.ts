@@ -127,6 +127,159 @@ const ticks = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };
 
+function teachingSession(d: Awaited<ReturnType<typeof setup>>, preset = 'guided') {
+  return {
+    ...d.session,
+    phase: 'waiting',
+    conversationMode: 'teach_lemmi',
+    communicationSupport: { preset, configVersion: 1 },
+    teaching: {
+      mode: 'teach_lemmi',
+      entityId: 'topic:gardening',
+      assetId: null,
+      topicLabel: 'Gardening',
+      prompt: 'Would you like to tell me about flowers?',
+      presentationId: 'teaching',
+      revision: 0,
+      policyRevision: 0,
+      phase: 'ready',
+    },
+  };
+}
+function playQuestion(
+  d: Awaited<ReturnType<typeof setup>>,
+  turnId: string,
+  text = 'How do you care for roses?',
+) {
+  d.emit('response.text', { turnId, text, language: 'en', source: 'model' }, turnId);
+  const meta = {
+    turnId,
+    leaseId: d.session.leaseId,
+    streamId: `stream-${turnId}`,
+    encoding: 'pcm_s16le',
+    channels: 1,
+    sampleRate: 16000,
+    chunkBytes: 640,
+    chunkCount: 1,
+    byteLength: 640,
+  };
+  d.emit('response.start', meta, turnId);
+  d.emit(
+    'audio.chunk',
+    {
+      leaseId: meta.leaseId,
+      streamId: meta.streamId,
+      chunkIndex: 0,
+      encoding: 'pcm_s16le',
+      data: Buffer.alloc(640).toString('base64'),
+    },
+    turnId,
+  );
+  d.emit('audio.end', { leaseId: meta.leaseId, streamId: meta.streamId, chunkCount: 1 }, turnId);
+  Context.last.nodes.at(-1)!.onended!();
+}
+
+test('conversation requests the next microphone grant only after played questions and backend waiting, repeatedly', async () => {
+  let opened = 0;
+  const d = await setup(async () => {
+    opened++;
+    return { getTracks: () => [{ stop() {} }] };
+  });
+  try {
+    const session = teachingSession(d);
+    d.emit('state.changed', { mode: 'live', session });
+    d.client.startConversation();
+    await ticks();
+    expect(d.state().automaticReplies).toBe(true);
+    expect(d.ws.sent.filter((e) => e.type === 'input.speak')).toHaveLength(1);
+    for (let i = 1; i <= 4; i++) {
+      d.emit('state.changed', { mode: 'live', session: { ...session, phase: 'processing' } });
+      playQuestion(d, `question-${i}`);
+      await ticks();
+      expect(d.ws.sent.filter((e) => e.type === 'input.speak')).toHaveLength(i);
+      d.emit('state.changed', { mode: 'live', session });
+      await ticks();
+      expect(d.ws.sent.filter((e) => e.type === 'input.speak')).toHaveLength(i + 1);
+      expect(opened).toBe(0); // a request is not a server capture grant
+    }
+  } finally {
+    d.client.close();
+  }
+});
+
+test('conversation startup waits for the teaching revision before requesting unmute', async () => {
+  const d = await setup();
+  try {
+    d.emit('state.changed', { mode: 'live', session: { ...d.session, micMuted: true } });
+    d.client.startTeachingConversation();
+    expect(d.ws.sent.filter((e) => e.type === 'input.mute')).toHaveLength(0);
+    const session = { ...teachingSession(d), generation: d.session.generation + 1, micMuted: true };
+    d.emit('state.changed', { mode: 'live', session });
+    const unmute = d.ws.sent.filter((e) => e.type === 'input.mute');
+    expect(unmute).toHaveLength(1);
+    expect(unmute[0].generation).toBe(session.generation);
+    expect(unmute[0].payload.muted).toBe(false);
+    expect(d.ws.sent.filter((e) => e.type === 'input.speak')).toHaveLength(0);
+  } finally {
+    d.client.close();
+  }
+});
+
+test('pause, mute, Stop and finish disarm automatic replies even if a late waiting state arrives', async () => {
+  for (const action of ['pause', 'mute', 'stop', 'teaching.finish']) {
+    const d = await setup();
+    try {
+      const session = teachingSession(d);
+      d.emit('state.changed', { mode: 'live', session });
+      d.client.startConversation();
+      await ticks();
+      playQuestion(d, 'finished-question');
+      d.client.command(action);
+      const requests = d.ws.sent.filter((e) => e.type === 'input.speak').length;
+      d.emit('state.changed', { mode: 'live', session });
+      await ticks();
+      expect(d.state().automaticReplies).toBe(false);
+      expect(d.ws.sent.filter((e) => e.type === 'input.speak')).toHaveLength(requests);
+    } finally {
+      d.client.close();
+    }
+  }
+});
+
+test('Quiet, non-question replies, backgrounding and changed policy never automatically open another turn', async () => {
+  for (const scenario of ['quiet', 'statement', 'background', 'policy']) {
+    const d = await setup();
+    try {
+      const session = teachingSession(d, scenario === 'quiet' ? 'quiet' : 'guided');
+      d.emit('state.changed', { mode: 'live', session });
+      d.client.startConversation();
+      await ticks();
+      const requests = d.ws.sent.filter((e) => e.type === 'input.speak').length;
+      playQuestion(
+        d,
+        'last-turn',
+        scenario === 'statement' ? 'Thank you for sharing.' : 'Would you like to explain?',
+      );
+      if (scenario === 'background') d.client.background();
+      d.emit('state.changed', {
+        mode: 'live',
+        session:
+          scenario === 'policy'
+            ? {
+                ...session,
+                policyRevision: 1,
+                teaching: { ...session.teaching, policyRevision: 1 },
+              }
+            : session,
+      });
+      await ticks();
+      expect(d.ws.sent.filter((e) => e.type === 'input.speak')).toHaveLength(requests);
+    } finally {
+      d.client.close();
+    }
+  }
+});
+
 test('voice client negotiates PCM and contains no browser credential; Stop suppresses late output locally', async () => {
   const d = await setup();
   try {

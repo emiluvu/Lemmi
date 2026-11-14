@@ -1,0 +1,29 @@
+# Teach Lemmi voice continuity fix
+
+Branch: `codex/teach-lemmi`. November 14, 2026. Anay owns review, merge and deployment. The pre-hands-free working commit is preserved on GitHub as `codex/teach-lemmi-before-handsfree-e0a1e40`; the earlier voice baseline is `codex/teach-lemmi-voice-baseline-16e263a`.
+
+## Missing spoken replies
+
+Observed on the live demo: `REVISION_CONFLICT: Speech turn canceled` after the selected teaching topic changed. Inspection of both this branch and `origin/backend-deploy` confirmed that recognized `Different topic`, `Not sure`, explicit Like and topic-specific Avoid use `handle('session.command')`, which cancels the old speech owner and increments generation. The coordinator then returns a fixed reply under the old input turn ID; `SpeechTurns.run` rejects it as obsolete, so no TTS acknowledgment plays. This is a reproduced cause of missing replies, not a claim that every recognition/provider failure has the same cause.
+
+`SpeechTurns.replaceForTeachingReply(owner, transition)` now allows only the existing coordinator's validated synchronous teaching transition to mint fresh speech-output authority. It requires the original current processing owner, a successful transition, the same session, a later generation, active teaching mode, ready phase and a canceled old owner. The new owner has a new turn/stream, the current token and the original bounded deadline. `teachingFor` binds it to the canceled input for reply handoff. It does not reuse the paused-concern exception: teaching output follows the ordinary active-session processing/speaking/waiting path and cannot play while paused.
+
+The coordinator supplies the newly selected reviewed invitation for Next/Not sure/Avoid, or the fixed session-only acknowledgment for Like. It publishes the updated generation before awaiting TTS. Existing profile/privacy/policy/lease/Stop/mute/deadline checks and late-PCM cleanup still apply. No new routes, schemas, client-selected authority or durable memory writes are added. Ordinary provider/recognition errors still remain explicit; there is no fake reply or blind retry.
+
+Backend review targets: `packages/server/src/speech-turns.ts` and the teaching-intent branch in `packages/server/src/session-coordinator.ts`. These are narrow changes to integrate into Anay's newer multi-profile authority; do not replace the deployed source with the older single-profile checkout. `tests/speech-pipeline.test.ts` reproduces the original failure, covers seven consecutive alternating explanation/control replies and Stop/pause during replacement synthesis with late-buffer wiping. `tests/speech-gateway.test.ts` exercises the fresh generation/turn through the actual scoped WebSocket gateway.
+
+## Question and listen conversation mode
+
+The local browser now starts an explained conversation when the participant explicitly chooses Start Teach Lemmi. For Guided/Conversational, it waits for actual question playback completion and the backend's current waiting snapshot, then requests `input.speak`. Hardware still opens only after that fresh server capture grant. The initial unmute is sequenced after the teaching transition's updated snapshot; sending it with the old generation was caught in live testing and fixed with a regression test.
+
+Pause, Stop, mute, Finish, errors, page backgrounding, disconnect, authority/context changes and Quiet disarm automatic replies. Resume and unmute alone never restart them. An explicit Start conversation action can rearm after pause/recovery, or Switch to Speak now only returns to single turns. Only completed question output schedules continuation; a non-question acknowledgment explains that Speak now is available to add more. No simultaneous capture/TTS, always-on listening, automatic reconnect, transcript retention or firmware memory is introduced.
+
+Browser tests cover repeated question/receipt/waiting cycles, no hardware before a grant, startup generation ordering, Quiet, non-question replies, stale scope, backgrounding and all safety controls. Existing two-second endpointing and Manual Done remain unchanged.
+
+## Verification and handoff
+
+Final local checks on Windows/Bun 1.4.4: type/Svelte checks, production build, changed-code formatting and whitespace passed. Full suite: **158 passed, 18 database-dependent skipped, one existing Windows POSIX-permission assertion failed**, 177 total. The targeted browser/speech checks passed, including seven consecutive alternating voice replies and the WSS fresh-generation control response. No credentials were changed, copied into source or printed; no dependency/lockfile change.
+
+Live browser check with separately approved fictional microphone content: the initial question opened listening without Speak now, the roses explanation received a spoken follow-up, and listening reopened for the watering explanation, which also received a spoken acknowledgment. Stop left audio off. That live run validates the browser conversation loop against the currently deployed ordinary voice path. The backend teaching-control fix is tested locally with adapters and the scoped gateway; it still requires Anay's deployment and a live Next/Not sure/Like check. Do not claim that backend fix is already live from the ordinary-turn rehearsal.
+
+Anay: review the fresh-output cancellation boundary, integrate the narrow server change with the current deployed authority, deploy and record its exact revision. Kylie: review the explicit conversation-start wording, indicator and recovery controls; adapt to the production UI as appropriate. Emilia: consume new current-generation output/stream IDs using the same fixed-output freshness conventions already required for concern replies; verify actual hardware separately. See [voice demo instructions](../teach-lemmi-voice-demo.md) for local launch and existing limits.

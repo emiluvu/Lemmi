@@ -14,6 +14,7 @@
     listening: false,
     playing: false,
     pending: false,
+    automaticReplies: false,
     session: null,
     reply: '',
     message: '',
@@ -40,9 +41,14 @@
       })
       .catch(() => (checked = true));
     const hide = () => client.close();
+    const background = () => {
+      if (document.visibilityState === 'hidden') client.background();
+    };
     window.addEventListener('pagehide', hide);
+    document.addEventListener('visibilitychange', background);
     return () => {
       window.removeEventListener('pagehide', hide);
+      document.removeEventListener('visibilitychange', background);
       client.close();
     };
   });
@@ -63,8 +69,9 @@
   journal excerpt is saved by this demo.
 </p>
 <p>
-  Choose Speak now for each turn. A short pause after speech sends your reply automatically. Done
-  speaking sends it immediately. You can pause or stop at any time.
+  Start Teach Lemmi begins a conversation: after Lemmi finishes a question, the microphone opens for
+  your reply with fresh backend permission. A short pause sends your reply. Pause, Stop or
+  microphone mute ends automatic listening; unmute alone does not restart it.
 </p>
 {#if checked && !configured}
   <section class="card">
@@ -103,7 +110,7 @@
       {#if !voiceState.session?.teaching}
         <button
           disabled={paused || !voiceState.audio || !voiceState.teaching}
-          onclick={() => client.command('teaching.start')}>Start Teach Lemmi</button
+          onclick={() => client.startTeachingConversation()}>Start Teach Lemmi</button
         >
       {:else}
         <p class="tag">
@@ -115,6 +122,16 @@
             voiceState.session.teaching.prompt ||
             'You can finish, listen to music or just look.'}
         </p>
+        {#if voiceState.session.communicationSupport.preset !== 'quiet'}
+          {#if voiceState.automaticReplies}
+            <p class="tag">Conversation on — listening follows each completed question</p>
+            <button onclick={() => client.useSingleTurns()}>Switch to Speak now only</button>
+          {:else}
+            <button disabled={paused} onclick={() => client.startConversation()}
+              >Start conversation — listen after questions</button
+            >
+          {/if}
+        {:else}<p>Quiet companionship uses one explicit Speak now turn at a time.</p>{/if}
         <label for="listening-pause">Pause before sending</label>
         <select
           id="listening-pause"

@@ -15,6 +15,7 @@ export type VoiceState = {
   listening: boolean;
   playing: boolean;
   pending: boolean;
+  automaticReplies: boolean;
   session: SessionSnapshot | null;
   reply: string;
   message: string;
@@ -25,6 +26,8 @@ type Output = {
   consumed: number;
   ended: boolean;
   nextAt: number;
+  question: boolean;
+  token: SessionSnapshot;
 };
 // A transport/player only. The backend owns all session, teaching and timing rules.
 export class VoiceClient {
@@ -37,6 +40,7 @@ export class VoiceClient {
     listening: false,
     playing: false,
     pending: false,
+    automaticReplies: false,
     session: null,
     reply: '',
     message: '',
@@ -64,10 +68,96 @@ export class VoiceClient {
   private disposed = false;
   private awaitingGrant = false;
   private requestTimer: ReturnType<typeof setTimeout> | null = null;
+  private firstConversationTurn = false;
+  private unmuteForConversation = false;
+  private awaitingTeachingStart = false;
+  private awaitingPrompt = false;
+  private lastReply: { turnId: string; question: boolean } | null = null;
+  private completedQuestion: SessionSnapshot | null = null;
   constructor(private readonly changed: (state: VoiceState) => void) {}
   setSilenceWait(ms: number) {
     if (![1200, 2000, 4000].includes(ms)) throw new Error('Unsupported listening pause');
     this.silenceWaitMs = ms;
+  }
+  private cancelAutomatic() {
+    this.firstConversationTurn = false;
+    this.unmuteForConversation = false;
+    this.awaitingTeachingStart = false;
+    this.completedQuestion = null;
+    this.update({ automaticReplies: false });
+  }
+  startTeachingConversation() {
+    if (this.state.session?.communicationSupport.preset === 'quiet') {
+      this.command('teaching.start');
+      return;
+    }
+    this.command('teaching.start');
+    this.awaitingTeachingStart = true;
+    this.unmuteForConversation = !!this.state.session?.micMuted;
+    this.update({ automaticReplies: true });
+  }
+  startConversation() {
+    const s = this.state.session;
+    if (
+      !s?.teaching ||
+      ['paused', 'ended'].includes(s.phase) ||
+      s.communicationSupport.preset === 'quiet'
+    )
+      return;
+    this.blocked = false;
+    this.firstConversationTurn = true;
+    this.update({ automaticReplies: true });
+    if (s.micMuted) this.send('input.mute', { muted: false });
+    else this.maybeContinue();
+  }
+  useSingleTurns() {
+    this.cancelAutomatic();
+    if (this.state.listening || this.awaitingGrant || this.state.pending) this.command('pause');
+  }
+  background() {
+    this.cancelAutomatic();
+    if (this.state.session && this.state.session.phase !== 'ended') this.command('pause');
+  }
+  private sameAuthority(a: SessionSnapshot, b: SessionSnapshot) {
+    return [
+      'id',
+      'generation',
+      'leaseId',
+      'activeEndpointId',
+      'profileRevision',
+      'privacyRevision',
+      'policyRevision',
+    ].every((key) => a[key as keyof SessionSnapshot] === b[key as keyof SessionSnapshot]);
+  }
+  private maybeContinue() {
+    const s = this.state.session;
+    if (
+      !this.state.automaticReplies ||
+      !s?.teaching?.entityId ||
+      this.awaitingTeachingStart ||
+      this.blocked ||
+      s.micMuted ||
+      s.communicationSupport.preset === 'quiet' ||
+      !['ready', 'waiting'].includes(s.phase) ||
+      this.output ||
+      this.capture ||
+      this.awaitingGrant ||
+      this.state.pending ||
+      !this.context ||
+      this.context.state !== 'running'
+    )
+      return;
+    if (
+      !this.firstConversationTurn &&
+      (!this.completedQuestion ||
+        s.phase !== 'waiting' ||
+        !this.sameAuthority(s, this.completedQuestion))
+    )
+      return;
+    this.firstConversationTurn = false;
+    this.completedQuestion = null;
+    // Completion only schedules a request. Hardware still waits for the fresh server grant.
+    void this.speak();
   }
   private update(patch: Partial<VoiceState>) {
     this.state = { ...this.state, ...patch };
@@ -180,6 +270,27 @@ export class VoiceClient {
     } else if (e.type === 'state.changed') {
       const before = this.state.session,
         next = e.payload.session;
+      const contextChanged =
+        !!before &&
+        !!next &&
+        [
+          'id',
+          'leaseId',
+          'activeEndpointId',
+          'profileRevision',
+          'privacyRevision',
+          'policyRevision',
+        ].some(
+          (key) => before[key as keyof SessionSnapshot] !== next[key as keyof SessionSnapshot],
+        );
+      if (
+        !next ||
+        contextChanged ||
+        ['paused', 'ended'].includes(next.phase) ||
+        next.communicationSupport.preset === 'quiet' ||
+        (!next.teaching && !this.awaitingTeachingStart)
+      )
+        this.cancelAutomatic();
       const changed =
         !before ||
         !next ||
@@ -194,11 +305,17 @@ export class VoiceClient {
           (key) => before[key as keyof SessionSnapshot] !== next[key as keyof SessionSnapshot],
         );
       if (changed || !next || ['paused', 'ended'].includes(next.phase)) {
+        this.completedQuestion = null;
         this.stopCapture();
         this.stopOutput();
         this.update({ reply: '', pending: false });
       }
       this.update({ session: next });
+      if (next?.teaching) this.awaitingTeachingStart = false;
+      if (this.state.automaticReplies && next?.teaching && this.unmuteForConversation) {
+        this.unmuteForConversation = false;
+        if (next.micMuted) this.send('input.mute', { muted: false });
+      }
       if (next?.captureGrant && !this.blocked && this.awaitingGrant) {
         if (!this.capture || this.capture.turnId !== next.captureGrant.turnId) {
           this.awaitingGrant = false;
@@ -215,12 +332,15 @@ export class VoiceClient {
         this.update({ message: 'Paused. Resume returns to ready; speaking stays off.' });
       else if (before?.teaching && !next?.teaching && next?.phase === 'ready')
         this.update({ message: 'Teaching finished. Microphone and speaker off.' });
+      this.maybeContinue();
     } else if (e.type === 'response.text') {
       if (
         this.current(e.session_id, e.generation) &&
         (!this.blocked || e.payload.source === 'fixed')
-      )
+      ) {
+        this.lastReply = { turnId: e.payload.turnId, question: e.payload.text.includes('?') };
         this.update({ reply: e.payload.text, pending: false });
+      }
     } else if (e.type === 'response.start') {
       if (!this.current(e.session_id, e.generation) || this.blocked) return;
       this.stopCapture();
@@ -236,7 +356,13 @@ export class VoiceClient {
         consumed: 0,
         ended: false,
         nextAt: this.context.currentTime + 0.08,
+        question:
+          this.lastReply?.turnId === e.payload.turnId
+            ? this.lastReply.question
+            : this.awaitingPrompt && !!this.state.session?.teaching?.prompt?.includes('?'),
+        token: this.state.session!,
       };
+      this.awaitingPrompt = false;
       this.update({ pending: false, message: 'Preparing speaker playback…' });
     } else if (e.type === 'audio.chunk') {
       const out = this.output,
@@ -290,8 +416,15 @@ export class VoiceClient {
         if (out.consumed === out.meta.chunkCount) this.completeOutput(out);
       }
     } else if (e.type === 'response.cancel') {
-      this.stopOutput();
+      if (
+        this.output?.meta.streamId === e.payload.streamId &&
+        this.output.meta.leaseId === e.payload.leaseId
+      ) {
+        this.completedQuestion = null;
+        this.stopOutput();
+      }
     } else if (e.type === 'error') {
+      this.cancelAutomatic();
       this.stopCapture();
       this.stopOutput();
       this.update({
@@ -316,9 +449,18 @@ export class VoiceClient {
     );
   }
   private completeOutput(out: Output) {
+    this.completedQuestion = out.question ? out.token : null;
     this.sendReceipt(out.meta, 'completed', out.consumed);
     this.output = null;
-    this.update({ playing: false, message: 'Ready. Choose Speak now for one microphone turn.' });
+    this.update({
+      playing: false,
+      message:
+        this.state.automaticReplies && out.question
+          ? 'Question finished. Waiting for the backend before listening…'
+          : this.state.automaticReplies
+            ? 'Lemmi finished without a question. Choose Speak now if you want to add more.'
+            : 'Ready. Choose Speak now for one microphone turn.',
+    });
   }
   private stopOutput() {
     this.output = null;
@@ -361,7 +503,9 @@ export class VoiceClient {
       !this.state.session ||
       this.state.pending ||
       this.output ||
-      this.state.listening
+      this.state.listening ||
+      this.state.session.micMuted ||
+      !['ready', 'waiting'].includes(this.state.session.phase)
     )
       return;
     this.stopCapture();
@@ -384,6 +528,8 @@ export class VoiceClient {
         }
       }, 5000);
     } catch {
+      if (permission !== this.capturePermission) return;
+      this.cancelAutomatic();
       this.stopCapture();
       this.update({
         pending: false,
@@ -473,6 +619,8 @@ export class VoiceClient {
           'Listening — microphone active. A short pause after speech sends your reply; Done speaking sends it immediately.',
       });
     } catch {
+      if (permission !== this.capturePermission) return;
+      this.cancelAutomatic();
       this.stopCapture();
       this.command('pause');
       this.update({
@@ -499,6 +647,15 @@ export class VoiceClient {
     this.update({ pending: true, message: 'Microphone off. Preparing a reply…' });
   }
   command(type: string) {
+    this.completedQuestion = null;
+    if (['stop', 'pause', 'mute', 'teaching.finish', 'handoff', 'help'].includes(type))
+      this.cancelAutomatic();
+    this.awaitingPrompt = [
+      'teaching.start',
+      'teaching.next',
+      'teaching.not_sure',
+      'teaching.avoid',
+    ].includes(type);
     const micOnly = type === 'mute' || type === 'unmute';
     if (type === 'mute' && (this.state.pending || this.state.listening) && !this.output)
       this.blocked = true;
@@ -526,6 +683,7 @@ export class VoiceClient {
     }
   }
   private fail(message: string) {
+    this.cancelAutomatic();
     this.blocked = true;
     this.stopCapture();
     this.stopOutput();

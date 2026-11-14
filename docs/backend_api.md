@@ -14,6 +14,8 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 
 ## 1. Availability and ownership
 
+**Undeployed voice-control continuity fix:** this branch corrects spoken teaching Next/Not sure/Like/Avoid canceling their own TTS replies. The validated coordinator transition now mints a fresh active-session output turn/stream in the new generation; normal stale-token/cancellation/receipt checks apply and no routes or wire shapes change. [Exact review and deployment handoff](handoffs/teach-lemmi-voice-continuity.md). The local browser can request a fresh capture grant after a played question in an explicitly started Guided/Conversational conversation. Quiet and pause/mute/stop/error/reconnect remain capture-off until explicit continuation. Ordinary two-turn hands-free voice passed live; the server control-specific fix still needs Anay to integrate/deploy.
+
 **Live browser rehearsal follow-up:** after Anay's teaching deployment, the user-authorized Alex microphone turn completed STT → live AI follow-up → TTS → browser playback, and the user confirmed audibility. Reviewed topic narration, capture-off unmute/resume and Stop were exercised. Browser progress receipts batch every two consumed frames to stay within the deployed 30-control/sec budget. This client-side result does not claim physical Stackchan, broad speech-quality, German or full privacy/storage acceptance. Earlier deployment/probe observations remain historical.
 
 | Surface | Current availability | Integration consumer |
