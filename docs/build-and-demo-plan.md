@@ -234,6 +234,29 @@ Resolved-tree observations, Bun **1.4.4**, native PostgreSQL **14.24**: **91 Bun
 
 Keep timing targets from the technical spec; do not silently shorten the listening pause to improve a latency number. Local inference/GPU advantages and the 2–3-second post-explicit-turn target are unverified until measured. Manual help bypasses the LLM and game engine. An app fallback cannot fix an unreachable shared server.
 
+### Observed speech pipeline feature — November 14, 2026
+
+Branch `anay/speech-pipeline`, isolated worktree based on main `be1e096` after backend deployment PR #2. The old shared checkout, main, backend-deploy and deployed services were left unchanged. Backend voice grants/PCM/end → local STT → existing chat/OpenRouter → local TTS → bounded output and receipt execution are opt-in. This remains bounded **whole-turn recognition**, not the incremental STT/silence-end target; physical K151/browser capture and playback are not accepted.
+
+Final checks: pinned Bun **1.4.4**, frozen-lockfile dependencies unchanged; **109 tests passed / 2,107 expectations** across 15 files against a dedicated private PostgreSQL **14.24** test cluster. TypeScript/Svelte (zero errors/warnings), seven Python boundary tests, production build, formatting and diff whitespace checks passed. Production control/fixture-chat HTTPS/WSS and real isolated PostgreSQL/profile/media smoke tests passed independently. One concurrent smoke attempt returned a different preview-denial status and was not counted passed; its independent rerun passed. No production data or credentials were used by fixture checks. Inspected client bundles contained none of the inspected server secret/adapter symbols; all 36 typed operations remain documented.
+
+A real, certificate-verified **20-turn repeated synthetic English voice endurance** run passed with local Whisper base/Piper and actual OpenRouter `z-ai/glm-5.3-flash`, plus one initial real text turn (21 model requests). It checked bounded credit, capture-off completion, three pause/resume cycles and final Stop. Playback receipts were simulated consumed chunks; the same synthesized waveform was repeated, so this is neither a varied human-conversation study nor a word-error/semantic-safety score. No raw audio/transcripts/reasoning were saved or logged. Total run 204,693 ms included synthetic capture pacing and simulated playback. Warm stage times:
+
+| Stage | Median | p95 | Range |
+| --- | --- | --- | --- |
+| STT | 421.5 ms | 449 ms | 393–457 ms |
+| LLM | 879.5 ms | 1,023 ms | 655–1,151 ms |
+| TTS | 184.5 ms | 279 ms | 143–503 ms |
+| Whole harness voice turn, including input/playback pacing | 10,142.5 ms | 11,803 ms | 8,436–13,530 ms |
+
+Numeric per-turn evidence is in [speech-pipeline-2026-11-14.json](verification/speech-pipeline-2026-11-14.json). The selected GLM model's mandatory default reasoning exhausted the old 160-token allowance on earlier runs; explicit supported low effort/512 tokens completed the final run. Reasoning is excluded; truncation remains an explicit failure, not a retry or partial reply. Neither server nor private root settings were changed by that command-only override. Cold-start/GPU/VM/Mac/venue/human/semantic-quality acceptance remains pending.
+
+Earlier long runs exposed a local wall-clock correction: a capture rate window reported **−418 ms wall time versus 1,257 ms monotonic**, and playback saw **740 ms wall versus 2,402 ms monotonic**. Gateway rate windows/watchdogs and speech elapsed deadlines now use monotonic time; credential/provider expiry remains UTC. A regression covers backward/forward wall-clock corrections. No system clock/resolver settings were changed. Legacy unnegotiated-audio compatibility, repeated-unmute capture invalidation, stale results/receipts, fixed help/refusal, bounded buffers, output metadata and mic-mute versus approved playback have automated checks. The simulated player also now handles end arriving after its last consumed frame.
+
+English keyword quality is still imperfect: an initial base probe passed 8/10; a later same-waveform base/small five-phrase comparison passed 20/20, while repeated difficult-phrase comparisons passed base 3/6 versus small 5/6. Padding or larger beam size did not reliably eliminate errors. The optional pinned multilingual small model is explicit (no default change/fallback) and slower (~1.2–1.6 s in these synthetic checks). Keep human microphone/semantic/German review open rather than claiming quality solved. The private services are replaceable independently; one earlier real voice turn used the small STT endpoint with the separate base-service Piper endpoint.
+
+The Python wrapper now tries graceful idle-worker shutdown before bounded terminate/kill; the final real engine shutdown exited **0 without the earlier semaphore warning**. This task's speech listener and PostgreSQL cluster were stopped. Models/private env/virtualenv/database/media are ignored. [Protocol/configuration and morning Emilia/Kylie handoff](handoffs/anay-speech-pipeline.md) lists remaining native-rate, framing, local controls, permissions/autoplay and receipt checks; substantive counterpart review is still required before merge/deployment.
+
 ## 8. Demo script and fallback
 
 Five-minute draft; adapt to actual event allowance. Grandma may choose one short segment after private rehearsal; teammates demonstrate the remaining features/failure scenarios. No audience member should see private contact details or secrets.
@@ -346,3 +369,21 @@ Post-restart public unlock/gate/cookie/logout/internal/mock denial passed. Priva
 ### Python Stackchan pairing helper — November 14, 2026
 
 Added standard-library `scripts/pair-stackchan.py`: existing VoidAuth state/PKCE loopback login → public caregiver pairing route, printing only the private unclaimed pairing details needed for provisioning. It does not retain tokens, change configuration, revoke/claim, start a session or exercise hardware. Four local fixture tests passed (OAuth state/PKCE, public auth/fresh command IDs, assignment/HTTPS constraints, unchanged settings). Actual use of this helper against the live pairing route and firmware provisioning remains unrun. Backend status/API usage updated; no server deployment changed.
+
+### App-data schema review — November 14, 2026
+
+Separate later local acceptance, November 14: on `anay/app-data-schema`, reviewed Emilia's `4e8993f` app-data draft and promoted only corrected media-collection storage to `002_media_collections.sql`. Native isolated PostgreSQL 14.24 passed fresh install, populated foundation upgrade, atomic DDL/ledger rollback, unchanged foundation checksum, scope/type/position bounds, stable entry reordering and metadata cascades. All 97 Bun tests / 875 expectations, type checks, build, formatting and production fixture HTTPS/data smoke passed. A separate disposable diagnostic applied the original full draft and confirmed missing excerpt-grant, dependent-summary deletion, alias-namespace and acknowledgment-actor guards. Those areas remain inactive proposals with required service work documented in [Anay's review](handoffs/anay-app-data-schema-review.md). No deployed database, firmware or running service was changed; counterpart review and actual host upgrade remain pending.
+
+### Speech concern-response review fix — November 14, 2026
+
+On `anay/speech-pipeline`, based on `151ebc3`, fixed the reproduced urgent voice gap: recognized urgent/unwell/refusal replies now receive new output authority after canceling the input and pausing. Fixed synthesis/playback keeps the session paused and capture off. A gateway regression exposed that the new generation was not published until TTS completed; the fix now broadcasts it before synthesis so Stop can use current state. No route/schema/dependency changes or production deployment were made.
+
+Pinned Bun 1.4.4, separate worktree, disposable PostgreSQL 17: **116 Bun tests / 2,438 expectations** and **seven Python boundary tests** passed, as did type/Svelte check and production build. New tests cover fresh IDs/generation, model bypass, fixed PCM/receipts, completion staying paused, cancellation during synthesis and queued/playing output, late PCM wiping, obsolete receipts, mute/resume behavior and failure/expiry. Production data and TLS/control/chat fixture smokes passed. The supplied suites' earlier green review did not cover the audible fixed-reply regression; that case is now automated. Hardware/local-control, human recognition quality and counterpart acceptance remain pending. Running deployment and private configuration are unchanged.
+
+Final integration check with the previously reviewed `anay/app-data-schema` (`cff8554`) content passed **122 tests / 2,480 expectations** on separate PostgreSQL test/schema databases. The fixed branch also passed certificate-verified WSS with a six-second fixture output and three synthetic turns using this host's separately started CPU Whisper/Piper engines (fixture LLM, simulated consumption, no microphone/speaker or external provider call). That isolated worker exited 0 without a semaphore warning. Final source formatting and diff-whitespace checks passed. The disposable test container/databases were removed after checks. No push/merge/redeployment was performed; local source is ready for Anay's review and later push instruction.
+
+### Speech branch merge with main — November 14, 2026
+
+Merged `main` at `a6f7ff9` into `anay/speech-pipeline` after speech fix `3fb561d`. The only content conflict was this plan's appended verification records; both the app-data review and speech-fix evidence are retained. Updated backend status/API wording to reflect the schema's presence in main without changing the recorded deployment. No application source or existing migration was edited to resolve the conflict.
+
+On the resolved tree, pinned Bun 1.4.4, disposable PostgreSQL 17 and separate runtime/schema-test databases: **122 tests / 2,480 expectations**, type/Svelte check, production build, formatting, whitespace and production data smoke passed. TLS/identity were fixtures. No physical hardware, real provider request, new speech quality check, production database or running service was involved. The shared checkout remains on `backend-deploy`; publishing this resolution updates only the speech feature branch and leaves the final main merge to Anay.
