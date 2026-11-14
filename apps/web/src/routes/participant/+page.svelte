@@ -8,21 +8,12 @@
     type SessionCommand,
     type ActivityAction,
     type Result,
-    type ConversationReply,
   } from '@lemmi/contracts';
   let profile = $state<ParticipantProfile | null>(null);
   let session = $state<SessionSnapshot | null>(null);
   let activity = $state<ActivityView | null>(null);
   let busy = $state(false);
   let message = $state('');
-  let answer = $state('');
-  let reply = $state<ConversationReply | null>(null);
-  let replyGeneration = $state(-1);
-  let submitting = $state(false);
-  $effect(() => {
-    if (session?.generation !== replyGeneration || session?.phase === 'ended') reply = null;
-    if (!session?.teaching || session.phase === 'paused') answer = '';
-  });
   function show<T>(r: Result<T>): T | null {
     if (r.ok) return r.data;
     message = `${r.error.code}: ${r.error.message}`;
@@ -50,10 +41,6 @@
     return clients.session.subscribe({ sessionId: id }, (result) => {
       if (result.ok && (!session || result.data.generation >= session.generation))
         session = result.data;
-      if (!result.ok) {
-        reply = null;
-        message = 'Connection unavailable. Your text has not been resent. Retry when connected.';
-      }
     });
   });
   $effect(() => {
@@ -86,7 +73,6 @@
     });
   }
   async function command(action: SessionCommand['action']) {
-    reply = null;
     await run(async () => {
       if (!session) return;
       const next = show(
@@ -100,45 +86,6 @@
       if (next) session = next;
       await refresh();
     });
-  }
-  async function sendAnswer(event: SubmitEvent) {
-    event.preventDefault();
-    if (!session || !answer.trim() || submitting) return;
-    const current = session;
-    const text = answer;
-    answer = '';
-    reply = null;
-    submitting = true;
-    message = '';
-    try {
-      const result = await clients.conversation.submit({
-        commandId: crypto.randomUUID(),
-        sessionId: current.id,
-        expectedGeneration: current.generation,
-        text,
-        language: 'en',
-      });
-      if (!result.ok) {
-        message = result.error.message;
-        return;
-      }
-      // Polling or a local safety control may already have superseded this response.
-      if (
-        !session ||
-        session.id !== result.data.session.id ||
-        session.generation > result.data.session.generation
-      )
-        return;
-      session = result.data.session;
-      if (result.data.kind === 'reply') {
-        replyGeneration = session.generation;
-        reply = result.data.reply;
-      }
-    } catch {
-      message = 'The reply is unavailable. Your text has not been resent.';
-    } finally {
-      submitting = false;
-    }
   }
   async function music() {
     await run(async () => {
@@ -186,152 +133,71 @@
   }
 </script>
 
-<h1>Ready when you are{profile ? `, ${profile.preferredName}` : ''}</h1>
-<p>Microphone off. Camera off. Commands below exercise mock state only.</p>
-{#if !session || session.phase === 'ended'}<button onclick={start} disabled={busy || !profile}
-    >Start mock session</button
-  >{/if}
-{#if session}<section class="card">
-    <h2>Session: {session.phase}</h2>
+<section class="participant-shell">
+  <h1>Ready when you are{profile ? `, ${profile.preferredName}` : ''}</h1>
+  <p>Microphone off. Camera off. Commands below exercise mock state only.</p>
+  <section id="conversation" class="card">
+    <h2>Talk with Lemmi</h2>
     <p>
-      Endpoint: {session.endpoint} · Generation {session.generation} · Microphone {session.micMuted
-        ? 'muted'
-        : 'off'}
+      Voice conversation is not connected in this starter. Start a mock session below to try the
+      shared controls; no microphone audio is captured.
     </p>
-    <button onclick={() => run(refresh)} disabled={busy}>Refresh shared state</button>
-  </section>{/if}
-{#if session && session.phase !== 'ended'}
-  <section class="card" aria-labelledby="teaching-title">
-    <h2 id="teaching-title">Teach Lemmi</h2>
-    <p class="tag">LOCAL TEXT DEMO · Scripted replies · Microphone and speaker off</p>
-    <p>Share something you know or enjoy. You can take your time, change topics or finish.</p>
-    <p>Conversation text and preferences are not saved for caregiver review or future visits.</p>
-    {#if !session.teaching}
-      <button
-        onclick={() => command({ type: 'teaching.start' })}
-        disabled={busy || session.phase === 'paused' || (!!activity && activity.phase !== 'ended')}
-        >Start Teach Lemmi</button
-      >
-    {:else}
-      {#if session.teaching.entityId}
-        <h3>{session.teaching.topicLabel}</h3>
-        {#if session.phase === 'paused'}
-          <p>Paused. Resume when you are ready; speaking does not start automatically.</p>
-        {:else}
-          <p class="invitation">{session.teaching.prompt}</p>
-        {/if}
-      {:else}
-        <p>No eligible topics remain. You can finish, then choose music or just look.</p>
-      {/if}
-      <div role="status" aria-live="polite">
-        {#if submitting}<p>Preparing a scripted reply… You can still pause or stop.</p>{/if}
-        {#if reply}<p><strong>Lemmi:</strong> {reply.text}</p>
-          <p class="tag">
-            {reply.source === 'scripted' ? 'Scripted demo reply' : 'Application control reply'}
-          </p>{/if}
-      </div>
-      <form onsubmit={sendAnswer}>
-        <label for="teaching-answer">Your reply (fictional test text only)</label>
-        <textarea
-          id="teaching-answer"
-          bind:value={answer}
-          maxlength="1000"
-          rows="3"
-          disabled={submitting || session.phase === 'paused' || !session.teaching.entityId}
-        ></textarea>
-        <button
-          type="submit"
-          disabled={busy ||
-            submitting ||
-            !answer.trim() ||
-            session.phase === 'paused' ||
-            !session.teaching.entityId}>Send reply</button
-        >
-      </form>
-      <div class="controls" aria-label="Teaching choices">
-        <button
-          onclick={() => command({ type: 'teaching.next' })}
-          disabled={busy || session.phase === 'paused'}>Different topic</button
-        >
-        <button
-          onclick={() => command({ type: 'teaching.not_sure' })}
-          disabled={busy || session.phase === 'paused' || !session.teaching.entityId}
-          >Not sure</button
-        >
-        <button
-          onclick={() => command({ type: 'teaching.prefer' })}
-          disabled={busy || session.phase === 'paused' || !session.teaching.entityId}
-          >Like this topic</button
-        >
-        <button
-          onclick={() => command({ type: 'teaching.avoid' })}
-          disabled={busy || session.phase === 'paused' || !session.teaching.entityId}
-          >Don't ask about this</button
-        >
-        <button onclick={() => command({ type: 'teaching.finish' })}>Finish teaching</button>
-      </div>
-    {/if}
-  </section>
-  <section class="card">
-    <h2>Music transport example</h2>
-    <p>
-      No audio asset or playback executor is installed. A request will never be labeled as heard or
-      played.
-    </p>
-    {#if !activity || activity.phase === 'ended'}<button
-        onclick={music}
-        disabled={busy || session.phase === 'paused' || !!session.teaching}
-        >Open music example</button
+    {#if session && session.phase !== 'ended'}<button
+        onclick={() => command({ type: 'speak' })}
+        disabled={busy || session.phase === 'paused'}>Start conversation</button
       >{/if}
-    {#if activity}<p>{activity.prompt}</p>
-      <p>
-        Activity {activity.phase} · Playback {activity.activityId === 'music_playlist'
-          ? activity.playback
-          : 'unavailable'}
-      </p>
-      <div class="controls">
-        {#each activity.choices as choice}<button onclick={() => act(choice.action)} disabled={busy}
-            >{choice.label}</button
-          >{/each}
-      </div>{/if}
   </section>
-  <div class="controls sticky" aria-label="Session controls">
-    <button onclick={() => command({ type: session?.phase === 'paused' ? 'resume' : 'pause' })}
-      >{session.phase === 'paused' ? 'Resume to ready' : 'Pause'}</button
-    >
-    <button onclick={() => command({ type: 'stop' })}>Stop</button>
-    <button onclick={() => command({ type: 'mute', muted: !session?.micMuted })} disabled={busy}
-      >{session.micMuted ? 'Unmute (capture stays off)' : 'Mute microphone'}</button
-    >
-    <button onclick={help}>Demo help — no real message</button>
-  </div>
-{:else}<button onclick={help} disabled={busy}>Demo help — no real message</button>{/if}
-<p role="status" aria-live="polite">{busy ? 'Working…' : message}</p>
-<p>
-  Photo talk, guessing and matching implementations remain pending. Teach Lemmi here uses reviewed,
-  scripted text only; live AI, voice and robot acceptance are separate integration checks.
-</p>
-
-<style>
-  label {
-    display: block;
-    font-weight: 650;
-  }
-  textarea {
-    display: block;
-    width: 100%;
-    max-width: 42rem;
-    padding: 12px;
-    font: inherit;
-    color: inherit;
-    border: 2px solid #315c4d;
-    border-radius: 12px;
-  }
-  textarea:focus-visible {
-    outline: 4px solid #a05218;
-    outline-offset: 4px;
-  }
-  .invitation {
-    font-size: 1.2rem;
-  }
-</style>
+  {#if !session || session.phase === 'ended'}<button onclick={start} disabled={busy || !profile}
+      >Start mock session</button
+    >{/if}
+  {#if session}<section class="card">
+      <h2>Session: {session.phase}</h2>
+      <p>
+        Endpoint: {session.endpoint} · Generation {session.generation} · Microphone {session.micMuted
+          ? 'muted'
+          : 'off'}
+      </p>
+      <button onclick={() => run(refresh)} disabled={busy}>Refresh shared state</button>
+    </section>{/if}
+  {#if session && session.phase !== 'ended'}
+    <section class="card">
+      <h2>Music transport example</h2>
+      <p>
+        No audio asset or playback executor is installed. A request will never be labeled as heard
+        or played.
+      </p>
+      {#if !activity || activity.phase === 'ended'}<button
+          onclick={music}
+          disabled={busy || session.phase === 'paused'}>Open music example</button
+        >{/if}
+      {#if activity}<p>{activity.prompt}</p>
+        <p>
+          Activity {activity.phase} · Playback {activity.activityId === 'music_playlist'
+            ? activity.playback
+            : 'unavailable'}
+        </p>
+        <div class="controls">
+          {#each activity.choices as choice}<button
+              onclick={() => act(choice.action)}
+              disabled={busy}>{choice.label}</button
+            >{/each}
+        </div>{/if}
+    </section>
+    <div class="controls sticky" aria-label="Session controls">
+      <button
+        onclick={() => command({ type: session?.phase === 'paused' ? 'resume' : 'pause' })}
+        disabled={busy}>{session.phase === 'paused' ? 'Resume to ready' : 'Pause'}</button
+      >
+      <button onclick={() => command({ type: 'stop' })} disabled={busy}>Stop</button>
+      <button onclick={() => command({ type: 'mute', muted: !session?.micMuted })} disabled={busy}
+        >{session.micMuted ? 'Unmute (capture stays off)' : 'Mute microphone'}</button
+      >
+      <button onclick={help} disabled={busy}>Demo help — no real message</button>
+    </div>
+  {:else}<button onclick={help} disabled={busy}>Demo help — no real message</button>{/if}
+  <p role="status" aria-live="polite">{busy ? 'Working…' : message}</p>
+  <p>
+    Photo talk, guessing, matching and Teach Lemmi have typed seams/fixtures; their implementations
+    are pending.
+  </p>
+</section>
