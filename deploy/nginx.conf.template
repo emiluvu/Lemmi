@@ -36,7 +36,7 @@ server {
     }
 
     # Explicit fictional demo/browser routes, independently authorized by the app.
-    location ~ ^/(participant(/conversation)?|caregiver(/(settings|check-in|sign-in))?|_app/.*|v1/demo/(profiles|enroll|current|release))?$ {
+    location ~ ^/(participant(/(conversation|photo-story))?|caregiver(/(settings|check-in|sign-in))?|_app/.*|v1/demo/(profiles|enroll|current|release|photo-assets/(photo-story-garden|photo-story-park)))?$ {
         client_max_body_size 4k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;

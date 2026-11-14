@@ -1,4 +1,5 @@
 import type { ProfileDetail } from '@lemmi/contracts';
+import { publicPhotoStoryPack } from '@lemmi/activities';
 import { caregiverProfile } from '@lemmi/contracts/fixtures';
 import type { ChatAdapter } from './adapters/types';
 import type { SpeechAdapters } from './speech-turns';
@@ -12,6 +13,7 @@ export class SessionRegistry {
     private readonly speech?: SpeechAdapters,
     private readonly now: () => number = Date.now,
     private readonly changed: () => void = () => {},
+    private readonly publicPhotoStory = false,
   ) {
     this.acceptPersistentProfile({
       ...structuredClone(caregiverProfile),
@@ -25,6 +27,9 @@ export class SessionRegistry {
     if (!coordinator) throw new Error('Profile is not assigned');
     return coordinator;
   }
+  authorizePhotoDemoProfile(profileId: string, enabled: boolean) {
+    this.forProfile(profileId).authorizePublicPhotoDemo(this.publicPhotoStory && enabled);
+  }
   all() {
     return [...this.entries.values()];
   }
@@ -32,7 +37,21 @@ export class SessionRegistry {
     let coordinator = this.entries.get(profile.id);
     if (!coordinator) {
       if (this.entries.size >= 100) throw new Error('Profile session capacity reached');
-      coordinator = new SessionCoordinator('live', this.chat, this.speech, this.now, this.changed);
+      coordinator = new SessionCoordinator(
+        'live',
+        this.chat,
+        this.speech,
+        this.now,
+        this.changed,
+        this.publicPhotoStory
+          ? {
+              publicDemo: true,
+              profileId: profile.id,
+              pack: publicPhotoStoryPack,
+              availableAssetIds: ['photo-story-garden', 'photo-story-park'],
+            }
+          : undefined,
+      );
       this.entries.set(profile.id, coordinator);
     }
     coordinator.acceptPersistentProfile(profile, contextChanged);

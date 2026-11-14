@@ -310,6 +310,70 @@ try {
   browser.send('input.text', { text: 'Hello fictional garden', language: 'en' });
   await until(() => browser.events.some((event) => event.type === 'response.text'));
   check(!device.events.some((event) => event.type === 'response.text'), 'Cross-profile reply leak');
+  // Public Photo Story uses the existing browser identity and scoped current-scene read.
+  browser.send('input.photo.start');
+  await until(() =>
+    browser.events.some(
+      (event) =>
+        event.type === 'activity.changed' &&
+        event.payload.activity?.activityId === 'photo_album' &&
+        event.payload.activity.currentAssetId === 'photo-story-garden',
+    ),
+  );
+  const scene = await request(
+    '/v1/demo/photo-assets/photo-story-garden',
+    'GET',
+    undefined,
+    browserCookie,
+  );
+  check(
+    scene.status === 200 && scene.headers.get('content-type') === 'image/svg+xml',
+    'Scoped current photo scene failed',
+  );
+  check((await scene.text()).includes('<svg'), 'Reviewed scene bytes missing');
+  check(
+    (await request('/v1/demo/photo-assets/photo-story-park', 'GET', undefined, browserCookie))
+      .status === 404,
+    'Noncurrent scene was exposed',
+  );
+  check(
+    (await request('/v1/demo/photo-assets/photo-story-garden', 'GET', undefined, gateCookie))
+      .status === 401,
+    'Gate key alone read participant media',
+  );
+  const photoEvent = [...browser.events]
+    .reverse()
+    .find((event) => event.type === 'activity.changed');
+  check(
+    photoEvent?.type === 'activity.changed' &&
+      photoEvent.payload.activity?.activityId === 'photo_album',
+    'Photo projection missing',
+  );
+  const photo = photoEvent.payload.activity;
+  const afterTalk = browser.events.length;
+  browser.send('input.photo.action', {
+    instanceId: photo.instanceId,
+    expectedRevision: photo.revision,
+    action: { type: 'photo.talk' },
+  });
+  await until(() =>
+    browser.events.slice(afterTalk).some((event) => event.type === 'response.text'),
+  );
+  check(
+    !device.events.some((event) => event.type === 'activity.changed'),
+    'Robot received unsupported photo stream',
+  );
+  browser.send('input.stop');
+  await until(() =>
+    browser.events.some(
+      (event) => event.type === 'state.changed' && event.payload.session?.phase === 'ended',
+    ),
+  );
+  check(
+    (await request('/v1/demo/photo-assets/photo-story-garden', 'GET', undefined, browserCookie))
+      .status === 404,
+    'Ended photo scene remained accessible',
+  );
   const current = (await (
     await request('/v1/demo/current', 'GET', undefined, browserCookie)
   ).json()) as any;
@@ -345,7 +409,7 @@ try {
   const after = await request('/v1/demo/current', 'GET', undefined, browserCookie);
   check(after.status === 403, 'Revoked browser cookie accepted');
   console.info(
-    'PASS: production participant selector/profile creation, cookie enrollment, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release. Model and clients are fixtures; no real microphone or speaker.',
+    'PASS: production participant selector/profile creation, cookie enrollment, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release; scoped public Photo Story media/opening/Stop and gate-only/noncurrent/ended denials. Model and clients are fixtures; no real microphone or speaker.',
   );
 } finally {
   for (const client of clients) client.close();

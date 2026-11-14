@@ -30,6 +30,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     '/caregiver/sign-in',
     '/participant',
     '/participant/conversation',
+    '/participant/photo-story',
   ].includes(event.url.pathname);
   const participantRoute =
     demoPage ||

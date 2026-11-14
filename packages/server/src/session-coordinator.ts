@@ -64,7 +64,8 @@ export class SessionCoordinator {
     now: () => number = Date.now,
     private readonly onFixedReply: () => void = () => {},
     private readonly photoStory?: {
-      localOnly: true;
+      localOnly?: true;
+      publicDemo?: true;
       profileId: string;
       pack: ApprovedPack;
       availableAssetIds: string[];
@@ -267,10 +268,10 @@ export class SessionCoordinator {
       fail('UNAVAILABLE', 'Speech adapters are disabled'));
     return this.photoTextFallback(result, (raw as { turnId?: string })?.turnId);
   }
-  async speakText(raw: unknown) {
+  async speakText(raw: unknown, rates = [16000, 22050, 24000, 44100, 48000]) {
     if (!this.photoStoryEnabled())
-      return fail('UNAVAILABLE', 'Photo speech is local rehearsal only');
-    const result = await (this.speech?.speak(raw, [16000, 22050, 24000, 44100, 48000]) ??
+      return fail('UNAVAILABLE', 'Photo Story is not enabled for this profile');
+    const result = await ((rates.length ? this.speech?.speak(raw, rates) : undefined) ??
       this.submitText(raw));
     return this.photoTextFallback(result, (raw as { commandId?: string })?.commandId);
   }
@@ -297,10 +298,50 @@ export class SessionCoordinator {
   }
   private photoStoryEnabled() {
     return (
-      this.photoStory?.localOnly === true &&
-      this.photoStory.profileId === DEMO_PROFILE_ID &&
-      this.profile.id === DEMO_PROFILE_ID
+      !!this.photoStory &&
+      this.photoStory.profileId === this.profile.id &&
+      ((this.photoStory.publicDemo === true && this.publicPhotoAuthorized) ||
+        (this.photoStory.localOnly === true && this.profile.id === DEMO_PROFILE_ID))
     );
+  }
+  private publicPhotoAuthorized = false;
+  authorizePublicPhotoDemo(enabled: boolean) {
+    this.publicPhotoAuthorized = enabled;
+  }
+  publicPhotoEnabled() {
+    return (
+      this.publicPhotoAuthorized && this.photoStory?.publicDemo === true && this.photoStoryEnabled()
+    );
+  }
+  photoView() {
+    return this.photoStoryEnabled() && this.activity?.activityId === 'photo_album' && this.context
+      ? projectActivity(this.activity, this.pack(), this.context)
+      : null;
+  }
+  photoAssetAllowed(assetId: string) {
+    const view = this.photoView();
+    const s = this.session;
+    return (
+      !!s &&
+      s.phase !== 'ended' &&
+      this.publicPhotoEnabled() &&
+      view?.activityId === 'photo_album' &&
+      view.currentAssetId === assetId &&
+      s.profileRevision === this.profile.revision &&
+      s.privacyRevision === this.privacyRevision &&
+      s.policyRevision === this.policyRevision
+    );
+  }
+  startPhoto(commandId: string) {
+    if (!this.publicPhotoEnabled() || !this.session || !this.photoStory)
+      return fail('UNAVAILABLE', 'Photo Story is not available');
+    return this.handle('activities.start', {
+      sessionId: this.session.id,
+      commandId,
+      activityId: 'photo_album',
+      packId: this.photoStory.pack.id,
+      packVersion: this.photoStory.pack.version,
+    });
   }
   private photoTalking() {
     return (
@@ -424,7 +465,11 @@ export class SessionCoordinator {
         policyRevision: this.policyRevision,
         ...(this.mode === 'live'
           ? {
-              permittedEntityIds: this.photoStoryEnabled() ? this.profile.interests : [],
+              permittedEntityIds: this.photoStoryEnabled()
+                ? this.publicPhotoEnabled()
+                  ? ['scene:generic-nature']
+                  : this.profile.interests
+                : [],
               available:
                 this.photoStoryEnabled() &&
                 !this.profile.rememberingEnabled &&
@@ -464,6 +509,10 @@ export class SessionCoordinator {
         policyRevision: profile.policyRevision,
       };
     if (syncPausedRevision && this.session?.teaching) this.refreshTeachingPrompt();
+    if (syncPausedRevision && this.session && this.context) {
+      this.context = this.activityContext(this.session.id);
+      this.system({ type: 'system.eligibility_changed' });
+    }
   }
   persistenceSnapshot() {
     const session = this.snapshot();
@@ -658,27 +707,41 @@ export class SessionCoordinator {
         | 'teaching.not_sure'
         | 'teaching.prefer'
         | 'teaching.avoid';
-      const changed = this.handle('session.command', {
-        sessionId: session.id,
-        expectedGeneration: session.generation,
-        commandId: input.commandId,
-        action: { type: action },
-      });
-      if (!changed.ok) return changed;
+      let changed: Result<unknown> = fail('REVISION_CONFLICT', 'Teaching transition was canceled');
+      const apply = () => {
+        changed = this.handle('session.command', {
+          sessionId: session.id,
+          expectedGeneration: session.generation,
+          commandId: input.commandId,
+          action: { type: action },
+        });
+        return changed.ok;
+      };
+      const replyTurnId = speechOwner
+        ? this.speech?.replaceForTeachingReply(speechOwner, apply)
+        : apply()
+          ? input.commandId
+          : null;
+      if (!replyTurnId)
+        return changed.ok
+          ? fail('REVISION_CONFLICT', 'Teaching speech turn was canceled')
+          : changed;
       const result = ok<ConversationTextResult>({
         kind: 'reply',
         reply: {
-          turnId: input.commandId,
+          turnId: replyTurnId,
           language: input.language,
           source: 'fixed',
           text:
             teachingIntent === 'prefer'
               ? 'You can keep sharing if you like. Preferences are only used in this session.'
-              : 'We can leave that topic. You can choose another topic or finish.',
+              : (this.session?.teaching?.prompt ??
+                'No eligible topics remain. You can choose another activity or finish.'),
         },
         session: this.snapshot()!,
       });
       this.lastChat = { commandId: input.commandId, result };
+      if (speechOwner) this.onFixedReply();
       return result;
     }
     if (
@@ -957,7 +1020,10 @@ export class SessionCoordinator {
         'session.get',
         'session.command',
         'help.create',
-        ...(this.photoStoryEnabled()
+        ...(this.publicPhotoEnabled()
+          ? ['activities.start', 'activities.view', 'activities.submit']
+          : []),
+        ...(this.photoStoryEnabled() && this.photoStory?.localOnly
           ? [
               'overview.load',
               'profile.load',
@@ -1209,7 +1275,7 @@ export class SessionCoordinator {
           return fail('NOT_FOUND', 'Session not found');
         if (this.session.teaching)
           return fail('REVISION_CONFLICT', 'Finish teaching before starting another activity');
-        if (this.session.phase === 'paused' || this.session.phase === 'ended')
+        if (!['ready', 'waiting'].includes(this.session.phase))
           return fail('REVISION_CONFLICT', 'Session must be ready');
         if (
           (input.activityId !== 'music_playlist' || input.packId !== musicPack.id) &&
@@ -1221,6 +1287,10 @@ export class SessionCoordinator {
           return fail('UNAVAILABLE', 'Activity pending Lukas implementation');
         if (this.activity && this.activity.phase !== 'ended')
           return fail('REVISION_CONFLICT', 'Leave the current activity first');
+        if (input.activityId === 'photo_album') {
+          this.cancelChat();
+          this.session = { ...this.session, generation: this.session.generation + 1, captureGrant: null };
+        }
         this.context = this.activityContext(this.session.id);
         this.activity = createActivity(
           { instanceId: `activity-${++this.count}` },
@@ -1255,7 +1325,12 @@ export class SessionCoordinator {
           if (this.activity.activityId === 'photo_album') {
             this.cancelChat();
             if (!['paused', 'ended'].includes(this.session.phase))
-              this.session = { ...this.session, phase: 'waiting', captureGrant: null };
+              this.session = {
+                ...this.session,
+                generation: this.session.generation + 1,
+                phase: 'waiting',
+                captureGrant: null,
+              };
           }
           for (const event of transition.events) this.event(event);
           // Deliberately DO NOT execute effects: no approved music bytes or live endpoint yet.

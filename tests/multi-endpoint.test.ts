@@ -606,3 +606,190 @@ test('revoking an observing browser rejects its reconnect without canceling the 
     await h.close();
   }
 });
+
+function latestPhoto(client: ReturnType<typeof socketClient>) {
+  const event = [...client.events].reverse().find((event) => event.type === 'activity.changed');
+  const view = event?.type === 'activity.changed' ? event.payload.activity : null;
+  if (!view || view.activityId !== 'photo_album') throw new Error('Expected current Photo Story');
+  return view;
+}
+
+test('public Photo Story uses scoped browser ownership, reviewed captions and current activity revisions', async () => {
+  const inputs: Array<{ system: string; text: string }> = [];
+  const h = harness({
+    demoEnrollment: true,
+    profiles: profiles.map((profile) =>
+      profile.id === 'profile-alex'
+        ? {
+            ...profile,
+            approvedFacts: [
+              {
+                id: 'a1e00000-0000-4000-8000-000000000099',
+                field: 'personal_context',
+                source: 'caregiver_provided',
+                value: 'Alex private biography sentinel.',
+              },
+            ],
+          }
+        : profile,
+    ),
+    devices: [
+      { profileId: 'profile-casey', deviceId: 'browser-casey', endpoint: 'browser' },
+      { profileId: 'profile-casey', deviceId: 'observer-casey', endpoint: 'browser' },
+      { profileId: 'profile-alex', deviceId: 'robot-alex', endpoint: 'robot' },
+    ],
+    chatAdapter: {
+      async complete(input) {
+        inputs.push({ system: input.system, text: input.text });
+        return ok({ text: 'Do you like flowers?', language: input.language });
+      },
+    },
+  });
+  try {
+    const browser = h.connect(await h.issue('browser-casey', 'profile-casey'), 'browser');
+    const observer = h.connect(await h.issue('observer-casey', 'profile-casey'), 'browser');
+    const robot = h.connect(await h.issue('robot-alex', 'profile-alex'));
+    await Promise.all([browser.hello(), observer.hello(), robot.hello()]);
+    const ready = browser.events.find((event) => event.type === 'device.ready');
+    expect(ready?.type === 'device.ready' && ready.payload.photoStory).toBe(true);
+    const robotReady = robot.events.find((event) => event.type === 'device.ready');
+    expect(robotReady?.type === 'device.ready' && robotReady.payload.photoStory).toBe(false);
+    await browser.apply('input.start', null);
+    await robot.apply('input.start', null);
+    expect(await observer.rejected('input.photo.start', browser.latest())).toBe('FORBIDDEN');
+    expect(await robot.rejected('input.photo.start')).toBe('UNAVAILABLE');
+    expect(robot.events.some((event) => event.type === 'activity.changed')).toBe(false);
+
+    const startedAfter = browser.events.length;
+    await browser.apply('input.photo.start');
+    await browser.wait(
+      (event) =>
+        event.type === 'activity.changed' && event.payload.activity?.activityId === 'photo_album',
+      startedAfter,
+    );
+    const garden = latestPhoto(browser);
+    expect(garden.currentAssetId).toBe('photo-story-garden');
+    expect(garden.viewingMode).toBe('just_look');
+    expect(inputs).toHaveLength(0);
+    const openingAfter = browser.events.length;
+    await browser.apply('input.photo.action', browser.latest(), {
+      instanceId: garden.instanceId,
+      expectedRevision: garden.revision,
+      action: { type: 'photo.talk' },
+    });
+    const reply = await browser.wait((event) => event.type === 'response.text', openingAfter);
+    expect(reply.type === 'response.text' && reply.payload.text).toBe('Do you like flowers?');
+    await browser.wait(
+      (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+      browser.events.indexOf(reply) + 1,
+    );
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]!.system).toContain('Roses and other flowers in a garden.');
+    expect(inputs[0]!.system).toContain('Casey');
+    expect(inputs[0]!.system).not.toContain('Alex private biography sentinel');
+    expect(inputs[0]!.system).not.toContain('Alex enjoys');
+    expect(inputs[0]!.text).toContain('approved scene');
+
+    const talking = latestPhoto(browser);
+    expect(
+      await observer.rejected('input.photo.action', browser.latest(), {
+        instanceId: talking.instanceId,
+        expectedRevision: talking.revision,
+        action: { type: 'photo.skip' },
+      }),
+    ).toBe('FORBIDDEN');
+    const skippedAfter = browser.events.length;
+    await browser.apply('input.photo.action', browser.latest(), {
+      instanceId: talking.instanceId,
+      expectedRevision: talking.revision,
+      action: { type: 'photo.skip' },
+    });
+    await browser.wait(
+      (event) =>
+        event.type === 'activity.changed' &&
+        event.payload.activity?.activityId === 'photo_album' &&
+        event.payload.activity.currentAssetId === 'photo-story-park',
+      skippedAfter,
+    );
+    const park = latestPhoto(browser);
+    expect(park.revision).toBeGreaterThan(talking.revision);
+    expect(park.viewingMode).toBe('just_look');
+    expect(
+      await browser.rejected('input.photo.action', browser.latest(), {
+        instanceId: talking.instanceId,
+        expectedRevision: talking.revision,
+        action: { type: 'photo.skip' },
+      }),
+    ).toBe('REVISION_CONFLICT');
+    expect(latestPhoto(browser).currentAssetId).toBe('photo-story-park');
+    expect(inputs).toHaveLength(1);
+    await browser.apply('input.stop');
+  } finally {
+    await h.close();
+  }
+});
+
+test('public Photo Story Stop cancels an in-flight opening and suppresses a late provider reply', async () => {
+  const entered = Promise.withResolvers<void>();
+  let finish!: (result: any) => void;
+  let signal: AbortSignal | undefined;
+  const h = harness({
+    demoEnrollment: true,
+    chatAdapter: {
+      complete(_input, currentSignal) {
+        signal = currentSignal;
+        entered.resolve();
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    },
+  });
+  try {
+    const browser = h.connect(await h.issue('browser-alex', 'profile-alex'), 'browser');
+    await browser.hello();
+    await browser.apply('input.start', null);
+    const startAfter = browser.events.length;
+    await browser.apply('input.photo.start');
+    await browser.wait(
+      (event) =>
+        event.type === 'activity.changed' && event.payload.activity?.activityId === 'photo_album',
+      startAfter,
+    );
+    const garden = latestPhoto(browser);
+    const openingId = browser.send('input.photo.action', browser.latest(), {
+      instanceId: garden.instanceId,
+      expectedRevision: garden.revision,
+      action: { type: 'photo.talk' },
+    });
+    await entered.promise;
+    await browser.wait(
+      (event) => event.type === 'state.changed' && event.payload.session?.phase === 'processing',
+    );
+    const stopped = await browser.apply('input.stop');
+    expect(stopped.phase).toBe('ended');
+    expect(stopped.captureGrant).toBeNull();
+    expect(signal?.aborted).toBe(true);
+    finish(ok({ text: 'This obsolete photo opening must never be delivered.', language: 'en' }));
+    await tick();
+    await tick();
+    browser.send('heartbeat', browser.latest());
+    await browser.wait((event) => event.type === 'heartbeat');
+    expect(
+      browser.events.some(
+        (event) => event.type === 'response.text' && event.payload.turnId === openingId,
+      ),
+    ).toBe(false);
+    expect(
+      browser.events.some(
+        (event) =>
+          event.type === 'response.text' && event.payload.text.includes('obsolete photo opening'),
+      ),
+    ).toBe(false);
+    expect(browser.latest()?.phase).toBe('ended');
+    expect(browser.latest()?.captureGrant).toBeNull();
+    expect(latestPhoto(browser).phase).toBe('ended');
+  } finally {
+    await h.close();
+  }
+});

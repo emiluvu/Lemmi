@@ -240,6 +240,11 @@
                     ? `/participant/conversation?profile=${encodeURIComponent(profile.id)}`
                     : '/participant/conversation'}><UIIcon name="leaf" size={18} /> Conversation</a
                 >
+                {#if data.live}<a
+                    class="profile-action-button"
+                    href={`/participant/photo-story?profile=${encodeURIComponent(profile.id)}`}
+                    ><UIIcon name="leaf" size={18} /> Photo Story</a
+                  >{/if}
                 <a class="profile-action-button" href="/caregiver/check-in"
                   ><UIIcon name="camera" size={18} /> Camera</a
                 >

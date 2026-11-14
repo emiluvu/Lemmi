@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IdSchema, RevisionSchema, ErrorCodeSchema } from './common';
 import { SessionSnapshotSchema } from './session';
+import { ActivityViewSchema, ActivityActionSchema } from './activity';
 import { ConversationReplySchema } from './conversation';
 import {
   PlaybackCapabilitySchema,
@@ -111,6 +112,23 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     ...base,
+    type: z.enum(['input.photo.start', 'input.photo.repeat']),
+    payload: z.strictObject({}),
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('input.photo.action'),
+    payload: z.strictObject({
+      instanceId: IdSchema,
+      expectedRevision: RevisionSchema,
+      action: ActivityActionSchema.refine(
+        (a) => a.type.startsWith('photo.') || a.type === 'activity.leave',
+        'Photo actions only',
+      ),
+    }),
+  }),
+  z.strictObject({
+    ...base,
     type: z.literal('input.text'),
     payload: z.strictObject({
       text: z.string().trim().min(1).max(1000),
@@ -196,12 +214,18 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       camera: z.literal(false),
       textChat: z.boolean().optional(),
       teaching: z.boolean().optional(),
+      photoStory: z.boolean().optional(),
       controls: z
         .array(
           z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak', 'handoff']),
         )
         .max(9),
     }),
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('activity.changed'),
+    payload: z.strictObject({ activity: ActivityViewSchema.nullable() }),
   }),
   z.strictObject({
     ...base,

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import LiveParticipant from '#lib/features/LiveParticipant.svelte';
+  import { page } from '$app/state';
+  let { data } = $props();
   import { onMount } from 'svelte';
   import {
     createHttpTransport,
@@ -411,6 +414,7 @@
     });
   }
   onMount(() => {
+    if (data.live) return;
     void safe(async () => {
       const status = await call('photoStory.status', {});
       session = status.session;
@@ -427,113 +431,124 @@
 </script>
 
 <svelte:head><title>Photo Story — Lemmi</title></svelte:head>
-<main>
-  <a href="/participant">Activity menu</a>
-  <h1>Photo Story with Alex</h1>
-  <p class="demo">
-    Local fictional rehearsal. Captions only; image pixels are not analyzed. Default chat is a
-    reviewed demo; OpenRouter is an explicit server setting. Current chat: {chatMode}. Voice: {speechEnabled
-      ? 'real local STT/TTS'
-      : 'unavailable; text fallback'}.
-  </p>
-  {#if !session || session.phase === 'ended'}<button onclick={() => void start()}
-      >Start Photo Story</button
-    >{/if}
-  {#if activity?.activityId === 'photo_album' && activity.currentAssetId}<img
-      src={images[activity.currentAssetId]}
-      alt={activity.caption ?? 'Approved scene'}
-      onerror={() => {
-        stopLocal();
-        void safe(() => action({ type: 'photo.just_look' }, false));
-        notice = 'Photo unavailable. You can skip it.';
-      }}
-    />
-    <p>{activity.caption}</p>{/if}
-  <p aria-live="polite">{reply}</p>
-  <p role="status">
-    {listening
-      ? 'Listening — choose Done when ready.'
-      : playing
-        ? 'Lemmi is speaking.'
-        : notice || 'You may take your time or simply look.'}
-  </p>
-  {#if session && session.phase !== 'ended'}<p>
-      Communication support: {session.communicationSupport.preset}.
+{#if data.live}
+  <LiveParticipant
+    demoEnrollment={data.demoEnrollment}
+    requestedProfileId={page.url.searchParams.get('profile')}
+  />
+{:else}
+  <main>
+    <a href="/participant">Activity menu</a>
+    <h1>Photo Story with Alex</h1>
+    <p class="demo">
+      Local fictional rehearsal. Captions only; image pixels are not analyzed. Default chat is a
+      reviewed demo; OpenRouter is an explicit server setting. Current chat: {chatMode}. Voice: {speechEnabled
+        ? 'real local STT/TTS'
+        : 'unavailable; text fallback'}.
     </p>
-    <div class="controls">
-      <button
-        disabled={busy || playing || listening || session.phase === 'paused'}
-        onclick={() =>
-          void safe(async () => {
-            await action({ type: 'photo.talk' }, false);
-            await ask('photo_opening');
-          })}>Talk / continue</button
-      >
-      <button
-        onclick={() => {
+    {#if !session || session.phase === 'ended'}<button onclick={() => void start()}
+        >Start Photo Story</button
+      >{/if}
+    {#if activity?.activityId === 'photo_album' && activity.currentAssetId}<img
+        src={images[activity.currentAssetId]}
+        alt={activity.caption ?? 'Approved scene'}
+        onerror={() => {
           stopLocal();
-          void safe(async () => {
-            await call('help.create', { profileId: 'profile-alex', commandId: id(), mode: 'real' });
-          });
-        }}>Get help</button
-      >
-      <button
-        disabled={busy || playing || session.phase === 'paused'}
-        onclick={() => void beginCapture()}>Speak now</button
-      ><button disabled={!listening} onclick={() => void done()}>Done speaking</button>
-      <button
-        disabled={busy || listening || session.phase === 'paused'}
-        onclick={() => void safe(() => ask('photo_repeat'))}>Repeat</button
-      >
-      <button onclick={() => void safe(() => action({ type: 'photo.skip' }))}
-        >Skip / next photo</button
-      ><button onclick={() => void safe(() => action({ type: 'photo.just_look' }, false))}
-        >Just look</button
-      >
-      <button onclick={() => void control(session?.phase === 'paused' ? 'resume' : 'pause')}
-        >{session.phase === 'paused' ? 'Resume' : 'Pause'}</button
-      >
-      <button
-        onclick={() => {
-          stopLocal();
-          void safe(async () => {
-            session = await call('session.command', {
-              ...scope(),
-              commandId: id(),
-              action: { type: 'mute', muted: true },
+          void safe(() => action({ type: 'photo.just_look' }, false));
+          notice = 'Photo unavailable. You can skip it.';
+        }}
+      />
+      <p>{activity.caption}</p>{/if}
+    <p aria-live="polite">{reply}</p>
+    <p role="status">
+      {listening
+        ? 'Listening — choose Done when ready.'
+        : playing
+          ? 'Lemmi is speaking.'
+          : notice || 'You may take your time or simply look.'}
+    </p>
+    {#if session && session.phase !== 'ended'}<p>
+        Communication support: {session.communicationSupport.preset}.
+      </p>
+      <div class="controls">
+        <button
+          disabled={busy || playing || listening || session.phase === 'paused'}
+          onclick={() =>
+            void safe(async () => {
+              await action({ type: 'photo.talk' }, false);
+              await ask('photo_opening');
+            })}>Talk / continue</button
+        >
+        <button
+          onclick={() => {
+            stopLocal();
+            void safe(async () => {
+              await call('help.create', {
+                profileId: 'profile-alex',
+                commandId: id(),
+                mode: 'real',
+              });
             });
+          }}>Get help</button
+        >
+        <button
+          disabled={busy || playing || session.phase === 'paused'}
+          onclick={() => void beginCapture()}>Speak now</button
+        ><button disabled={!listening} onclick={() => void done()}>Done speaking</button>
+        <button
+          disabled={busy || listening || session.phase === 'paused'}
+          onclick={() => void safe(() => ask('photo_repeat'))}>Repeat</button
+        >
+        <button onclick={() => void safe(() => action({ type: 'photo.skip' }))}
+          >Skip / next photo</button
+        ><button onclick={() => void safe(() => action({ type: 'photo.just_look' }, false))}
+          >Just look</button
+        >
+        <button onclick={() => void control(session?.phase === 'paused' ? 'resume' : 'pause')}
+          >{session.phase === 'paused' ? 'Resume' : 'Pause'}</button
+        >
+        <button
+          onclick={() => {
+            stopLocal();
+            void safe(async () => {
+              session = await call('session.command', {
+                ...scope(),
+                commandId: id(),
+                action: { type: 'mute', muted: true },
+              });
+            });
+          }}>Mute microphone</button
+        >
+        <button class="stop" onclick={() => void control('stop')}>Stop Photo Story</button>
+      </div>
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          void safe(async () => {
+            if (activity?.activityId === 'photo_album' && activity.viewingMode !== 'talk')
+              await action({ type: 'photo.talk' }, false);
+            await ask();
           });
-        }}>Mute microphone</button
+        }}
       >
-      <button class="stop" onclick={() => void control('stop')}>Stop Photo Story</button>
-    </div>
-    <form
-      onsubmit={(e) => {
-        e.preventDefault();
-        void safe(async () => {
-          if (activity?.activityId === 'photo_album' && activity.viewingMode !== 'talk')
-            await action({ type: 'photo.talk' }, false);
-          await ask();
-        });
-      }}
-    >
-      <label for="answer">Or type your answer</label><input
-        id="answer"
-        bind:value={typed}
-        maxlength="1000"
-        autocomplete="off"
-      /><button
-        disabled={!typed.trim() || busy || playing || listening || session.phase === 'paused'}
-        >Send answer</button
-      >
-    </form>
-  {/if}
-  <p>
-    Spoken answers are not saved. Photo selections and skips are in the <a href="/caregiver"
-      >local caregiver rehearsal view</a
-    >. This demo is not production caregiver authorization.
-  </p>
-</main>
+        <label for="answer">Or type your answer</label><input
+          id="answer"
+          bind:value={typed}
+          maxlength="1000"
+          autocomplete="off"
+        /><button
+          disabled={!typed.trim() || busy || playing || listening || session.phase === 'paused'}
+          >Send answer</button
+        >
+      </form>
+    {/if}
+    <p>
+      Spoken answers are not saved. Photo selections and skips are in the <a href="/caregiver"
+        >local caregiver rehearsal view</a
+      >. This demo is not production caregiver authorization.
+    </p>
+  </main>
+{/if}
 
 <style>
   main {

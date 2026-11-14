@@ -26,3 +26,17 @@ export const photoStoryDemoPack = ApprovedPackSchema.parse({
     },
   ],
 });
+
+export const publicPhotoStoryPack = ApprovedPackSchema.parse({
+  ...photoStoryDemoPack,
+  id: 'reviewed-photo-scenes',
+  entries:
+    photoStoryDemoPack.activityId === 'photo_album'
+      ? photoStoryDemoPack.entries.map((entry) => ({
+          ...entry,
+          entityIds: ['scene:generic-nature'],
+          discussionContext:
+            'Reviewed fictional illustration. No personal event, location, visit, relationship or ownership is established. Use the caption only; do not infer biography.',
+        }))
+      : [],
+});

@@ -10,7 +10,14 @@
     ParticipantConnection,
     type ParticipantEndpoint,
   } from '@lemmi/contracts';
-  import type { ParticipantProfile, SessionSnapshot, ServerEvent, Result } from '@lemmi/contracts';
+  import type {
+    ParticipantProfile,
+    SessionSnapshot,
+    ServerEvent,
+    Result,
+    ActivityView,
+    ActivityAction,
+  } from '@lemmi/contracts';
   let {
     demoEnrollment = false,
     requestedProfileId = null,
@@ -28,6 +35,9 @@
   let textAvailable = $state(false);
   let speechAvailable = $state(false);
   let teachingAvailable = $state(false);
+  let photoAvailable = $state(false);
+  let photo = $state<Extract<ActivityView, { activityId: 'photo_album' }> | null>(null);
+  let photoLoadError = $state(false);
   let outputBlocked = true;
   let replyBlocked = true;
   let outputAfterGeneration: number | null = null;
@@ -66,6 +76,18 @@
       textAvailable = event.payload.textChat ?? false;
       speechAvailable = event.payload.audio !== false;
       teachingAvailable = event.payload.teaching ?? false;
+      photoAvailable = event.payload.photoStory ?? false;
+    }
+    if (
+      event.type === 'activity.changed' &&
+      event.session_id === session?.id &&
+      event.generation === session?.generation
+    ) {
+      const next = event.payload.activity;
+      if (next?.activityId === 'photo_album') {
+        if (next.currentAssetId !== photo?.currentAssetId) photoLoadError = false;
+        photo = next;
+      } else photo = null;
     }
     if (event.type === 'state.changed') {
       const next = event.payload.session;
@@ -79,6 +101,7 @@
       )
         reply = '';
       session = next;
+      if (!next || next.phase === 'ended') photo = null;
     }
     if (
       event.type === 'response.text' &&
@@ -103,16 +126,33 @@
     if (type === 'input.mute') audio?.cancelInput();
     else audio?.cancel();
     reply = '';
-    replyBlocked = !type.startsWith('input.teaching.') && type !== 'input.start';
+    const requestsOutput =
+      type.startsWith('input.teaching.') ||
+      type === 'input.start' ||
+      type === 'input.photo.repeat' ||
+      (type === 'input.photo.action' &&
+        !!payload &&
+        typeof payload === 'object' &&
+        'action' in payload &&
+        (payload.action as ActivityAction).type === 'photo.talk');
+    replyBlocked = !requestsOutput;
     // Microphone mute preserves unrelated approved playback. Other controls cancel it locally.
     if (type !== 'input.mute') {
-      outputBlocked = !type.startsWith('input.teaching.') && type !== 'input.start';
+      outputBlocked = !requestsOutput;
       outputAfterGeneration = type.startsWith('input.teaching.')
         ? (session?.generation ?? null)
         : null;
     }
     if (!connection?.send(type, payload, independent))
       message = 'Connection unavailable. Reconnect when ready.';
+  }
+  function photoAction(action: ActivityAction) {
+    if (!photo) return;
+    control('input.photo.action', {
+      instanceId: photo.instanceId,
+      expectedRevision: photo.revision,
+      action,
+    });
   }
   function connect() {
     const epoch = ++connectionEpoch;
@@ -126,6 +166,8 @@
     textAvailable = false;
     speechAvailable = false;
     teachingAvailable = false;
+    photoAvailable = false;
+    photo = null;
     session = null;
     reply = '';
     connection = new ParticipantConnection({
@@ -372,12 +414,72 @@
             disabled={!connected}>Ask for help</button
           >
         </div>
-        <TeachingChoices
-          {session}
-          available={teachingAvailable}
-          disabled={!connected || !ownsEndpoint}
-          command={control}
-        />
+        {#if photoAvailable && (!photo || photo.phase === 'ended')}
+          <button
+            onclick={() => control('input.photo.start')}
+            disabled={!connected ||
+              !ownsEndpoint ||
+              !!session.teaching ||
+              !['ready', 'waiting'].includes(session.phase)}
+          >
+            Start Photo Story
+          </button>
+        {/if}
+        {#if photo && photo.phase !== 'ended'}
+          <section class="card public-photo" aria-labelledby="photo-story-title">
+            <h2 id="photo-story-title">Photo Story</h2>
+            <p>Reviewed illustrations · Caption-based conversation · No image analysis</p>
+            {#if photo.currentAssetId}
+              {#key photo.currentAssetId}
+                <img
+                  src={`/v1/demo/photo-assets/${encodeURIComponent(photo.currentAssetId)}`}
+                  alt={photo.caption ?? 'Reviewed illustration'}
+                  onerror={() => {
+                    photoLoadError = true;
+                    audio?.cancel();
+                    if (ownsEndpoint) control('input.pause');
+                  }}
+                />
+              {/key}
+              <p>{photo.caption}</p>
+            {/if}
+            {#if photoLoadError}<p role="alert">
+                The picture could not be loaded. Resume and skip it, or finish Photo Story.
+              </p>{/if}
+            <p>{photo.phase === 'paused' ? 'Paused. Resume when ready.' : photo.prompt}</p>
+            <div class="controls">
+              {#each photo.choices as choice}
+                <button
+                  onclick={() => photoAction(choice.action)}
+                  disabled={!connected ||
+                    !ownsEndpoint ||
+                    session.phase === 'paused' ||
+                    (photoLoadError && choice.action.type === 'photo.talk')}>{choice.label}</button
+                >
+              {/each}
+              <button
+                onclick={() => control('input.photo.repeat')}
+                disabled={!connected ||
+                  !ownsEndpoint ||
+                  photo.viewingMode !== 'talk' ||
+                  !['ready', 'waiting'].includes(session.phase)}>Repeat question</button
+              >
+              <button
+                onclick={() => photoAction({ type: 'activity.leave' })}
+                disabled={!connected || !ownsEndpoint || session.phase === 'paused'}
+                >Finish Photo Story</button
+              >
+            </div>
+          </section>
+        {/if}
+        {#if !photo || photo.phase === 'ended'}
+          <TeachingChoices
+            {session}
+            available={teachingAvailable}
+            disabled={!connected || !ownsEndpoint}
+            command={control}
+          />
+        {/if}
         {#if speechAvailable && ownsEndpoint}
           {#if listening}<button onclick={() => audio?.finish()}>Finish speaking</button>
           {:else}<button
@@ -549,6 +651,12 @@
     }
   }
 
+  .public-photo img {
+    width: 100%;
+    max-height: 40dvh;
+    object-fit: contain;
+    border-radius: 20px;
+  }
   .live-companion {
     padding: 96px 24px 48px;
     align-content: start;

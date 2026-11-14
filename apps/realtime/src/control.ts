@@ -1,3 +1,4 @@
+import { handlePhotoScene } from '../../../packages/server/src/photo-scene';
 import {
   DeviceEventSchema,
   ServerEventSchema,
@@ -70,8 +71,15 @@ export function startControlGateway(options: Options) {
     options.speech ? createScheduledSpeechAdapters(options.speech) : undefined,
     now,
     () => broadcast(),
+    options.demoEnrollment === true,
   );
   for (const profile of options.profiles ?? []) sessions.acceptPersistentProfile(profile);
+  // In-memory fixtures explicitly enroll fictional profiles; PostgreSQL supplies its own is_demo check.
+  if (!options.repository && options.demoEnrollment) {
+    sessions.authorizePhotoDemoProfile('profile-alex', true);
+    for (const profile of options.profiles ?? [])
+      sessions.authorizePhotoDemoProfile(profile.id, true);
+  }
   const sockets = new Set<Bun.ServerWebSocket<SocketData>>();
   const reservations = new Map<string, { id: string; at: number }>();
   const ownsEndpoint = (identity: DeviceIdentity) =>
@@ -186,6 +194,8 @@ export function startControlGateway(options: Options) {
       if (socket.data.hello && access.current(socket.data.identity)) {
         const coordinator = sessions.forProfile(socket.data.identity.profileId);
         emit(socket, 'state.changed', { mode: 'live', session: coordinator.snapshot() });
+        if (socket.data.identity.endpoint === 'browser' && coordinator.publicPhotoEnabled())
+          emit(socket, 'activity.changed', { activity: coordinator.photoView() });
         const output = coordinator.speechOutputInfo();
         if (socket.data.speechOutput && socket.data.speechOutput.streamId !== output?.streamId) {
           emit(socket, 'response.cancel', {
@@ -277,6 +287,11 @@ export function startControlGateway(options: Options) {
         if (url.pathname === '/internal/data') {
           if (!data || !raw || typeof raw !== 'object')
             return controlResponse(fail('UNAVAILABLE', 'PostgreSQL data mode is not configured'));
+          if ('operation' in raw && raw.operation === 'photo.scene.read') {
+            if (!options.demoEnrollment)
+              return controlResponse(fail('UNAVAILABLE', 'Fictional Photo Story is disabled'));
+            return handlePhotoScene(raw, data, sessions);
+          }
           const { actor, credential, ...operation } = raw as Record<string, unknown>;
           try {
             const result = await data.handle(operation, actor, credential);
@@ -515,6 +530,7 @@ export function startControlGateway(options: Options) {
             camera: false,
             textChat: !!options.chatAdapter,
             teaching: true,
+            photoStory: ws.data.identity.endpoint === 'browser' && coordinator.publicPhotoEnabled(),
             controls: [
               'start',
               'stop',
@@ -567,6 +583,114 @@ export function startControlGateway(options: Options) {
           !ownsEndpoint(ws.data.identity)
         ) {
           error(ws, 'FORBIDDEN', 'Use an explicit handoff to control this session', event.event_id);
+          return;
+        }
+        if (
+          event.type === 'input.photo.start' ||
+          event.type === 'input.photo.action' ||
+          event.type === 'input.photo.repeat'
+        ) {
+          if (ws.data.identity.endpoint !== 'browser' || !coordinator.publicPhotoEnabled()) {
+            error(
+              ws,
+              'UNAVAILABLE',
+              'Photo Story is available only on an enabled browser endpoint',
+              event.event_id,
+            );
+            return;
+          }
+          // The generic owner/current-generation guards above bind all photo actions
+          // to this endpoint's profile and current audio lease; clients choose no pack.
+          let actionAccepted = false;
+          if (event.type !== 'input.photo.repeat') {
+            const result =
+              event.type === 'input.photo.start'
+                ? coordinator.startPhoto(event.event_id)
+                : coordinator.handle('activities.submit', {
+                    sessionId: current!.id,
+                    commandId: event.event_id,
+                    ...event.payload,
+                  });
+            emit(ws, 'command.ack', {
+              mode: 'live',
+              commandId: event.event_id,
+              applied: result.ok,
+            });
+            if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
+            broadcast();
+            if (
+              !result.ok ||
+              event.type === 'input.photo.start' ||
+              event.payload.action.type !== 'photo.talk'
+            )
+              return;
+            actionAccepted = true;
+          }
+          // Provider work is never awaited by the socket handler. Stop/Pause/mute,
+          // profile changes and handoff can immediately invalidate the result.
+          const selected = coordinator.snapshot()!;
+          const purpose = event.type === 'input.photo.repeat' ? 'photo_repeat' : 'photo_opening';
+          const work = coordinator.speakText(
+            {
+              sessionId: selected.id,
+              expectedGeneration: selected.generation,
+              commandId: event.event_id,
+              text: 'Photo Story',
+              language: 'en',
+              purpose,
+            },
+            ws.data.playbackRates,
+          );
+          broadcast();
+          void work
+            .then((result) => {
+              if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
+              const latest = coordinator.snapshot();
+              if (
+                result.ok &&
+                result.data.kind === 'reply' &&
+                (!ownsEndpoint(ws.data.identity) ||
+                  !coordinator.isCurrentTextReply(result.data.reply.turnId) ||
+                  !latest ||
+                  latest.phase === 'ended' ||
+                  latest.phase === 'paused' ||
+                  latest.id !== result.data.session.id ||
+                  latest.generation !== result.data.session.generation ||
+                  latest.leaseId !== result.data.session.leaseId ||
+                  latest.profileRevision !== result.data.session.profileRevision ||
+                  latest.privacyRevision !== result.data.session.privacyRevision ||
+                  latest.policyRevision !== result.data.session.policyRevision)
+              ) {
+                error(
+                  ws,
+                  'REVISION_CONFLICT',
+                  'Discarded obsolete Photo Story output',
+                  event.event_id,
+                );
+                return;
+              }
+              if (!actionAccepted)
+                emit(ws, 'command.ack', {
+                  mode: 'live',
+                  commandId: event.event_id,
+                  applied: result.ok,
+                });
+              if (
+                result.ok &&
+                result.data.kind === 'reply' &&
+                !ws.data.deliveredText.has(result.data.reply.turnId)
+              ) {
+                if (ws.data.deliveredText.size >= 256) ws.data.deliveredText.clear();
+                ws.data.deliveredText.add(result.data.reply.turnId);
+                emit(ws, 'response.text', result.data.reply);
+              } else if (!result.ok)
+                error(ws, result.error.code, result.error.message, event.event_id);
+              broadcast();
+            })
+            .catch(() => {
+              if (sockets.has(ws))
+                error(ws, 'UNAVAILABLE', 'Photo Story conversation unavailable', event.event_id);
+            });
           return;
         }
         if (event.type === 'input.speak' || media) {

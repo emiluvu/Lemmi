@@ -13,6 +13,7 @@ type ProfileSessions = Pick<
 > & {
   pauseForProfileUpdate(patch: Record<string, unknown>, profileId?: string): void;
   forProfile?(profileId: string): SessionCoordinator;
+  authorizePhotoDemoProfile?(profileId: string, enabled: boolean): void;
 };
 
 export function dataConfig(env: Record<string, string | undefined> = process.env) {
@@ -50,11 +51,16 @@ export class PersistentData {
       await this.repository.bootstrap(this.subject);
       await this.devices.start();
       const profiles = await this.repository.listProfiles(this.subject);
+      const demoIds = new Set(
+        (await this.repository.listProfiles(this.subject, true)).map((p) => p.id),
+      );
       for (const profile of profiles) {
-        if (this.coordinator.forProfile || profile.id === 'profile-alex')
+        if (this.coordinator.forProfile || profile.id === 'profile-alex') {
           this.coordinator.acceptPersistentProfile(
             await this.repository.approvedProfile(this.subject, profile.id),
           );
+          this.coordinator.authorizePhotoDemoProfile?.(profile.id, demoIds.has(profile.id));
+        }
       }
     } catch (error) {
       await this.close();
@@ -164,6 +170,7 @@ export class PersistentData {
         this.devices.bootId,
       );
       this.coordinator.acceptPersistentProfile(profile);
+      this.coordinator.authorizePhotoDemoProfile?.(profile.id, true);
       return ok(
         (await this.repository.listProfiles(this.subject, true)).find(
           (value) => value.id === profile.id,
