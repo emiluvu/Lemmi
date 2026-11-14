@@ -22,6 +22,7 @@ import {
   type SessionSnapshot,
   type ActivityState,
   type ActivityContext,
+  type SpeechOutputWindow,
   type Journal,
   type HelpSnapshot,
   type ApprovedPack,
@@ -230,21 +231,21 @@ export class SessionCoordinator {
     else if (run.since === null) run.since = this.now();
   }
   private readonly speech?: SpeechTurns;
-  async speakTeachingPrompt(raw: unknown, rates: number[]) {
+  async speakTeachingPrompt(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
     this.sweepTeaching();
     if (this.configurationChanges.size)
       return fail('REVISION_CONFLICT', 'Configuration save is pending');
     const prompt = this.session?.teaching?.prompt;
     if (!prompt) return fail('UNAVAILABLE', 'No current teaching prompt');
     return (
-      this.speech?.speakApproved(raw, rates, prompt) ??
+      this.speech?.speakApproved(raw, rates, prompt, outputWindow) ??
       fail('UNAVAILABLE', 'Speech adapters are disabled')
     );
   }
   speechConfigured() {
     return !!this.speech;
   }
-  requestCapture(raw: unknown, rates: number[]) {
+  requestCapture(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
     this.sweepTeaching();
     if (this.session?.teaching && !this.session.teaching.entityId)
       return fail('UNAVAILABLE', 'Choose another activity or finish; no eligible teaching topic');
@@ -254,7 +255,8 @@ export class SessionCoordinator {
       return fail('REVISION_CONFLICT', 'Leave the activity before speaking');
     if (this.pendingChat) return fail('REVISION_CONFLICT', 'A text turn is pending');
     const result =
-      this.speech?.start(raw, rates) ?? fail('UNAVAILABLE', 'Speech adapters are disabled');
+      this.speech?.start(raw, rates, outputWindow) ??
+      fail('UNAVAILABLE', 'Speech adapters are disabled');
     if (result.ok) this.lastChat = null;
     return result;
   }
@@ -268,11 +270,16 @@ export class SessionCoordinator {
       fail('UNAVAILABLE', 'Speech adapters are disabled'));
     return this.photoTextFallback(result, (raw as { turnId?: string })?.turnId);
   }
-  async speakText(raw: unknown, rates = [16000, 22050, 24000, 44100, 48000]) {
+  async speakText(
+    raw: unknown,
+    rates = [16000, 22050, 24000, 44100, 48000],
+    outputWindow: SpeechOutputWindow = 4,
+  ) {
     if (!this.photoStoryEnabled())
       return fail('UNAVAILABLE', 'Photo Story is not enabled for this profile');
-    const result = await ((rates.length ? this.speech?.speak(raw, rates) : undefined) ??
-      this.submitText(raw));
+    const result = await ((rates.length
+      ? this.speech?.speak(raw, rates, outputWindow)
+      : undefined) ?? this.submitText(raw));
     return this.photoTextFallback(result, (raw as { commandId?: string })?.commandId);
   }
   private photoTextFallback(
@@ -1289,7 +1296,11 @@ export class SessionCoordinator {
           return fail('REVISION_CONFLICT', 'Leave the current activity first');
         if (input.activityId === 'photo_album') {
           this.cancelChat();
-          this.session = { ...this.session, generation: this.session.generation + 1, captureGrant: null };
+          this.session = {
+            ...this.session,
+            generation: this.session.generation + 1,
+            captureGrant: null,
+          };
         }
         this.context = this.activityContext(this.session.id);
         this.activity = createActivity(

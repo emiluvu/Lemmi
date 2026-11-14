@@ -4,6 +4,8 @@ import { IdSchema, RevisionSchema } from './common';
 export const SPEECH_CAPTURE_MS = 20_000;
 export const SPEECH_FRAME_BYTES = 640;
 export const SPEECH_OUTPUT_WINDOW = 4;
+export const SPEECH_BROWSER_OUTPUT_WINDOW = 12;
+export type SpeechOutputWindow = 4 | 12;
 export const SpeechSampleRateSchema = z.union([
   z.literal(16000),
   z.literal(22050),
@@ -15,6 +17,7 @@ export const PlaybackCapabilitySchema = z.strictObject({
   encoding: z.literal('pcm_s16le'),
   channels: z.literal(1),
   sampleRates: z.array(SpeechSampleRateSchema).min(1).max(5),
+  outputWindowChunks: z.union([z.literal(4), z.literal(12)]).optional(),
 });
 const current = {
   sessionId: IdSchema,

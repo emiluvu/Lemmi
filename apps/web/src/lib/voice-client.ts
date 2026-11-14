@@ -63,6 +63,7 @@ export class VoiceClient {
   private listenTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private output: Output | null = null;
+  private outputWindow = 4;
   private nodes = new Set<AudioBufferSourceNode>();
   private playbackSpans = new Map<AudioBufferSourceNode, [number, number]>();
   private playbackTimer: ReturnType<typeof setInterval> | null = null;
@@ -225,6 +226,7 @@ export class VoiceClient {
             encoding: 'pcm_s16le',
             channels: 1,
             sampleRates: [16000, 22050, 24000, 44100, 48000],
+            outputWindowChunks: 12,
           },
         });
         this.heartbeat = setInterval(() => {
@@ -275,6 +277,7 @@ export class VoiceClient {
     this.lastSeen = performance.now();
     if (e.type === 'device.ready') {
       const audio = e.payload.audio !== false;
+      this.outputWindow = e.payload.audio !== false ? e.payload.audio.outputWindowChunks : 4;
       this.update({
         ready: true,
         audio,
@@ -394,7 +397,7 @@ export class VoiceClient {
         p.leaseId !== m.leaseId ||
         e.turn_id !== m.turnId ||
         p.chunkIndex !== out.received ||
-        out.received - out.consumed >= 4
+        out.received - out.consumed >= this.outputWindow
       )
         throw new Error('Out of order output');
       const bytes = Math.min(m.chunkBytes, m.byteLength - p.chunkIndex * m.chunkBytes);
@@ -423,7 +426,7 @@ export class VoiceClient {
         if (out.consumed === 1) this.sendReceipt(m, 'started', 0);
         if (out.ended && out.consumed === m.chunkCount) this.completeOutput(out);
         // Two consumed frames per progress receipt keeps this client below the
-        // deployed gateway's 30-control/sec budget while maintaining four-frame credit.
+        // deployed gateway's 30-control/sec budget while replenishing negotiated credit.
         else if (out.consumed % 2 === 0) this.sendReceipt(m, 'progress', out.consumed);
       };
       node.start(at);

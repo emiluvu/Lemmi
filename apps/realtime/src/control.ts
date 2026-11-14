@@ -44,6 +44,7 @@ type SocketData = {
   messages: number;
   deliveredText: Set<string>;
   playbackRates: number[];
+  outputWindow: 4 | 12;
   mediaMessages: number;
   speechOutput?: SpeechOutputStart;
 };
@@ -432,6 +433,7 @@ export function startControlGateway(options: Options) {
           messages: 0,
           deliveredText: new Set<string>(),
           playbackRates: [],
+          outputWindow: 4,
           mediaMessages: 0,
         },
       });
@@ -442,7 +444,7 @@ export function startControlGateway(options: Options) {
     websocket: {
       maxPayloadLength: 4096,
       idleTimeout: 10,
-      backpressureLimit: 16384,
+      backpressureLimit: 65536,
       closeOnBackpressureLimit: true,
       open(ws) {
         sockets.add(ws);
@@ -525,6 +527,11 @@ export function startControlGateway(options: Options) {
             event.payload.playback
               ? [...event.payload.playback.sampleRates]
               : [];
+          ws.data.outputWindow =
+            ws.data.identity.endpoint === 'browser' &&
+            event.payload.playback?.outputWindowChunks === 12
+              ? 12
+              : 4;
           emit(ws, 'device.ready', {
             mode: 'live',
             deviceId: ws.data.identity.deviceId,
@@ -541,7 +548,7 @@ export function startControlGateway(options: Options) {
                   frameMs: 20,
                   maxCaptureMs: 20000,
                   playback: event.payload.playback!,
-                  outputWindowChunks: 4,
+                  outputWindowChunks: ws.data.outputWindow,
                 }
               : false,
             camera: false,
@@ -657,6 +664,7 @@ export function startControlGateway(options: Options) {
               purpose,
             },
             ws.data.playbackRates,
+            ws.data.outputWindow,
           );
           broadcast();
           void work
@@ -732,6 +740,7 @@ export function startControlGateway(options: Options) {
                 language: event.payload.language,
               },
               ws.data.playbackRates,
+              ws.data.outputWindow,
             );
             emit(ws, 'command.ack', {
               mode: 'live',
@@ -908,6 +917,7 @@ export function startControlGateway(options: Options) {
                   language: 'en',
                 },
                 ws.data.playbackRates,
+                ws.data.outputWindow,
               )
               .then((spoken) => {
                 if (!spoken.ok && sockets.has(ws))

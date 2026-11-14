@@ -10,6 +10,8 @@ import {
   SPEECH_CAPTURE_MS,
   SPEECH_FRAME_BYTES,
   SPEECH_OUTPUT_WINDOW,
+  SPEECH_BROWSER_OUTPUT_WINDOW,
+  type SpeechOutputWindow,
   type SessionSnapshot,
   type ConversationTextResult,
   type Result,
@@ -34,6 +36,7 @@ type Owner = {
   language: 'en' | 'de';
   commandId: string;
   rates: number[];
+  outputWindow: SpeechOutputWindow;
   began: number;
   deadline: number;
   phase: 'capture' | 'processing' | 'queued' | 'playing';
@@ -251,7 +254,11 @@ export class SpeechTurns {
     }
     return false;
   }
-  start(raw: unknown, rates: number[]): Result<SessionSnapshot> {
+  start(
+    raw: unknown,
+    rates: number[],
+    outputWindow: SpeechOutputWindow = SPEECH_OUTPUT_WINDOW,
+  ): Result<SessionSnapshot> {
     const parsed = SpeechStartCommandSchema.safeParse(raw);
     if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid capture request');
     const input = parsed.data,
@@ -289,6 +296,10 @@ export class SpeechTurns {
       language: input.language,
       commandId: input.commandId,
       rates: [...rates],
+      outputWindow:
+        s.endpoint === 'browser' && outputWindow === SPEECH_BROWSER_OUTPUT_WINDOW
+          ? SPEECH_BROWSER_OUTPUT_WINDOW
+          : SPEECH_OUTPUT_WINDOW,
       began: this.now(),
       deadline: this.now() + SPEECH_CAPTURE_MS,
       phase: 'capture',
@@ -318,6 +329,7 @@ export class SpeechTurns {
     raw: unknown,
     rates: number[],
     text: string,
+    outputWindow: SpeechOutputWindow = SPEECH_OUTPUT_WINDOW,
   ): Promise<Result<ConversationTextResult>> {
     const parsed = SpeechStartCommandSchema.safeParse(raw),
       s = this.snapshot();
@@ -345,6 +357,10 @@ export class SpeechTurns {
       language: input.language,
       commandId: input.commandId,
       rates: [...rates],
+      outputWindow:
+        s.endpoint === 'browser' && outputWindow === SPEECH_BROWSER_OUTPUT_WINDOW
+          ? SPEECH_BROWSER_OUTPUT_WINDOW
+          : SPEECH_OUTPUT_WINDOW,
       began: this.now(),
       deadline: this.now() + 20_000,
       phase: 'processing',
@@ -371,7 +387,11 @@ export class SpeechTurns {
     });
   }
   // Typed openings/repeats use the same output owner, validation and receipts as STT replies.
-  async speak(raw: unknown, rates: number[]): Promise<Result<ConversationTextResult>> {
+  async speak(
+    raw: unknown,
+    rates: number[],
+    outputWindow: SpeechOutputWindow = SPEECH_OUTPUT_WINDOW,
+  ): Promise<Result<ConversationTextResult>> {
     const parsed = ConversationTextCommandSchema.safeParse(raw),
       s = this.snapshot();
     if (
@@ -395,6 +415,10 @@ export class SpeechTurns {
       streamId: crypto.randomUUID(),
       language: input.language,
       rates: [...rates],
+      outputWindow:
+        s.endpoint === 'browser' && outputWindow === SPEECH_BROWSER_OUTPUT_WINDOW
+          ? SPEECH_BROWSER_OUTPUT_WINDOW
+          : SPEECH_OUTPUT_WINDOW,
       began: this.now(),
       deadline: this.now() + 60000,
       phase: 'processing',
@@ -637,7 +661,7 @@ export class SpeechTurns {
     const start = !v.announced;
     v.announced = true;
     const chunks: SpeechOutputChunk[] = [];
-    while (v.sent < metadata.chunkCount && v.sent < v.played + SPEECH_OUTPUT_WINDOW) {
+    while (v.sent < metadata.chunkCount && v.sent < v.played + v.outputWindow) {
       const chunkIndex = v.sent++;
       const bytes = v.output.pcm.subarray(
         chunkIndex * metadata.chunkBytes,

@@ -46,7 +46,10 @@ class Node {
   port = { onmessage: null as ((e: { data: Float32Array }) => void) | null };
   connect() {}
   disconnect() {}
-  start() {}
+  startedAt: number | null = null;
+  start(at: number) {
+    this.startedAt = at;
+  }
   stop() {
     this.stopped = true;
   }
@@ -670,6 +673,142 @@ test('deployed voice uses the enrolled browser socket and rejects another endpoi
     expect(d.state().reply).toBe('');
     await d.client.speak();
     expect(d.ws.sent.some((e: any) => e.type === 'input.speak')).toBe(false);
+  } finally {
+    d.client.close();
+  }
+});
+
+function negotiatedVoicePlayback(d: Awaited<ReturnType<typeof setup>>, window: 4 | 12) {
+  d.emit('device.ready', {
+    mode: 'live',
+    deviceId: 'stackchan-alex',
+    profileId: 'profile-alex',
+    credentialExpiresAt: null,
+    audio: {
+      encoding: 'pcm_s16le',
+      sampleRate: 16000,
+      channels: 1,
+      frameMs: 20,
+      maxCaptureMs: 20000,
+      playback: { encoding: 'pcm_s16le', channels: 1, sampleRates: [16000] },
+      outputWindowChunks: window,
+    },
+    camera: false,
+    teaching: true,
+    controls: ['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak'],
+  });
+}
+function voiceChunk(d: Awaited<ReturnType<typeof setup>>, metadata: any, chunkIndex: number) {
+  d.emit(
+    'audio.chunk',
+    {
+      leaseId: metadata.leaseId,
+      streamId: metadata.streamId,
+      chunkIndex,
+      encoding: 'pcm_s16le',
+      data: Buffer.alloc(metadata.chunkBytes).toString('base64'),
+    },
+    metadata.turnId,
+  );
+}
+test('voice client negotiates twelve queued frames with continuous scheduled times and truthful consumption', async () => {
+  const d = await setup();
+  try {
+    const hello = d.ws.sent.find((e) => e.type === 'device.hello');
+    expect(hello.payload.playback.outputWindowChunks).toBe(12);
+    negotiatedVoicePlayback(d, 12);
+    const metadata = {
+      turnId: 'buffered-turn',
+      leaseId: d.session.leaseId,
+      streamId: 'buffered-stream',
+      encoding: 'pcm_s16le',
+      channels: 1,
+      sampleRate: 16000,
+      chunkBytes: 640,
+      chunkCount: 12,
+      byteLength: 7680,
+    };
+    d.emit('response.start', metadata, metadata.turnId);
+    for (let i = 0; i < 12; i++) voiceChunk(d, metadata, i);
+    expect(Context.last.nodes).toHaveLength(12);
+    expect(d.ws.sent.filter((e) => e.type === 'audio.receipt')).toHaveLength(0);
+    for (let i = 0; i < 12; i++)
+      expect(Context.last.nodes[i]!.startedAt).toBeCloseTo(0.08 + i * 0.02, 8);
+    d.emit(
+      'audio.end',
+      { leaseId: metadata.leaseId, streamId: metadata.streamId, chunkCount: 12 },
+      metadata.turnId,
+    );
+    expect(d.ws.sent.filter((e) => e.type === 'audio.receipt')).toHaveLength(0);
+    Context.last.nodes[0]!.onended!();
+    expect(
+      d.ws.sent
+        .filter((e) => e.type === 'audio.receipt')
+        .map((e) => [e.payload.status, e.payload.playedChunks]),
+    ).toEqual([['started', 0]]);
+    Context.last.nodes[1]!.onended!();
+    expect(d.ws.sent.filter((e) => e.type === 'audio.receipt').at(-1).payload).toMatchObject({
+      status: 'progress',
+      playedChunks: 2,
+    });
+    for (let i = 2; i < 12; i++) Context.last.nodes[i]!.onended!();
+    expect(d.ws.sent.filter((e) => e.type === 'audio.receipt').at(-1).payload).toMatchObject({
+      status: 'completed',
+      playedChunks: 12,
+    });
+  } finally {
+    d.client.close();
+  }
+});
+test('voice client enforces the negotiated four or twelve frame bound and stops scheduled audio locally', async () => {
+  for (const window of [4, 12] as const) {
+    const d = await setup();
+    try {
+      negotiatedVoicePlayback(d, window);
+      const metadata = {
+        turnId: 'bounded-turn',
+        leaseId: d.session.leaseId,
+        streamId: 'bounded-stream',
+        encoding: 'pcm_s16le',
+        channels: 1,
+        sampleRate: 16000,
+        chunkBytes: 640,
+        chunkCount: window + 1,
+        byteLength: 640 * (window + 1),
+      };
+      d.emit('response.start', metadata, metadata.turnId);
+      for (let i = 0; i < window; i++) voiceChunk(d, metadata, i);
+      expect(Context.last.nodes).toHaveLength(window);
+      expect(d.ws.sent.filter((e) => e.type === 'audio.receipt')).toHaveLength(0);
+      voiceChunk(d, metadata, window);
+      expect(Context.last.nodes).toHaveLength(window);
+      expect(Context.last.nodes.every((node) => node.stopped && node.onended === null)).toBe(true);
+      expect(d.state().message).toContain('Invalid audio');
+      expect(d.ws.sent.filter((e) => e.type === 'audio.receipt')).toHaveLength(0);
+    } finally {
+      d.client.close();
+    }
+  }
+  const d = await setup();
+  try {
+    negotiatedVoicePlayback(d, 12);
+    const metadata = {
+      turnId: 'stop-buffered',
+      leaseId: d.session.leaseId,
+      streamId: 'stop-stream',
+      encoding: 'pcm_s16le',
+      channels: 1,
+      sampleRate: 16000,
+      chunkBytes: 640,
+      chunkCount: 12,
+      byteLength: 7680,
+    };
+    d.emit('response.start', metadata, metadata.turnId);
+    for (let i = 0; i < 12; i++) voiceChunk(d, metadata, i);
+    d.client.command('stop');
+    expect(Context.last.nodes.every((node) => node.stopped && node.onended === null)).toBe(true);
+    expect(d.ws.sent.filter((e) => e.type === 'audio.receipt')).toHaveLength(0);
+    expect(d.ws.sent.at(-1).type).toBe('input.stop');
   } finally {
     d.client.close();
   }

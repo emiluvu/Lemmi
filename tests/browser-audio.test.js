@@ -38,7 +38,8 @@ function fixture() {
         onended: null,
         connect() {},
         disconnect() {},
-        start() {
+        start(at) {
+          source.startedAt = at;
           listeners.push(source);
         },
         stop() {
@@ -263,7 +264,7 @@ test('paused fixed speech survives receipt snapshots and completes without grant
     for (let i = 4; i < 8; i++) f.listeners[i].onended();
     expect(
       f.sent.filter(([type]) => type === 'audio.receipt').map(([, payload]) => payload.status),
-    ).toEqual(['started', 'progress', 'progress', 'completed']);
+    ).toEqual(['started', 'progress', 'progress', 'progress', 'progress', 'completed']);
     expect(f.session.phase).toBe('paused');
     expect(f.track.stopped).toBe(true);
     expect(f.sent.filter(([type]) => type === 'input.speak')).toHaveLength(1);
@@ -390,13 +391,13 @@ test('avatar follows consumed playback time and closes on gaps and cancellation'
     // Scheduled audio has not reached the speaker yet.
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(f.playback).toEqual([]);
-    f.context.currentTime = 0.04;
+    f.context.currentTime = 0.09;
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(f.playback.at(-1)).toBe(true);
     f.context.currentTime = 0.2;
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(f.playback.at(-1)).toBe(false);
-    f.context.currentTime = 0.04;
+    f.context.currentTime = 0.09;
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(f.playback.at(-1)).toBe(true);
     f.audio.cancel();
@@ -404,6 +405,101 @@ test('avatar follows consumed playback time and closes on gaps and cancellation'
     const count = f.playback.length;
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(f.playback).toHaveLength(count);
+  } finally {
+    f.restore();
+  }
+});
+
+function readyPlayback(audio, window) {
+  audio.receive(event('device.ready', { audio: { outputWindowChunks: window } }), 'browser');
+}
+function receivePlaybackChunk(f, metadata, chunkIndex) {
+  f.audio.receive(
+    event('audio.chunk', {
+      leaseId: metadata.leaseId,
+      streamId: metadata.streamId,
+      chunkIndex,
+      encoding: 'pcm_s16le',
+      data: btoa('\0'.repeat(metadata.chunkBytes)),
+    }),
+    'browser',
+  );
+}
+test('browser negotiated twelve-frame cushion schedules contiguous audio and credits only consumed frames', async () => {
+  const f = fixture();
+  try {
+    await f.audio.speak();
+    f.audio.cancelInput();
+    readyPlayback(f.audio, 12);
+    const metadata = { ...meta, chunkCount: 12, byteLength: meta.chunkBytes * 12 };
+    f.audio.receive(event('response.start', metadata), 'browser');
+    for (let i = 0; i < 12; i++) receivePlaybackChunk(f, metadata, i);
+    expect(f.listeners).toHaveLength(12);
+    expect(f.sent.filter(([type]) => type === 'audio.receipt')).toHaveLength(0);
+    for (let i = 0; i < 12; i++) expect(f.listeners[i].startedAt).toBeCloseTo(0.08 + i * 0.02, 8);
+    f.audio.receive(
+      event('audio.end', { leaseId: 'lease', streamId: 'output', chunkCount: 12 }),
+      'browser',
+    );
+    expect(f.sent.filter(([type]) => type === 'audio.receipt')).toHaveLength(0);
+    f.listeners[0].onended();
+    expect(
+      f.sent
+        .filter(([type]) => type === 'audio.receipt')
+        .map(([, p]) => [p.status, p.playedChunks]),
+    ).toEqual([['started', 0]]);
+    f.listeners[1].onended();
+    expect(f.sent.filter(([type]) => type === 'audio.receipt').at(-1)[1]).toMatchObject({
+      status: 'progress',
+      playedChunks: 2,
+    });
+    for (let i = 2; i < 12; i++) f.listeners[i].onended();
+    expect(f.sent.filter(([type]) => type === 'audio.receipt').at(-1)[1]).toMatchObject({
+      status: 'completed',
+      playedChunks: 12,
+    });
+  } finally {
+    f.restore();
+  }
+});
+test('browser negotiated playback window stays bounded and Stop cancels every scheduled frame', async () => {
+  for (const window of [4, 12]) {
+    const f = fixture();
+    try {
+      await f.audio.speak();
+      f.audio.cancelInput();
+      readyPlayback(f.audio, window);
+      const metadata = {
+        ...meta,
+        chunkCount: window + 1,
+        byteLength: meta.chunkBytes * (window + 1),
+      };
+      f.audio.receive(event('response.start', metadata), 'browser');
+      for (let i = 0; i < window; i++) receivePlaybackChunk(f, metadata, i);
+      expect(f.listeners).toHaveLength(window);
+      expect(f.sent.filter(([type]) => type === 'audio.receipt')).toHaveLength(0);
+      receivePlaybackChunk(f, metadata, window);
+      expect(f.listeners).toHaveLength(window);
+      expect(f.listeners.every((node) => node.stopped && node.onended === null)).toBe(true);
+      expect(f.sent.filter(([type]) => type === 'audio.receipt').at(-1)[1]).toMatchObject({
+        status: 'failed',
+        playedChunks: 0,
+      });
+    } finally {
+      f.restore();
+    }
+  }
+  const f = fixture();
+  try {
+    await f.audio.speak();
+    f.audio.cancelInput();
+    readyPlayback(f.audio, 12);
+    const metadata = { ...meta, chunkCount: 12, byteLength: meta.chunkBytes * 12 };
+    f.audio.receive(event('response.start', metadata), 'browser');
+    for (let i = 0; i < 12; i++) receivePlaybackChunk(f, metadata, i);
+    f.audio.cancel();
+    expect(f.listeners.every((node) => node.stopped && node.onended === null)).toBe(true);
+    expect(f.sent.filter(([type]) => type === 'audio.receipt')).toHaveLength(0);
   } finally {
     f.restore();
   }

@@ -29,6 +29,7 @@ export class BrowserAudio {
       this.playbackState(speaking);
     }
   }
+  private outputWindow = 4;
   private output: {
     meta: SpeechOutputStart;
     token: SessionSnapshot;
@@ -228,6 +229,9 @@ export class BrowserAudio {
     ].every((key) => token[key as keyof SessionSnapshot] === session[key as keyof SessionSnapshot]);
   }
   receive(event: ServerEvent, deviceId: string) {
+    if (event.type === 'device.ready')
+      this.outputWindow =
+        event.payload.audio !== false ? event.payload.audio.outputWindowChunks : 4;
     const current = this.connection.session;
     if (
       event.type === 'response.text' &&
@@ -311,7 +315,7 @@ export class BrowserAudio {
         played: 0,
         ended: false,
         started: false,
-        next: this.context.currentTime + 0.03,
+        next: this.context.currentTime + 0.08,
         nodes: new Set(),
         spans: new Map(),
       };
@@ -338,7 +342,7 @@ export class BrowserAudio {
         event.payload.chunkIndex !== output.received
       )
         return;
-      if (output.nodes.size >= 4) {
+      if (output.nodes.size >= this.outputWindow) {
         this.receipt('failed', output.played);
         this.cancel();
         this.error('Browser playback fell behind. Try again.');
@@ -383,7 +387,7 @@ export class BrowserAudio {
           this.receipt('started', 0);
         }
         output.played++;
-        if (output.played % 4 === 0) this.receipt('progress', output.played);
+        if (output.played % 2 === 0) this.receipt('progress', output.played);
         this.completed();
       };
       source.start(playAt);

@@ -208,7 +208,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
           frameMs: z.literal(20),
           maxCaptureMs: z.literal(20000),
           playback: PlaybackCapabilitySchema,
-          outputWindowChunks: z.literal(4),
+          outputWindowChunks: z.union([z.literal(4), z.literal(12)]),
         }),
       ]),
       camera: z.literal(false),

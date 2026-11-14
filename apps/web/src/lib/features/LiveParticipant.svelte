@@ -236,6 +236,7 @@
                 encoding: 'pcm_s16le',
                 channels: 1,
                 sampleRates: [16000, 22050, 24000, 44100, 48000],
+                outputWindowChunks: 12,
               },
             }
           : { audio: { supported: false } }),
