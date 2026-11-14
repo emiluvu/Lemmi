@@ -9,40 +9,57 @@ Updated November 13, 2026. This is a restart handoff for a new ChatGPT/Codex acc
 - Read `AGENTS.md`, `firmware/stackchan/README.md`, `firmware/stackchan/hardware-checks.md`, `docs/robot-capabilities-spec.md` and `docs/integration-contracts.md`.
 - Keep firmware implementation on this branch. Anay owns backend/contracts, Kylie UI/art, Lukas activity logic/content. Anay’s separate handoff is already on main: `docs/handoffs/anay-device-integration.md` (`236768d`). Do not recreate the scaffold or move firmware onto main as part of resuming.
 
-## Current session continuation (offline feasibility)
+## Current offline status — resume here
 
-This firmware branch now contains `lemmi-feasibility/0.2`, in a separate sketch;
-foundation source and the private original backup are preserved. Read
-[feasibility checks](../../firmware/stackchan/feasibility-checks.md) before continuing.
-That document contains the implementation architecture, exact build/upload/monitor
-commands, pending local procedure and the limits of each diagnostic.
+0.5 is uploaded and running; Emilia's local upload passed all four image hashes.
+Serial confirms 0.5, 320×240, camera/capture off at boot. Final compile and SCCB
+linker/dry-run checks passed: 635,067 program bytes, 74,140 static globals. No tools
+were installed and the original private backup remains preserved.
 
-Final compile: 635,075 program bytes / 74,140 static-global bytes, PSRAM disabled.
-Host gate tests and linker-map SCCB ownership checks passed. No tools were installed.
-The agent upload attempt was blocked by macOS `Operation not permitted` at USB
-serial open, before any firmware write. The 16 MB backup integrity dry-run passed;
-original backup/evidence was untouched. New transfer diagnostics go under ignored
-`firmware/stackchan/backups/runs/`, rather than overwriting original evidence.
-Emilia subsequently ran the helper in local Terminal successfully: all four flash
-images hash-verified. The saved private upload manifest matches the current build.
-Emilia confirms the visible 0.2 startup screen says **Lemmi offline test** and
-**Camera / microphone off**, with control boxes. The receive-only monitor confirmed
-`firmware=lemmi-feasibility/0.2 display=320x240 capture=off camera=off` at
-2026-11-14 03:39:50 UTC. Emilia tapped Camera test and saw **Preview on this screen**
-with camera/mic still off. Allow has not been confirmed. Not now was instructed,
-but its result is unreported; the request may since have expired. Next: resume the
-local procedure with Emilia one action at a time, restarting the bounded monitor
-if needed. Decline/expiry, active camera/mic/tone and Stop-latency checks are pending.
+Observed locally across 0.4/0.5:
 
-The new sketch requires local Allow for a 15-second RGB565 preview, a separate
-local tone action, and Unmute plus a separate 5-second mic test action. No network,
-recording, raw payload logging or movement is implemented. Camera uses an
-application SCCB adapter through M5's bus and a single worker with a pinned internal
-HAL timeout API; review those details before changing SDK versions. Stop/expiry,
-real peripheral coexistence and actual latency still need the local procedure.
-F13/F14 acceptance remains pending.
+- Explicit camera permission prompt, then correct-color 160×120 RGB565 preview
+  (38400 bytes per frame), 15-second expiry and early local camera Stop.
+  Camera teardown was 64 ms on expiry / 65 ms on local Stop in recorded runs.
+- Unmute leaves capture off. Explicit 16 kHz mono int16 mic test produced a bar
+  responsive to Emilia's voice. Active local Mute reported 4 ms handler cleanup.
+- Global Stop during active mic reported `reason=local cleanup_ms=4` at
+  04:21:28 UTC. A separate active tone Stop reported `reason=local cleanup_ms=5`
+  at 04:22:02 UTC; Emilia confirms the sound cut off early.
+- Tone at 64/255 is audible. Earlier 24/255 tones were inaudible despite library
+  acceptance; the pinned library squares master volume.
 
-## What is running and verified
+Handler times begin after touch detection; they do not measure physical-input
+latency. Audio/camera tests are offline and require separate local activation.
+No raw audio/frame recording, payload logging, network or motion was added.
+
+Anay can develop speech adapters against the proposed shared 16 kHz mono
+pcm_s16le contract: 20 ms / 320 samples / 640 bytes, base64 in current JSON schema.
+Actual firmware mic requests are 256 samples; bounded packetization and live
+WSS/pairing/capture grants/output leases/receipts remain to implement together.
+No intelligible speech or end-to-end STT/TTS is yet verified. Camera transport
+encoding also remains unresolved: hardware preview is RGB565, shared schema JPEG.
+
+Next hardware checks: sequential audio→camera→audio reuse, additional expiry/
+request/decline/reboot edge cases and repeated/peak heap measurements. Next
+integration handoff: agreed authenticated live control/media contracts from Anay.
+No F13/F14 acceptance, general watchdog proof or network-load latency is claimed.
+Guide Emilia through any further local tests one action at a time.
+
+## Earlier experiment findings
+
+0.2 rejected a received HAL frame with ESP_ERR_INVALID_SIZE (260), because the
+short-timeout cam_take path does not initialize width/height/format. The pinned
+SDK disassembly confirmed that esp_camera_fb_get normally fills these fields.
+0.3 restored that metadata step and added a regression test; actual preview then
+worked but colors were wrong. 0.4 removed the extra display byte swap to match
+the vendor example, which Emilia verified fixed the colors. 0.5 raised tone
+volume from 24/255 to 64/255, which Emilia verified was audible. See
+[feasibility checks](../../firmware/stackchan/feasibility-checks.md) for the exact
+per-run measurements and remaining gaps. All changes are on the firmware branch;
+check git status/log before assuming the latest local work is pushed.
+
+## Original foundation hardware evidence
 
 Stackchan is connected to this Mac at **`/dev/cu.usbmodem2101`**; recheck the port before using it. It is an ESP32-S3 revision v0.2 with 16 MB flash. Secure Boot and flash encryption reported disabled; no eFuses were changed.
 

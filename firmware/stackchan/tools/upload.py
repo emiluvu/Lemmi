@@ -35,7 +35,7 @@ if backup.stat().st_size != 16777216 or hashlib.sha256(backup.read_bytes()).hexd
 lock = json.loads((root / "toolchain.json").read_text())
 build = root / "build" / args.target
 sketch = "lemmi_" + args.target
-firmware = "lemmi-foundation/0.1" if args.target == "foundation" else "lemmi-feasibility/0.2"
+firmware = "lemmi-foundation/0.1" if args.target == "foundation" else "lemmi-feasibility/0.5"
 if json.loads((build / "build.options.json").read_text())["fqbn"] != lock["fqbn"]:
     raise SystemExit("Build target differs from pinned toolchain")
 # Same four offsets/images as the pinned M5Stack platform.txt upload recipe.

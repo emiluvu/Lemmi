@@ -4,6 +4,7 @@
 #include <atomic>
 #include "LocalGate.h"
 #include "CameraBus.h"
+#include "CameraFrame.h"
 
 // Version-specific internal camera HAL entry point from the pinned 3.3.10 SDK.
 // Its declaration is verified against upstream cam_hal.h; build/link checks pin
@@ -121,7 +122,12 @@ void cameraWorker(void*) {
           continue;
         }
         lastGood = millis();
-        const bool valid = fb->format == PIXFORMAT_RGB565 && fb->width == 160 && fb->height == 120 && fb->len == sizeof(preview);
+        const bool valid = finalizePreviewFrame(fb, sensor, resolution, FRAMESIZE_QQVGA, PIXFORMAT_RGB565);
+        if (!frames || !valid) {
+          Serial.printf("event=camera_frame width=%u height=%u format=%d bytes=%lu valid=%u\n",
+                        unsigned(fb->width), unsigned(fb->height), int(fb->format),
+                        (unsigned long)fb->len, unsigned(valid));
+        }
         if (valid && cameraWanted.load() && uint32_t(millis() - started) < 15000) {
           xSemaphoreTake(frameLock, portMAX_DELAY);
           if (cameraWanted.load()) {
@@ -165,7 +171,7 @@ void startAudio(bool mic) {
   bool ok;
   if (mic) { M5.Speaker.end(); ok = M5.Mic.begin(); }
   else {
-    M5.Mic.end(); M5.Speaker.setVolume(24);
+    M5.Mic.end(); M5.Speaker.setVolume(64);
     ok = M5.Speaker.begin() && M5.Speaker.tone(440, 1000);
   }
   Serial.printf("event=audio_start kind=%s ok=%u\n", mic ? "mic" : "tone", unsigned(ok));
@@ -184,7 +190,7 @@ void setup() {
   M5.Mic.end(); M5.Speaker.end();
   workerAvailable = xTaskCreatePinnedToCore(cameraWorker, "camera-test", 8192, nullptr, 1, &cameraTask, 0) == pdPASS;
   draw();
-  Serial.printf("firmware=lemmi-feasibility/0.2 display=%dx%d capture=off camera=off\n", M5.Display.width(), M5.Display.height());
+  Serial.printf("firmware=lemmi-feasibility/0.5 display=%dx%d capture=off camera=off\n", M5.Display.width(), M5.Display.height());
 }
 void loop() {
   const uint32_t now = millis();
@@ -231,8 +237,12 @@ void loop() {
   if (dirty) draw();
   if (gate.mode == LocalGate::Camera && cameraWanted.load() && xSemaphoreTake(frameLock, 0) == pdTRUE) {
     if (fresh && gate.accepts(previewToken) && uint32_t(millis() - previewAt) < 1500) {
-      M5.Display.setSwapBytes(true);
+      // Match the vendor's uint16_t RGB565 pushImage path (default swap=false).
+      // An additional swap scrambled colors on the observed 0.3 preview.
+      const bool previousSwap = M5.Display.getSwapBytes();
+      M5.Display.setSwapBytes(false);
       M5.Display.pushImage(80, 60, 160, 120, preview);
+      M5.Display.setSwapBytes(previousSwap);
       fresh = false; lastFrameShown = millis();
     }
     xSemaphoreGive(frameLock);

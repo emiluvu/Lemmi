@@ -9,7 +9,13 @@ The `emilia/firmware-foundation` branch contains an initial standalone display/t
 A separate `lemmi_feasibility/` sketch now implements local Allow/Stop/expiry camera
 preview and separate tone/mic tests. It is compile-checked and locally uploaded
 with all four image hashes verified. Emilia confirms the startup screen shows camera
-and microphone off; active camera/audio results remain pending. Read [feasibility checks](feasibility-checks.md) for architecture, exact
+and microphone off. A later 0.3 run produced a real preview with incorrect colors;
+15-second automatic expiry and 64 ms teardown were observed. 0.4 source adjusts
+byte order; 0.4 is now hardware-verified for correct colors, one automatic expiry
+and one active local Stop (65 ms teardown in that run). Emilia observed a mic
+level response to her voice on 0.4 and audible generated-tone output on 0.5 at
+64/255. Local mic Mute/global Stop and early audible-output Stop were subsequently
+observed on 0.5. The live STT/TTS path and sustained peripheral reuse remain pending. Read [feasibility checks](feasibility-checks.md) for architecture, exact
 commands, measured-versus-proposed limits and the local test procedure. The agent's
 upload attempt was blocked by macOS serial access before any firmware write;
 Emilia subsequently completed the upload from local Terminal. The original foundation sketch and verified private backup are preserved.

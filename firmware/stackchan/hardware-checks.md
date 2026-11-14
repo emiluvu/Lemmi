@@ -37,3 +37,56 @@ this build. Emilia confirms the startup screen shows **Lemmi offline test** and
 still showing camera/mic off; Allow has not been confirmed. Active camera/audio,
 decline/expiry, runtime memory and Stop latency remain pending.
 All hardware rows above remain scoped to the previously verified foundation test.
+
+Emilia subsequently allowed the 0.2 camera test: the on notice appeared, preview
+remained black and the test failed. A repeat's serial result was code 260
+(ESP_ERR_INVALID_SIZE), accepted frames 0, max frame wait 49 ms, heap before
+281252 / after 281220 bytes. Post-completion Stop cleanup was 1 ms, with no camera
+teardown pending; this is not active Stop latency. Investigation found the
+short-timeout HAL call omits the public wrapper's frame metadata initialization.
+A 0.3 correction and regression test are prepared; actual preview and active Stop
+remain unverified. See feasibility checks for exact observations and reproduction.
+
+0.3 was then uploaded/hash-verified by Emilia. Serial confirmed off at startup.
+Local Allow produced a visible picture with severely incorrect colors and 49
+accepted 160×120 RGB565 / 38400-byte frame copies. Automatic 15-second expiry
+reported teardown 64 ms, maximum loop gap 99 ms, max frame wait 49 ms, with
+post-teardown heap 279784 versus 281252 before initialization. The log says
+`reason=expired`, not local Stop; active local Stop and repeated-cycle memory
+checks remain pending. 0.4 removes an extra display byte swap to match the vendor
+example; color correction and all audio tests remain hardware-pending.
+
+0.4 was uploaded/hash-verified; serial startup reported capture/camera off. Emilia
+confirmed correct preview colors. One cycle expired after 15 seconds (49 accepted
+frames, teardown 64 ms, max loop gap 100 ms); a second ended on local Stop after
+6 frames (teardown 65 ms, max loop gap 108 ms). Both code=0 and max wait 49 ms;
+second-cycle heap before/after was 281220/281220 bytes. This verifies local camera
+Stop in that run, not worst-case physical latency or F13. Local audio tests are next.
+
+0.4 local mic test: Emilia confirms the green level bar moved when she spoke after
+explicit Unmute + Start mic test. This is a local signal-response observation, not
+intelligibility/STT or sample-clock verification. Speaker tone at 24/255 was
+reported inaudible; output remains unverified, with status diagnostics needed.
+
+Monitored speaker retries on 0.4 both reported `audio_start kind=tone ok=1` and
+expiry (6 ms cleanup), yet Emilia heard no tone. 0.5 source raises the requested
+volume from 24/255 to 64/255; the pinned mixer squares master volume. This is an
+experiment, not a proven diagnosis or audible-output acceptance.
+
+0.5 was uploaded/hash-verified by Emilia. She tapped Speaker tone (1s) and
+confirmed an audible tone at 64/255. Basic local mic response (0.4) and speaker
+output (0.5) are observed; intelligible speech, active audio interruption and
+authenticated STT/TTS transport remain unverified.
+
+0.5 active mic mute: Emilia confirmed Unmute leaves capture off, then explicitly
+started the mic test and pressed Mute during capture. Serial `audio_start
+kind=mic ok=1` was followed by `reason=mute cleanup_ms=4 camera_pending=0` at
+04:18:13 UTC. This measures handler cleanup after touch detection, not total
+physical-input latency. Active global Stop/output cancellation remain pending.
+
+0.5 global Stop during active mic: `audio_start kind=mic ok=1` at 04:21:27.480
+→ `reason=local cleanup_ms=4 camera_pending=0` at 04:21:28.090 UTC. Speaker
+Stop: `audio_start kind=tone ok=1` at 04:22:02.476 → `reason=local cleanup_ms=5
+camera_pending=0` at 04:22:02.679; Emilia confirms the audible tone cut off early.
+Both are local handler measurements after touch detection. Live transport, speech
+intelligibility, full watchdog and network cancellation remain unverified.

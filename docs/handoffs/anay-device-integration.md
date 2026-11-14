@@ -2,21 +2,37 @@
 
 **Updated:** November 13, 2026. Read with `AGENTS.md`, [team start](../team-start.md), [integration contracts](../integration-contracts.md) and [robot capabilities](../robot-capabilities-spec.md).
 
-## Firmware continuation — November 13
+## Current firmware/audio handoff — November 13 local
 
-The original foundation inventory below predates hardware uploads. Current evidence
-is in [Emilia's resume handoff](emilia-resume.md) and
-[offline feasibility checks](../../firmware/stackchan/feasibility-checks.md).
-Foundation 0.1 was hardware-verified; offline feasibility 0.2 is now uploaded with
-all four images hash-verified, and serial/screen confirm camera/mic off at startup.
-The local camera permission prompt was observed, but active preview/audio and
-Stop/expiry under capture remain untested. No network firmware is implemented.
+0.5 is uploaded/hash-verified and starts with camera/capture off (320×240).
+Emilia observed a correctly colored local 160×120 RGB565 preview (38400-byte
+frames), 15-second camera expiry and early local camera Stop. Teardown was
+64 ms on expiry / 65 ms on local Stop in the recorded runs. This is offline
+feasibility, not an authenticated F13 check-in.
 
-Shared protocol v1 is a mock baseline to extend together, not a frozen live device
-protocol. The missing live WSS/pairing, capability negotiation, grants/receipts and
-camera control/media contracts below remain unresolved. The offline experiment
-configures RGB565; the shared frame schema accepts JPEG only. Do not freeze that
-encoding or claim hardware camera support before measuring and agreeing the path.
+The explicit mic level test responds to Emilia's voice. Unmute alone leaves
+capture off. Active mic Mute and global Stop each reported 4 ms handler cleanup
+in separate 0.5 runs. Tone at volume 64/255 is audible; local Stop reported 5 ms
+cleanup and Emilia confirms the tone cut off early. Handler timings start after
+touch detection, not at physical contact. Intelligible speech and live STT/TTS
+remain unverified. Earlier 24/255 tone requests were inaudible despite ok=1.
+
+Use the existing proposed 16 kHz mono signed little-endian PCM contract:
+20 ms / 320 samples / 640 bytes, base64 in current JSON audio.chunk schema.
+Offline firmware requests 256 int16 mono samples at 16 kHz and discards them;
+it still needs a bounded packetizer. WSS/pairing, capture/output grants,
+input/output cancellation, stream ends and playback receipts remain joint work.
+Agree TTS output format/rate explicitly before freezing it. No microphone data
+or generated speech is currently sent to or recorded by this firmware.
+
+Camera encoding remains unresolved: hardware preview is RGB565; shared schema
+accepts JPEG only. Agree measured conversion/transport limits before freezing
+media. Do not expose the loopback mock gateway. Detailed observations and exact
+commands: [Emilia resume](emilia-resume.md) and
+[feasibility checks](../../firmware/stackchan/feasibility-checks.md).
+
+The following original inventory is historical; its missing live protocol/access
+interfaces remain relevant. Hardware status above supersedes its pre-upload notes.
 
 ## Original foundation inventory
 
