@@ -54,7 +54,9 @@ const headers = {
   'Content-Type': 'text/html; charset=utf-8',
   'Content-Security-Policy':
     "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
-  'Referrer-Policy': 'no-referrer',
+  // Native form navigation needs its same-origin Origin header for the CSRF check.
+  // no-referrer makes browsers serialize that header as null; never allow null instead.
+  'Referrer-Policy': 'same-origin',
   'X-Content-Type-Options': 'nosniff',
 };
 export function createPrivateAccessHandler() {
