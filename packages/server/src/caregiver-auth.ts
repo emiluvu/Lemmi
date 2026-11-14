@@ -10,19 +10,27 @@ export type CaregiverAuthConfig = {
   clientId: string;
   clientSecret: string;
   subject: string;
+  tokenBinding?: 'audience' | 'client_id';
 };
 export function caregiverAuthConfig(
   env: Record<string, string | undefined> = process.env,
 ): CaregiverAuthConfig {
-  const config = {
+  const tokenBinding = env.LEMMI_AUTH_TOKEN_BINDING ?? 'audience';
+  if (tokenBinding !== 'audience' && tokenBinding !== 'client_id')
+    throw new Error('Unsupported caregiver token binding');
+  const config: CaregiverAuthConfig = {
     endpoint: env.LEMMI_AUTH_INTROSPECTION_URL ?? '',
     issuer: env.LEMMI_AUTH_ISSUER ?? '',
     audience: env.LEMMI_AUTH_AUDIENCE ?? '',
     clientId: env.LEMMI_AUTH_CLIENT_ID ?? '',
     clientSecret: env.LEMMI_AUTH_CLIENT_SECRET ?? '',
     subject: env.LEMMI_CAREGIVER_SUBJECT ?? '',
+    tokenBinding,
   };
-  if (Object.values(config).some((v) => !v))
+  if (
+    Object.entries(config).some(([key, value]) => key !== 'audience' && !value) ||
+    (tokenBinding === 'audience' && !config.audience)
+  )
     throw new Error('Managed caregiver authentication is not configured');
   const url = new URL(config.endpoint);
   if (url.protocol !== 'https:' || url.username || url.password || url.hash)
@@ -53,11 +61,17 @@ export async function authenticateCaregiver(
     if (!response.ok) return fail('UNAVAILABLE', 'Caregiver verification unavailable');
     const value = (await boundedJson(response, 16384)) as Record<string, unknown>;
     const aud = typeof value.aud === 'string' ? [value.aud] : value.aud;
+    // VoidAuth's non-resource access tokens bind to their issuing client instead of aud.
+    // This is explicit configuration, never an automatic fallback from audience checks.
+    const audienceMatches = Array.isArray(aud) && aud.includes(config.audience);
+    const bindingMatches =
+      config.tokenBinding === 'client_id'
+        ? value.client_id === config.clientId && (value.aud === undefined || audienceMatches)
+        : audienceMatches;
     if (
       value.active !== true ||
       value.iss !== config.issuer ||
-      !Array.isArray(aud) ||
-      !aud.includes(config.audience) ||
+      !bindingMatches ||
       typeof value.sub !== 'string' ||
       typeof value.exp !== 'number' ||
       !Number.isInteger(value.exp) ||

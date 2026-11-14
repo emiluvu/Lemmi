@@ -1,0 +1,17 @@
+[Unit]
+Description=Lemmi Cloudflare Tunnel
+After=network-online.target lemmi-web.service
+Wants=network-online.target
+ConditionPathExists=@ROOT@/.data/cloudflared/config.yml
+
+[Service]
+Type=simple
+WorkingDirectory=@ROOT@
+ExecStart=@ROOT@/.data/bin/cloudflared tunnel --config @ROOT@/.data/cloudflared/config.yml run
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

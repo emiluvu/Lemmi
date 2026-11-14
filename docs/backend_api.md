@@ -383,3 +383,7 @@ For each backend integration increment:
 4. Link the focused handoff and next owner in [Anay's tasks](anay_tasks.md). A task/schema/fixture marked ready never implies hardware or real delivery acceptance.
 
 No OpenAPI document is generated yet. The `operations` registry covers the typed client seam, not every private/public route and not an implemented production REST catalog. Treat this file as the navigable integration inventory and import source schemas for exact executable validation.
+
+### Explicit VoidAuth token binding
+
+`LEMMI_AUTH_TOKEN_BINDING` defaults to `audience`, preserving the required `LEMMI_AUTH_AUDIENCE` check. For VoidAuth non-resource access tokens, explicitly select `client_id`; `client_id` must then equal the dedicated configured `LEMMI_AUTH_CLIENT_ID`. Missing/foreign clients are rejected. A present `aud` still must match `LEMMI_AUTH_AUDIENCE`; it is never ignored. Issuer, active status, Bearer type, one-hour expiry bound and configured caregiver subject checks remain enforced in both modes. This is a provider-specific integration choice, not automatic fallback or JWT-only verification. The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper obtains the actual subject using an explicitly authorized one-time code/PKCE login; see [host setup](host-setup.md). Production browser login UI remains pending.

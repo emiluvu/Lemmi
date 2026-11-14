@@ -2,6 +2,8 @@
 
 Backend checklist: [Anay's tasks](docs/anay_tasks.md) — teammate blockers, backend work and agent claims.
 
+Current deployment: [backend status](docs/backend-status.md) — running services, verified live paths and remaining limitations.
+
 Backend integration reference: [backend_api.md](docs/backend_api.md) — current routes, clients, events, auth, speech interfaces, limits and pending handoffs; maintained with backend changes.
 
 A personalized companion for familiar conversation, enjoyable activities, and connection with family.
@@ -32,7 +34,7 @@ Optional **PostgreSQL/profile/private-media mode** now persists fictional Alex's
 
 The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
 
-Backend deployment uses the `backend-deploy` integration branch; see the [new-machine and Cloudflare deployment guide](docs/backend-deploy.md). Public domain/provider/host checks remain pending.
+Backend deployment uses the `backend-deploy` integration branch; see the [new-machine and Cloudflare deployment guide](docs/backend-deploy.md). The [current Ubuntu host setup](docs/host-setup.md) records running local services and observed checks; the public tunnel/gate, actual VoidAuth caregiver setup, PostgreSQL bootstrap and public computer-device text-chat path have been verified. Host DNS and speech-quality limitations remain documented there.
 
 ## Who we are designing for
 

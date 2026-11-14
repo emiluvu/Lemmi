@@ -130,6 +130,7 @@ try {
       LEMMI_AUTH_INTROSPECTION_URL: `https://127.0.0.1:${identity.port}`,
       LEMMI_AUTH_ISSUER: 'fixture-issuer',
       LEMMI_AUTH_AUDIENCE: 'lemmi-data',
+      LEMMI_AUTH_TOKEN_BINDING: 'audience',
       LEMMI_AUTH_CLIENT_ID: 'fixture-client',
       LEMMI_AUTH_CLIENT_SECRET: clientSecret,
       NODE_EXTRA_CA_CERTS: cert,

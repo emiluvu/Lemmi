@@ -1,4 +1,5 @@
 import { secretMatches } from './device-access';
+import { privateAccessKey } from './private-access';
 export function controlConfig(env: Record<string, string | undefined> = process.env) {
   const origin = new URL(env.LEMMI_PUBLIC_ORIGIN ?? '');
   if (
@@ -16,7 +17,10 @@ export function controlConfig(env: Record<string, string | undefined> = process.
     throw new Error(
       'LEMMI_CONTROL_TOKEN must be an independent random secret of at least 32 characters',
     );
-  return { publicOrigin: origin.origin, internalToken };
+  const accessKey = privateAccessKey(env);
+  if (env.LEMMI_MODE === 'live' && !accessKey)
+    throw new Error('LEMMI_ACCESS_KEY is required in live mode');
+  return { publicOrigin: origin.origin, internalToken, accessKey };
 }
 export function bearer(request: Request): string | null {
   const header = request.headers.get('authorization') ?? '';

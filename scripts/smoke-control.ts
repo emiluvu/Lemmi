@@ -175,6 +175,7 @@ try {
     LEMMI_AUTH_INTROSPECTION_URL: `https://127.0.0.1:${identity.port}/introspect`,
     LEMMI_AUTH_ISSUER: 'https://fixture-issuer.invalid',
     LEMMI_AUTH_AUDIENCE: 'lemmi-control',
+    LEMMI_AUTH_TOKEN_BINDING: 'audience',
     LEMMI_AUTH_CLIENT_ID: 'fixture-client',
     LEMMI_AUTH_CLIENT_SECRET: clientSecret,
     LEMMI_CAREGIVER_SUBJECT: 'fixture-caregiver-alex',

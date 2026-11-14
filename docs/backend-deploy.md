@@ -4,6 +4,8 @@
 
 The first snapshot includes authenticated device controls, optional OpenRouter **text** chat, private local speech engines/adapters, shared activity contracts and the [backend API inventory](backend_api.md). Browser sign-in/chat, live microphone/playback, full journal/notification workflows, real notifications and camera remain pending. This is a fictional-profile integration deployment, not completed care-service readiness.
 
+Observed setup and remaining private configuration on the current Ubuntu machine: [host setup](host-setup.md).
+
 ## Machine setup and start
 
 Use a dedicated checkout on the new machine, separate from developer sessions:
@@ -149,3 +151,7 @@ Once domain and host setup are available, record actual observations in the buil
 6. If local speech is provisioned, run the synthetic English smoke on this host and record timings separately from robot/human speech quality.
 
 The domain, new host access, privately configured domain key, identity-provider settings and model choice are required for those remote/live checks. Local fixture tests cannot establish that the tunnel or real providers work.
+
+### Explicit VoidAuth token binding
+
+`LEMMI_AUTH_TOKEN_BINDING` defaults to `audience`, preserving the required `LEMMI_AUTH_AUDIENCE` check. For VoidAuth non-resource access tokens, explicitly select `client_id`; `client_id` must then equal the dedicated configured `LEMMI_AUTH_CLIENT_ID`. Missing/foreign clients are rejected. A present `aud` still must match `LEMMI_AUTH_AUDIENCE`; it is never ignored. Issuer, active status, Bearer type, one-hour expiry bound and configured caregiver subject checks remain enforced in both modes. This is a provider-specific integration choice, not automatic fallback or JWT-only verification. The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper obtains the actual subject using an explicitly authorized one-time code/PKCE login; see [host setup](host-setup.md). Production browser login UI remains pending.
