@@ -507,3 +507,8 @@ Observed Bun 1.4.4/PostgreSQL17: **212 tests / 3,991 expectations, no skipped da
 ### Public speech configuration observation — November 14, 2026
 
 The deployment owner enabled speech on the existing `17a8522` runtime and observed one synthetic public verified-WSS turn through actual local STT → real OpenRouter → local TTS: **141 capture frames / 421 output chunks**, with simulated consumption receipts. This is actual provider/transport evidence; it is not browser microphone/speaker, human English recognition, K151 local-control or new frontend/Teach deployment acceptance. The reconciled frontend/Teach candidate retains its separately recorded 212-test fixture/database gate. Remote browser rehearsal is the next check: [steps and failure reporting](handoffs/remote-voice-test.md). No raw audio, transcript, reply or credential is retained in this acceptance record.
+
+
+### Frontend/Teach host deployment acceptance — November 14, 2026
+
+Anay deployed `f5724a0` from `anay/frontend-backend-integration`, including Teach Lemmi. Final isolated suite: 213 passed / 4,045 expectations, no skips; type/build/format, helper/speech tests and built participant/persistent data/control/speech smokes passed. Public fictional rehearsal passed owner-scoped teaching, actual model reply, topic advance, Pause/Finish preserving pause/Resume/Stop and profile isolation; existing persistent key survived. User approved all three reviewed teaching topic IDs for fictional Alex. No new migration or firmware flash. Browser microphone/autoplay/speaker, K151 controls and venue/reboot acceptance remain pending. See current backend status and remote voice handoff for exact runtime availability.

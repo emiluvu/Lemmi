@@ -1,6 +1,6 @@
 # Remote browser voice rehearsal
 
-Use fictional team data only. You can test from another machine; no SSH tunnel or localhost callback is needed for this participant flow. Current runtime and deployment acceptance are recorded in [backend status](../backend-status.md). Public voice is enabled, but the new frontend/Teach build is still a deployment candidate until that record confirms installation.
+Use fictional team data only. You can test from another machine; no SSH tunnel or localhost callback is needed for this participant flow. Current runtime and deployment acceptance are recorded in [backend status](../backend-status.md). Public voice and the frontend/Teach build are deployed in runtime `f5724a0`.
 
 The public synthetic local-STT → actual-OpenRouter → local-TTS test passed with simulated consumption receipts. An actual browser microphone, audible speaker, human recognition quality and K151 controls have **not** been verified by that test.
 

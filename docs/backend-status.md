@@ -2,7 +2,7 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed backend runtime revision: **`17a8522`**, integrating `anay/multi-profile-endpoints` (`284dcb7`) with the later persistent-key/chat-support compatibility fixes. Later documentation-only commits do not require a runtime restart.
+Deployed backend runtime revision: **`f5724a0`**, integrating `anay/frontend-backend-integration` (`a7d5528`), Teach Lemmi (`c006d26`), fictional multi-profile endpoints and the persistent-key/chat-support fixes. Later documentation-only commits do not require a runtime restart.
 
 The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictional multi-profile integration deployment, not completed P0 scope or readiness for unattended care.
 
@@ -10,13 +10,13 @@ Maintain this deployment/acceptance record alongside the [backend API reference]
 
 **Media collections deployed:** migration `002_media_collections.sql` has been applied to the existing host database after a private backup. It adds corrected album/playlist metadata only; collection APIs, reviewed-pack hosting and deferred consent/journal/help/jobs/deletion/camera workflows remain unavailable. See [schema review](handoffs/anay-app-data-schema-review.md).
 
-## Undeployed Emilia frontend/backend candidate
+## Frontend and Teach Lemmi — deployed
 
-`anay/frontend-backend-integration` combines Emilia's `integration/frontend-backend` (`437f065`) with deployed-source `7debf9a`, retaining the deployed migrations, persistent keys, per-profile authority and chat/support hardening. It adds reviewed Teach Lemmi to the cookie-enrolled live participant shell and preserves the local caregiver/mock conversation UI. No running service, private configuration, credential, database or firmware was changed.
+`anay/frontend-backend-integration` combines Emilia's `integration/frontend-backend` (`437f065`) with deployed-source `7debf9a`, retaining the deployed migrations, persistent keys, per-profile authority and chat/support hardening. It adds reviewed Teach Lemmi to the cookie-enrolled live participant shell and preserves the local caregiver/mock conversation UI. The tested build and exact generic artwork/font proxy allowlist are now installed; existing keys and all six migration files were preserved. Firmware was not flashed.
 
 Completed Emilia's requested backend gate on an isolated worktree/PostgreSQL 17: **212 Bun tests / 3,991 expectations**, with all database suites enabled; **ten pairing-helper and seven speech Python tests**; type/Svelte, production build, formatting and whitespace passed. Dedicated migration/credential compatibility checks passed **10 tests / 74 expectations**; all six SQL files byte-match deployed source, and the conflicting old receipt migration is excluded. Production participant cookie/enrollment/concurrent-WSS/restart/release (including UI assets), persistent profile/media/support, TLS control/chat and six-second speech-output fixture smokes passed. These use fictional data, fixture providers/clients and simulated consumption; they do not establish physical browser/robot acceptance.
 
-Fixed integration defects include preserving authoritative teaching policy on support-only saves, updating invitations on explicit support apply, fencing teaching while context saves are pending, preserving broader recognized Stop phrases, allowing only authorized fixed browser PCM while paused, suppressing late output on background pause, and exposing only the generic static art/font paths needed by the live shell. Deployment must separately install the candidate build and explicit proxy allowlist; the existing deployed host has since enabled public voice as recorded below, independently of this candidate. [Exact handoff and remaining gates](handoffs/frontend-backend-integration.md#backend-integration-follow-up--november-14-2026).
+Fixed integration defects include preserving authoritative teaching policy on support-only saves, updating invitations on explicit support apply, fencing teaching while context saves are pending, preserving broader recognized Stop phrases, allowing only authorized fixed browser PCM while paused, suppressing late output on background pause, and exposing only the generic static art/font paths needed by the live shell. The build and explicit proxy allowlist are deployed; public voice remains explicitly enabled for fictional team testing. [Exact handoff and remaining gates](handoffs/frontend-backend-integration.md#backend-integration-follow-up--november-14-2026).
 
 ## Multi-profile endpoints — deployed
 
@@ -31,11 +31,11 @@ The user explicitly authorized full fictional multi-profile support on November 
 | Session ownership | Multiple authorized endpoints may connect; each profile retains one active audio owner. `activeEndpointId` plus explicit handoff/Resume guards conversation/media. Different profiles remain isolated. |
 | Caregiver support | Existing hardening, profile membership, save/apply cancellation and revision behavior is preserved and regression-tested independently for each profile. |
 | Speech | Public speech is now explicitly enabled; a synthetic public local-STT → actual-OpenRouter → local-TTS turn passed (141 input frames / 421 output chunks), with simulated playback receipts. Actual browser microphone/speaker and K151 acceptance remain unrun. |
-| Teach Lemmi | `codex/teach-lemmi` and its handoff reviewed; no merge or deployment in this prioritized endpoint deployment. Shared schema/coordinator/protocol/UI conflicts require a separate integration. |
+| Teach Lemmi | Deployed through `anay/frontend-backend-integration`; owner-only reviewed topics, model replies and Pause/Finish/Resume passed an actual public fictional rehearsal. |
 
 The deployed migration set retains all existing checksummed migrations and includes `002_multi_profile_endpoints.sql` and replaces the branch's incompatible receipt-table creation with `004_endpoint_revocations.sql`. The latter preserves legacy revoke history while introducing per-device receipts; no checksum edit/rename of an already applied migration is permitted. The upgrade and unchanged-key acceptance are recorded in the deployment section below. The frontend/Teach candidate adds no new migration; its six SQL files byte-match this deployed set.
 
-Frontend/robot integration entry point: [endpoint contract and quickstart](backend_api.md#deployed-endpoints--frontend-and-robot-contracts), [endpoint handoff](handoffs/anay-multi-profile-endpoints.md). The current running deployment is `17a8522`; earlier candidate observations in this section are historical.
+Frontend/robot integration entry point: [endpoint contract and quickstart](backend_api.md#deployed-endpoints--frontend-and-robot-contracts), [endpoint handoff](handoffs/anay-multi-profile-endpoints.md). The current running deployment is `f5724a0`; earlier candidate observations in this section are historical.
 
 ## Persistent credentials and chat support — deployed
 
@@ -170,3 +170,16 @@ Frontend integration may use the same-origin participant clients and browser coo
 ## Public speech enablement observation — November 14, 2026
 
 On the existing `17a8522` runtime, the deployment owner enabled public speech in private host configuration. An actual synthetic public HTTPS/WSS rehearsal passed granted PCM capture → local STT → real OpenRouter → local TTS → bounded PCM output and simulated receipt consumption: **141 input frames / 421 output chunks**. This is an actual provider/transport observation, separate from candidate fixture checks. It does not establish human recognition quality, audible playback, microphone capture, browser permission/autoplay behavior, physical robot controls or a completed frontend/Teach deployment. No raw audio, transcript, generated reply or credential belongs in this record.
+
+
+## Frontend/Teach deployment follow-up — November 14, 2026
+
+Installed runtime **`f5724a0`**, containing both requested branches, on `backend-deploy`. Added a reviewed regression fix so finishing teaching while paused preserves pause until explicit Resume. Final isolated acceptance: **213 Bun tests / 4,045 expectations, zero skipped/failed**, type/Svelte, production build, formatting, ten helper and seven speech Python tests; built participant/assets/enrollment/concurrent-WSS/restart/release, persistent data/support, TLS control/chat and six-second bounded speech fixture smokes passed. The 49-file browser output secret scan passed. All six deployed migrations byte-match; no migration, reset or reseed was needed. A private database/source/build/config backup is retained in ignored `.data/releases`.
+
+Actual public HTTPS/WSS checks passed existing shared persistent-key access, isolated fictional profile creation/enrollment, Start → Teach Gardening → actual model reply → Beaches → Pause → Finish remains paused → explicit Resume → Stop, with capture off and separate profile authority. Rehearsal enrollments and only their fictional profiles were removed. Host-admin SQL cleanup leaves in-memory rehearsal coordinators until restart; the gateway is restarted after cleanup before final availability checks. This is test cleanup, not an implemented participant deletion API. The shared key was preserved. Exact generic avatar/surface/font URLs return 200; caregiver/mock conversation/internal/README paths remain 404.
+
+The user explicitly approved enabling `topic:gardening`, `topic:beaches` and `topic:banking` for fictional Alex; applied through the guarded profile update path, without biography facts or remembering permission. Newly created profiles still need their own approved interests; there is no unrestricted teaching fallback. Existing sessions affected by configuration require explicit Resume.
+
+Remote team test: [voice and participant handoff](handoffs/remote-voice-test.md). Actual browser microphone/autoplay/speaker and K151 local controls remain unverified.
+
+The post-install actual public voice recheck passed **138 input frames / 276 output chunks**, using local STT, the configured real OpenRouter model, local TTS and simulated consumed receipts, ending capture-off and stopped. Initial repeats closed with a persistence error because host-admin test cleanup had removed profiles while their coordinators were still resident; clearing those rehearsal coordinators by restarting the gateway resolved it. The final gateway restart after cleanup preserves keys and leaves sessions/capture/output stopped. All four user services are active with zero automatic restarts.
