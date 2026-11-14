@@ -38,6 +38,9 @@
   let photoAvailable = $state(false);
   let photo = $state<Extract<ActivityView, { activityId: 'photo_album' }> | null>(null);
   let photoLoadError = $state(false);
+  const photoBlocksConversation = $derived(
+    !!photo && photo.phase !== 'ended' && (photo.viewingMode !== 'talk' || photoLoadError),
+  );
   let outputBlocked = true;
   let replyBlocked = true;
   let outputAfterGeneration: number | null = null;
@@ -462,9 +465,7 @@
                 disabled={!connected ||
                   !ownsEndpoint ||
                   photo.viewingMode !== 'talk' ||
-                  (!!photo &&
-                    photo.phase !== 'ended' &&
-                    (photo.viewingMode !== 'talk' || photoLoadError)) ||
+                  photoBlocksConversation ||
                   !['ready', 'waiting'].includes(session.phase)}>Repeat question</button
               >
               <button
@@ -495,9 +496,7 @@
               }}
               disabled={!connected ||
                 session.micMuted ||
-                (!!photo &&
-                  photo.phase !== 'ended' &&
-                  (photo.viewingMode !== 'talk' || photoLoadError)) ||
+                photoBlocksConversation ||
                 !['ready', 'waiting'].includes(session.phase)}>Speak now</button
             >{/if}
         {/if}
@@ -512,9 +511,7 @@
               rows="3"
               disabled={!connected ||
                 !ownsEndpoint ||
-                (!!photo &&
-                  photo.phase !== 'ended' &&
-                  (photo.viewingMode !== 'talk' || photoLoadError)) ||
+                photoBlocksConversation ||
                 !['ready', 'waiting'].includes(session.phase) ||
                 !textAvailable ||
                 (!!session.teaching && !session.teaching.entityId)}
@@ -523,9 +520,7 @@
               type="submit"
               disabled={!connected ||
                 !ownsEndpoint ||
-                (!!photo &&
-                  photo.phase !== 'ended' &&
-                  (photo.viewingMode !== 'talk' || photoLoadError)) ||
+                photoBlocksConversation ||
                 !['ready', 'waiting'].includes(session.phase) ||
                 (!!session.teaching && !session.teaching.entityId) ||
                 !textAvailable ||
