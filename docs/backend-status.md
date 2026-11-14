@@ -8,7 +8,7 @@ The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictio
 
 Maintain this deployment/acceptance record alongside the [backend API reference](backend_api.md) whenever backend behavior, configuration, availability or observed checks change. Do not promote unrun checks to passed or treat a new source commit as deployed.
 
-**Undeployed increment, November 14:** `anay/app-data-schema` reviews Emilia's `4e8993f` draft and promotes only corrected album/playlist metadata in migration `002_media_collections.sql`. PostgreSQL 14.24 upgrade/rollback and existing backend tests pass locally; no public API or shared/deployed database changed. Consent/journal/help/jobs/deletion/camera tables remain proposal-only. See [review, checks and next handoff](handoffs/anay-app-data-schema-review.md). This branch is separate from the speech work on `anay/speech-pipeline`; neither feature branch changes the deployed revision recorded above.
+**Undeployed increment, November 14:** `anay/app-data-schema` reviews Emilia's `4e8993f` draft and promotes only corrected album/playlist metadata in migration `002_media_collections.sql`. PostgreSQL 14.24 upgrade/rollback and existing backend tests pass locally; no public API or shared/deployed database changed. Consent/journal/help/jobs/deletion/camera tables remain proposal-only. See [review, checks and next handoff](handoffs/anay-app-data-schema-review.md). The schema increment is now merged into `main` (`a6f7ff9`) and incorporated into `anay/speech-pipeline`; neither source merge changes the deployed revision recorded above.
 
 ## Deployment
 
@@ -58,6 +58,8 @@ User lingering is enabled. Application/tunnel/speech services are enabled; conta
 The live computer rehearsal created its pairing through the private authenticated server authority. It did **not** exercise a public caregiver-bearer pairing request; real caregiver verification was tested separately. No physical robot, microphone, camera, real contact or notification was used. Fixture tests remain distinct from these live observations.
 
 ## Remaining limits and next handoff
+
+**Undeployed feature branch:** `anay/speech-pipeline` adds backend microphone grants, PCM ingestion, STT→chat→TTS and bounded output/receipt execution. See [feature protocol/handoff](handoffs/anay-speech-pipeline.md). Its local synthetic checks do not change the deployed revision or host acceptance below. A subsequent local fix gives recognized concern/refusal replies fresh fixed-output authority after pausing, keeps capture off and cancels on later controls/revisions. The new regression suite passes 116 Bun tests / 2,438 expectations against isolated PostgreSQL 17 plus seven Python boundary tests, type checks and production build. This fix is not deployed; physical playback and counterpart review remain pending. See the feature handoff and build-plan follow-up for validation details.
 
 1. **Speech:** synthetic English recognition was intermittent. Engines are running privately, but integrated device/browser capture, STT-to-chat, speech/music playback and receipts are incomplete. No robot voice-readiness claim follows from engine startup.
 2. **Product work:** production browser OIDC sign-in/participant text transport, full journal/summary, notification/outbox, preferences/deletion workflows, completed activities, camera and physical K151 acceptance remain pending as described in the [API inventory](backend_api.md) and team plan.

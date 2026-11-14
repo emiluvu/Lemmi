@@ -8,6 +8,7 @@ import { DeviceEventSchema, ServerEventSchema, fail, type ServerEvent } from '@l
 import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
+import { localSpeechConfig, createLocalSpeechAdapters } from '@lemmi/server';
 function startMockGateway() {
   assertMockMode();
   const coordinator = new MockCoordinator();
@@ -193,10 +194,23 @@ function startMockGateway() {
 }
 if (process.env.LEMMI_MODE === 'live') {
   const llm = openRouterConfig();
+  let speech;
+  if (process.env.LEMMI_SPEECH_ENABLED === '1') {
+    const selected = localSpeechConfig();
+    if (
+      !selected.ok ||
+      selected.data.sttBackend === 'disabled' ||
+      selected.data.ttsBackend === 'disabled'
+    )
+      throw new Error('Enable valid independent STT/TTS configuration before speech startup');
+    if (!llm.ok) throw new Error('Configure OpenRouter before enabling the speech pipeline');
+    speech = createLocalSpeechAdapters(selected.data);
+  }
   const config = dataConfig();
   const repository = config ? await openData(config) : undefined;
   const gateway = startControlGateway({
     repository,
+    speech,
     caregiverSubject: config?.subject,
     ...controlConfig(),
     port: Number(process.env.GATEWAY_PORT ?? 3001),

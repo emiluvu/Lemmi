@@ -118,6 +118,47 @@ test('cancellation rejects late LLM results even if upstream ignores abort', asy
   expect(requests).toBe(0);
 });
 
+test('reasoning effort is explicit, hidden reasoning is excluded and exhausted budgets fail without retry', async () => {
+  expect(
+    openRouterConfig({
+      OPENROUTER_API_KEY: 'fixture-key',
+      OPENROUTER_MODEL: 'fixture/model',
+      LEMMI_LLM_REASONING_EFFORT: 'unsupported',
+    }).ok,
+  ).toBe(false);
+  const selected = unwrap(
+    openRouterConfig({
+      OPENROUTER_API_KEY: 'fixture-key',
+      OPENROUTER_MODEL: 'fixture/model',
+      LEMMI_LLM_REASONING_EFFORT: 'low',
+      LEMMI_LLM_MAX_TOKENS: '512',
+    }),
+  );
+  let calls = 0;
+  const result = await createOpenRouterAdapter(selected, async (_url, init) => {
+    calls++;
+    const body = JSON.parse(String(init?.body));
+    expect(body.reasoning).toEqual({ effort: 'low', exclude: true });
+    expect(body.max_tokens).toBe(512);
+    return Response.json({
+      choices: [
+        {
+          finish_reason: 'length',
+          message: {
+            role: 'assistant',
+            content: '',
+            reasoning: 'private-reasoning-fixture-marker',
+          },
+        },
+      ],
+    });
+  }).complete(chat, live);
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.error.message).toContain('token budget');
+  expect(calls).toBe(1);
+  expect(JSON.stringify(result)).not.toContain('private-reasoning-fixture-marker');
+});
+
 test('English/German prompts use approved minimal context and effective support instructions', () => {
   const english = unwrap(
     companionInput({

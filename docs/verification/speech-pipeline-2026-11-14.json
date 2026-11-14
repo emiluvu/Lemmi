@@ -1,0 +1,191 @@
+{
+  "date": "2026-11-14",
+  "branch": "anay/speech-pipeline",
+  "host": "Framework WSL Ubuntu 22.04 x86_64 CPU",
+  "bun": "1.4.4",
+  "python": "3.10.12",
+  "stt": "faster-whisper 1.2.1 multilingual base CPU int8, four threads",
+  "tts": "Piper 1.8.0 en_US-ljspeech-medium CPU 22050 Hz",
+  "model": "z-ai/glm-5.3-flash",
+  "reasoningEffort": "low",
+  "maxTokens": 512,
+  "tlsVerified": true,
+  "liveProviders": true,
+  "voiceTurns": 20,
+  "additionalTextTurns": 1,
+  "totalRunMs": 204693,
+  "pcmOutputBytes": 4930048,
+  "rawAudioSaved": false,
+  "transcriptLogged": false,
+  "hardwareTested": false,
+  "productionSessionModified": false,
+  "playbackReceipts": "simulated consumption of repeated identical synthetic input, not physical playback",
+  "summaryMs": {
+    "sttMs": {
+      "min": 393,
+      "median": 421.5,
+      "p95": 449,
+      "max": 457
+    },
+    "llmMs": {
+      "min": 655,
+      "median": 879.5,
+      "p95": 1023,
+      "max": 1151
+    },
+    "ttsMs": {
+      "min": 143,
+      "median": 184.5,
+      "p95": 279,
+      "max": 503
+    },
+    "totalMs": {
+      "min": 8436,
+      "median": 10142.5,
+      "p95": 11803,
+      "max": 13530
+    }
+  },
+  "turns": [
+    {
+      "turn": 1,
+      "sttMs": 438,
+      "llmMs": 888,
+      "ttsMs": 143,
+      "totalMs": 8950
+    },
+    {
+      "turn": 2,
+      "sttMs": 396,
+      "llmMs": 949,
+      "ttsMs": 165,
+      "totalMs": 9705
+    },
+    {
+      "turn": 3,
+      "sttMs": 446,
+      "llmMs": 871,
+      "ttsMs": 170,
+      "totalMs": 10278
+    },
+    {
+      "turn": 4,
+      "sttMs": 449,
+      "llmMs": 911,
+      "ttsMs": 239,
+      "totalMs": 10128
+    },
+    {
+      "turn": 5,
+      "sttMs": 457,
+      "llmMs": 713,
+      "ttsMs": 174,
+      "totalMs": 9045
+    },
+    {
+      "turn": 6,
+      "sttMs": 411,
+      "llmMs": 1023,
+      "ttsMs": 206,
+      "totalMs": 10719
+    },
+    {
+      "turn": 7,
+      "sttMs": 395,
+      "llmMs": 981,
+      "ttsMs": 195,
+      "totalMs": 11113
+    },
+    {
+      "turn": 8,
+      "sttMs": 441,
+      "llmMs": 802,
+      "ttsMs": 503,
+      "totalMs": 13530
+    },
+    {
+      "turn": 9,
+      "sttMs": 422,
+      "llmMs": 717,
+      "ttsMs": 150,
+      "totalMs": 8436
+    },
+    {
+      "turn": 10,
+      "sttMs": 428,
+      "llmMs": 901,
+      "ttsMs": 184,
+      "totalMs": 10157
+    },
+    {
+      "turn": 11,
+      "sttMs": 426,
+      "llmMs": 792,
+      "ttsMs": 279,
+      "totalMs": 11803
+    },
+    {
+      "turn": 12,
+      "sttMs": 444,
+      "llmMs": 655,
+      "ttsMs": 222,
+      "totalMs": 9860
+    },
+    {
+      "turn": 13,
+      "sttMs": 402,
+      "llmMs": 1151,
+      "ttsMs": 229,
+      "totalMs": 11060
+    },
+    {
+      "turn": 14,
+      "sttMs": 421,
+      "llmMs": 950,
+      "ttsMs": 162,
+      "totalMs": 9739
+    },
+    {
+      "turn": 15,
+      "sttMs": 393,
+      "llmMs": 765,
+      "ttsMs": 185,
+      "totalMs": 9481
+    },
+    {
+      "turn": 16,
+      "sttMs": 398,
+      "llmMs": 996,
+      "ttsMs": 166,
+      "totalMs": 10184
+    },
+    {
+      "turn": 17,
+      "sttMs": 394,
+      "llmMs": 718,
+      "ttsMs": 153,
+      "totalMs": 9026
+    },
+    {
+      "turn": 18,
+      "sttMs": 404,
+      "llmMs": 925,
+      "ttsMs": 172,
+      "totalMs": 8832
+    },
+    {
+      "turn": 19,
+      "sttMs": 423,
+      "llmMs": 730,
+      "ttsMs": 213,
+      "totalMs": 10447
+    },
+    {
+      "turn": 20,
+      "sttMs": 399,
+      "llmMs": 704,
+      "ttsMs": 195,
+      "totalMs": 11099
+    }
+  ]
+}
