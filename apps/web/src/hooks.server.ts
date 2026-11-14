@@ -19,7 +19,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     event.url.pathname,
   );
   const dataRoute =
-    /^\/v1\/(profiles\/[^/]+(?:\/(photos|assets)(?:\/[^/]+)?)?|participant\/profiles\/[^/]+|assets\/[^/]+(?:\/metadata)?)$/.test(
+    /^\/v1\/(profiles\/[^/]+(?:\/(?:(photos|assets)(?:\/[^/]+)?|communication-support(?:\/apply)?))?|participant\/profiles\/[^/]+|assets\/[^/]+(?:\/metadata)?)$/.test(
       event.url.pathname,
     );
   const accessRoute = event.url.pathname === '/access' || event.url.pathname === '/access/logout';

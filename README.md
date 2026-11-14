@@ -6,6 +6,8 @@ Current deployment: [backend status](docs/backend-status.md) — running service
 
 Backend integration reference: [backend_api.md](docs/backend_api.md) — current routes, clients, events, auth, speech interfaces, limits and pending handoffs; maintained with backend changes.
 
+Undeployed backend increment: [chat hardening and communication support](docs/handoffs/anay-chat-support-hardening.md) provides reviewed English scenarios, central presets and caregiver read/save/apply with cancellation and explicit continuation. Runtime migration `003` and proxy routing are documented; frontend/device acceptance remains pending.
+
 A personalized companion for familiar conversation, enjoyable activities, and connection with family.
 
 Lemmi is a Cal Poly Vibecode Club hackathon project exploring how an app and an optional Stackchan robot can support people living with dementia. Caregiver-provided context—such as preferred names, interests, familiar people, and communication preferences—helps the companion make interactions more personal.

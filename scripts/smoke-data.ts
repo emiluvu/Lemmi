@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { database, migrate, PrivateMedia, DataRepository } from '@lemmi/server';
 import { startControlGateway } from '../apps/realtime/src/control';
+import { controlHelloFixture } from '@lemmi/contracts/fixtures';
+import { DeviceEventSchema, type DeviceEvent } from '@lemmi/contracts';
 
 const url = process.env.LEMMI_TEST_DATABASE_URL;
 if (!url || !new URL(url).pathname.endsWith('_test'))
@@ -16,8 +18,13 @@ let web: ReturnType<typeof Bun.spawn> | undefined;
 let gateway: ReturnType<typeof startControlGateway> | undefined;
 let proxy: ReturnType<typeof Bun.serve> | undefined;
 let identity: ReturnType<typeof Bun.serve> | undefined;
+let participant: WebSocket | undefined;
+let failedAssertion: string | undefined;
 function check(value: boolean, message: string): asserts value {
-  if (!value) throw new Error(message);
+  if (!value) {
+    failedAssertion = message;
+    throw new Error(message);
+  }
 }
 try {
   await migrate(sql);
@@ -286,6 +293,135 @@ try {
     credential,
   );
   check(unconfigured.status === 404, 'Missing asset did not return explicit failure');
+  // Exercise the production caregiver HTTPS route against the same authoritative
+  // session. The computer control socket is a loopback fixture, not real hardware.
+  const messages: any[] = [];
+  participant = new WebSocket(`ws://127.0.0.1:${gateway.server.port}/v1/device-stream`, {
+    headers: {
+      authorization: `Bearer ${credential}`,
+      host: new URL(origin).host,
+      'x-forwarded-proto': 'https',
+      'X-Lemmi-Access-Key': accessKey,
+    },
+  });
+  participant.onmessage = (event) => {
+    if (messages.length < 100) messages.push(JSON.parse(String(event.data)));
+  };
+  let waitStep = 0;
+  const until = async (predicate: () => boolean) => {
+    const step = ++waitStep;
+    const due = performance.now() + 3000;
+    while (!predicate()) {
+      check(performance.now() < due, `Support control fixture step ${step} timed out`);
+      await Bun.sleep(5);
+    }
+  };
+  let sequence = 0;
+  const send = (type: DeviceEvent['type'], session: any = null, payload: unknown = {}) => {
+    const parsed = DeviceEventSchema.safeParse({
+      protocol_version: 1,
+      event_id: crypto.randomUUID(),
+      session_id: session?.id ?? null,
+      turn_id: null,
+      generation: session?.generation ?? 0,
+      sequence: sequence++,
+      type,
+      payload,
+    });
+    check(parsed.success, 'Invalid fixture control frame');
+    participant!.send(JSON.stringify(parsed.data));
+  };
+  await until(() => participant!.readyState === WebSocket.OPEN);
+  send('device.hello', null, controlHelloFixture.payload);
+  await until(() => messages.some((e) => e.type === 'device.ready'));
+  send('input.start');
+  await until(() =>
+    messages.some((e) => e.type === 'state.changed' && e.payload.session?.phase === 'ready'),
+  );
+  const active = messages.filter((e) => e.type === 'state.changed' && e.payload.session).at(-1)
+    ?.payload.session;
+  check(active.communicationSupport.preset === 'guided', 'Wrong initial session support');
+  const savedSupport = await request('/v1/profiles/profile-alex', 'PATCH', {
+    profileId: 'profile-alex',
+    commandId: crypto.randomUUID(),
+    expectedRevision: 1,
+    patch: { communicationSupport: { preset: 'quiet', configVersion: 1 } },
+  });
+  check(savedSupport.status === 200, 'Support default save failed');
+  const path = '/v1/profiles/profile-alex/communication-support/apply';
+  const supportState = await request('/v1/profiles/profile-alex/communication-support');
+  check(supportState.status === 200, 'Caregiver support state read failed');
+  const view = ((await supportState.json()) as any).data;
+  check(
+    view.saved.preset === 'quiet' && view.session?.communicationSupport.preset === 'guided',
+    'Saved support overwrote the effective active preset',
+  );
+  const apply = {
+    profileId: 'profile-alex',
+    expectedProfileRevision: view.profileRevision,
+    sessionId: view.session.id,
+    expectedGeneration: view.session.generation,
+    commandId: crypto.randomUUID(),
+  };
+  check((await request(path)).status === 405, 'GET could apply support');
+  check(
+    (await request(path, 'POST', apply, credential)).status === 401,
+    'Device token could apply caregiver support',
+  );
+  check(
+    (
+      await fetch(origin + path, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify(apply),
+        tls: { ca, rejectUnauthorized: true },
+      })
+    ).status === 401,
+    'Support route bypassed the domain gate',
+  );
+  const applied = await request(path, 'POST', apply);
+  check(applied.status === 200, 'Support apply route failed');
+  const effective = ((await applied.json()) as any).data;
+  check(
+    effective.phase === 'paused' &&
+      effective.communicationSupport.preset === 'quiet' &&
+      effective.captureGrant === null,
+    'Apply did not pause/cancel with saved support',
+  );
+  check((await request(path, 'POST', apply)).status === 200, 'Support apply retry failed');
+  await until(() =>
+    messages.some(
+      (e) =>
+        e.type === 'state.changed' &&
+        e.payload.session?.generation === effective.generation &&
+        e.payload.session.phase === 'paused',
+    ),
+  );
+  send('input.resume', effective);
+  await until(() =>
+    messages.some(
+      (e) =>
+        e.type === 'state.changed' &&
+        e.payload.session?.generation > effective.generation &&
+        e.payload.session.phase === 'ready',
+    ),
+  );
+  const continued = messages.filter((e) => e.type === 'state.changed' && e.payload.session).at(-1)
+    ?.payload.session;
+  check(
+    continued.communicationSupport.preset === 'quiet' && continued.captureGrant === null,
+    'Resume changed support or opened capture',
+  );
+  check(
+    (await request(path, 'POST', apply)).status === 409,
+    'Stale apply retry paused a continued session',
+  );
+  send('input.stop', continued);
+  await until(() =>
+    messages.some((e) => e.type === 'state.changed' && e.payload.session?.phase === 'ended'),
+  );
+  participant.close();
+  participant = undefined;
   await request('/v1/devices/stackchan-alex/revoke', 'POST', {
     deviceId: 'stackchan-alex',
     commandId: crypto.randomUUID(),
@@ -296,14 +432,15 @@ try {
     'Revoked participant credential accepted',
   );
   console.info(
-    'PASS: production SvelteKit → authenticated gateway → real PostgreSQL profile read/edit/retry/conflict; approved photo upload/read, scoped participant projection, preview denial and committed device revocation. TLS verified; identity is a fixture.',
+    'PASS: production SvelteKit → authenticated gateway → real PostgreSQL profile/media/access checks and caregiver support save/apply/retry/Resume/Stop. Support route enforces gate, caregiver identity, POST and stale-retry rejection; control socket/identity are fixtures. HTTPS TLS verified; no real model or hardware.',
   );
 } catch {
   console.error(
-    'FAIL: database production smoke; inspect setup and the explicit assertions locally without logging private request bodies.',
+    `FAIL: database production smoke (${failedAssertion ?? 'setup/network'}); private request bodies are not logged.`,
   );
   process.exitCode = 1;
 } finally {
+  participant?.close();
   if (web) {
     web.kill();
     await web.exited;

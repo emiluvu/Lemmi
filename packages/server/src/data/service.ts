@@ -27,6 +27,7 @@ export class PersistentData {
     private coordinator: SessionCoordinator,
     now: () => number,
     invalidated: () => void,
+    private readonly changed: () => void = () => {},
   ) {
     this.devices = new DatabaseDeviceAuthority(repository, now, invalidated);
   }
@@ -64,6 +65,7 @@ export class PersistentData {
           };
         }),
         this.devices.bootId,
+        snapshot.supportSelections,
       );
     };
     const result = this.checkpoints.then(work);
@@ -71,6 +73,7 @@ export class PersistentData {
     return result;
   }
   async close() {
+    await this.profileWork;
     await this.checkpoints;
     const lock = this.lock;
     this.lock = undefined;
@@ -104,22 +107,97 @@ export class PersistentData {
     throw new DataError('FORBIDDEN', 'Assigned caregiver or current paired device required');
   }
   private uploadBusy = false;
+  private profileWork = Promise.resolve();
+  private changeProfile<T>(work: () => Promise<T>): Promise<T> {
+    const result = this.profileWork.then(work);
+    this.profileWork = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  }
   async handle(raw: unknown, actor: unknown, credential: unknown) {
     const request = DataRequestSchema.safeParse(raw);
     if (!request.success) throw new DataError('VALIDATION_ERROR', 'Invalid resource request');
     const principal = await this.principal(actor, credential);
     switch (request.data.operation) {
+      case 'support.read': {
+        const id = request.data.profileId;
+        return this.changeProfile(async () => {
+          const profile = await this.repository.profile(principal, id, true);
+          const session = this.coordinator.snapshot();
+          return ok({
+            profileId: id,
+            profileRevision: profile.revision,
+            saved: profile.communicationSupport,
+            session: session?.phase === 'ended' ? null : session,
+          });
+        });
+      }
       case 'profile.read':
         return ok(
           await this.repository.profile(principal, request.data.profileId, request.data.caregiver),
         );
       case 'profile.update': {
         const input = request.data.input;
-        const profile = await this.repository.update(principal, input, () =>
-          this.coordinator.pauseForProfileUpdate(input.patch),
-        );
-        this.coordinator.acceptPersistentProfile(profile);
-        return ok(profile);
+        return this.changeProfile(async () => {
+          let release: () => unknown = () => {};
+          try {
+            const profile = await this.repository.update(principal, input, () => {
+              release = this.coordinator.beginProfileUpdate(input.patch);
+              this.changed();
+            });
+            this.coordinator.acceptPersistentProfile(profile);
+            return ok(profile);
+          } finally {
+            release();
+          }
+        });
+      }
+      case 'support.apply': {
+        const input = request.data.input;
+        return this.changeProfile(async () => {
+          let release: () => unknown = () => {};
+          try {
+            const result = await this.repository.withSupportProfile(principal, input, (profile) => {
+              const applied = this.coordinator.applyCommunicationSupport(
+                input,
+                profile,
+                principal.kind === 'caregiver' ? principal.subject : '',
+              );
+              if (applied.ok) {
+                release = this.coordinator.holdConfiguration();
+                this.changed();
+              }
+              return applied;
+            });
+            if (!result.ok) return result;
+            try {
+              await this.checkpoint();
+            } catch {
+              this.coordinator.disconnect();
+              this.changed();
+              throw new DataError(
+                'UNAVAILABLE',
+                'Support checkpoint failed; interaction remains paused',
+              );
+            }
+            const latest = this.coordinator.snapshot();
+            if (
+              !latest ||
+              latest.id !== result.data.id ||
+              latest.generation !== result.data.generation ||
+              latest.phase !== 'paused'
+            )
+              throw new DataError(
+                'REVISION_CONFLICT',
+                'Session changed during support apply; reload its state',
+              );
+            return ok(latest);
+          } finally {
+            release();
+          }
+        });
       }
       case 'asset.create': {
         if (this.uploadBusy)
