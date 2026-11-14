@@ -304,7 +304,13 @@
     {#if currentProfile}<div class="conversation-avatar live-avatar">
         <AvatarArt avatarId={currentProfile.avatarId} />
       </div>{/if}
-    <h2>Ready when you are{currentProfile ? `, ${currentProfile.preferredName}` : ''}</h2>
+    <h2>
+      {session?.phase === 'paused'
+        ? 'Take your time'
+        : session?.phase === 'ended'
+          ? 'Here when you need me'
+          : 'Ready when you are'}
+    </h2>
     <p class="conversation-capture" aria-live="polite">
       {listening ? 'Microphone listening — tap Finish speaking when ready.' : 'Microphone off'} · Camera
       off
@@ -312,8 +318,10 @@
   </header>
   <div class="conversation-workspace">
     {#if assignment}
-      <section class="card">
-        <p>Participant: <strong>{currentProfile?.preferredName ?? assignment.profileId}</strong></p>
+      <section class="connection-status" aria-label="Conversation connection">
+        <p class="participant-name">
+          <strong>{currentProfile?.preferredName ?? assignment.profileId}</strong>
+        </p>
         <p>
           {connected ? 'Connected' : 'Disconnected'} · Session: {session?.phase ?? 'not started'}
         </p>
@@ -332,10 +340,11 @@
             >Start conversation</button
           >{/if}
         {#if !connected}<button onclick={connect} disabled={busy}>Reconnect</button>{/if}
-        <button onclick={changeParticipant} disabled={busy}>Change participant</button>
+        <button class="quiet" onclick={changeParticipant} disabled={busy}>Change participant</button
+        >
       </section>
       {#if session && session.phase !== 'ended'}
-        <div class="controls sticky" aria-label="Session controls">
+        <div class="controls session-controls" aria-label="Session controls">
           <button
             onclick={() => {
               control(session?.phase === 'paused' ? 'input.resume' : 'input.pause');
@@ -541,23 +550,25 @@
   }
 
   .live-companion {
-    padding: 32px 24px 48px;
-    min-height: calc(100dvh - 40px);
+    padding: 96px 24px 48px;
+    align-content: start;
+    gap: 0;
   }
   .live-companion-heading {
     text-align: center;
   }
   .live-avatar {
-    width: min(300px, 80%);
-    height: 220px;
+    width: min(440px, 100%);
+    height: clamp(200px, 34dvh, 340px);
     margin: 0 auto;
   }
   .live-companion-heading {
-    padding-top: 36px;
+    padding-top: 0;
   }
   .conversation-workspace {
-    width: min(760px, 100%);
-    margin: 20px auto 0;
+    width: min(720px, 100%);
+    margin: 16px auto 0;
+    min-width: 0;
   }
   .conversation-workspace > :global(.card) {
     text-align: center;
@@ -581,5 +592,51 @@
   }
   .controls {
     flex-wrap: wrap;
+    justify-content: center;
+  }
+  .connection-status {
+    padding: 0 0 16px;
+  }
+  .connection-status p {
+    margin: 6px 0;
+  }
+  .participant-name {
+    font-size: 20px;
+  }
+  .connection-status button,
+  .session-controls button {
+    min-height: 56px;
+    margin: 8px 4px;
+  }
+  .session-controls {
+    position: sticky;
+    bottom: 12px;
+    z-index: 2;
+    padding: 8px;
+    border: 1px solid #bdc8aa;
+    border-radius: 24px;
+    background: #fffdf7f5;
+    box-shadow: 0 5px 16px #684b3212;
+  }
+  .conversation-workspace > button {
+    min-height: 56px;
+    font-size: 20px;
+  }
+  @media (max-height: 700px) {
+    .live-avatar {
+      height: 180px;
+    }
+  }
+  @media (max-width: 600px) {
+    .live-companion {
+      padding-inline: 16px;
+    }
+    .session-controls {
+      gap: 4px;
+    }
+    .session-controls button {
+      flex: 1 1 44%;
+      margin: 2px;
+    }
   }
 </style>

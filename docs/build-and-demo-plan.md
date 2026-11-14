@@ -561,3 +561,27 @@ changes with `backend-deploy` before deployment, retaining its live participant
 enrollment/transport/teaching and cancellation fixes. Caregiver sign-in and live
 dashboard integration remain unfinished. No firmware, credentials, migration,
 server deployment or live-data claims are included in this UI publication.
+
+
+### Main-based Kylie visual alignment — November 14, 2026
+
+On `codex/main-ui-alignment`, based on `origin/main` at `818b269`, compared
+`codex/kylie-ui-refinements` at `d8a6fe4`. Main already contains the reference
+styles, fonts, art and dashboard. Aligned the separate live profile panel with
+the reference section/card/avatar layout and the live conversation with its
+larger avatar/spacing, preserving existing API/session/audio/teaching handlers.
+Private fields, trends, excerpts and upload remain explicitly unavailable; no
+mock caregiver data or settings are shown as live. No server/API/auth/migration
+or firmware change.
+
+Observed: pinned Bun 1.4.4 frozen install (unchanged lock), type/Svelte check
+(zero errors/warnings), production build; existing suite **183 passed, 33
+database tests skipped, zero failures / 3,818 expectations**. Chrome inspected
+the live profile component and disconnected live conversation using a temporary,
+explicitly labeled fictional visual harness at desktop/390 × 844, including
+profile Escape dismissal. Corrected an overflowing unavailable-settings label.
+The harness was removed before final validation/publication. Browser control
+later failed with a ScreenCaptureKit stream error; no full live interaction or
+active-session phone-control acceptance is claimed. Database production smoke,
+real speech/K151 and counterpart review remain pending. See
+[review handoff](handoffs/main-ui-alignment.md). No merge/deployment by this pass.
