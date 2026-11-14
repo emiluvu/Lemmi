@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../styles.css';
   let { children } = $props();
+  import { page } from '$app/state';
 </script>
 
 <svelte:head
@@ -10,7 +11,9 @@
   /></svelte:head
 >
 <div class="banner">
-  LOCAL MOCK STARTER · No microphone, camera, real notifications or saved data
+  {page.url.pathname.includes('photo-story')
+    ? 'LOCAL PHOTO STORY REHEARSAL · Explicit microphone capture · No saved speech or real notifications'
+    : 'LOCAL MOCK STARTER · No microphone, camera, real notifications or saved data'}
 </div>
 <header>
   <a href="/" class="brand">Lemmi</a>

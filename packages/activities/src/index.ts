@@ -17,6 +17,11 @@ import {
   type ActivitySystemInput,
   type ActivityView,
 } from '@lemmi/contracts';
+import { createPhoto, reducePhoto, systemPhoto, projectPhoto } from './photo';
+export * from './photo-story';
+export * from './photo-recap';
+export * from './photo-story-content';
+export * from './alex-profile';
 // Starter music transitions only. Lukas owns completion/content; no I/O or authorization here.
 function tracks(pack: ApprovedPack, ctx: ActivityContext) {
   if (pack.activityId !== 'music_playlist' || !ctx.eligibility.available) return [];
@@ -42,6 +47,7 @@ export function createActivity(
   StartActivityInputSchema.parse(input);
   ApprovedPackSchema.parse(pack);
   ActivityContextSchema.parse(ctx);
+  if (pack.activityId === 'photo_album') return createPhoto(input.instanceId, pack, ctx);
   // Shape-only unavailable stubs. Lukas supplies these activities' actual rules.
   const base = { instanceId: input.instanceId, revision: 0, phase: 'unavailable' as const };
   switch (pack.activityId) {
@@ -54,14 +60,6 @@ export function createActivity(
         guessCandidateId: null,
         roundPhase: 'ready',
         questionsAsked: 0,
-      });
-    case 'photo_album':
-      return ActivityStateSchema.parse({
-        ...base,
-        activityId: pack.activityId,
-        currentPhotoId: null,
-        position: null,
-        viewingMode: 'just_look',
       });
     case 'object_matching':
       return ActivityStateSchema.parse({
@@ -92,6 +90,8 @@ export function reduceActivity(
 ): ActivityTransition {
   checked(state, pack, ctx);
   ActivityActionSchema.parse(action);
+  if (state.activityId === 'photo_album' && pack.activityId === 'photo_album')
+    return reducePhoto(state, action, pack, ctx);
   if (
     state.activityId !== 'music_playlist' ||
     state.phase === 'ended' ||
@@ -150,6 +150,8 @@ export function applyActivitySystemInput(
   ctx: ActivityContext,
 ): ActivityTransition {
   checked(state, pack, ctx);
+  if (state.activityId === 'photo_album' && pack.activityId === 'photo_album')
+    return systemPhoto(state, input, pack, ctx);
   ActivitySystemInputSchema.parse(input);
   if (state.activityId !== 'music_playlist' || state.phase === 'ended')
     return ActivityTransitionSchema.parse({ nextState: state, events: [], effects: [] });
@@ -214,6 +216,8 @@ export function projectActivity(
   ctx: ActivityContext,
 ): ActivityView {
   checked(state, pack, ctx);
+  if (state.activityId === 'photo_album' && pack.activityId === 'photo_album')
+    return projectPhoto(state, pack, ctx);
   if (state.activityId !== 'music_playlist')
     throw new Error('Activity projection pending Lukas implementation');
   const eligible = tracks(pack, ctx);

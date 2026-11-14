@@ -2,6 +2,7 @@ import {
   fail,
   ok,
   SpeechStartCommandSchema,
+  ConversationTextCommandSchema,
   SpeechInputChunkSchema,
   SpeechInputEndSchema,
   SpeechReceiptSchema,
@@ -80,6 +81,7 @@ export class SpeechTurns {
     private readonly chat: (raw: unknown, owner: object) => Promise<Result<ConversationTextResult>>,
     now: () => number = Date.now,
     private readonly cancelText: (turnId: string) => void = () => {},
+    private readonly retainApprovedTextOnTtsFailure = false,
   ) {
     this.now = now === Date.now ? elapsedEpochClock() : now;
   }
@@ -252,6 +254,56 @@ export class SpeechTurns {
     });
     return ok(this.snapshot()!);
   }
+  // Typed openings/repeats use the same output owner, validation and receipts as STT replies.
+  async speak(raw: unknown, rates: number[]): Promise<Result<ConversationTextResult>> {
+    const parsed = ConversationTextCommandSchema.safeParse(raw),
+      s = this.snapshot();
+    if (
+      !parsed.success ||
+      !s ||
+      parsed.data.sessionId !== s.id ||
+      parsed.data.expectedGeneration !== s.generation ||
+      !['ready', 'waiting'].includes(s.phase) ||
+      this.busy() ||
+      !rates.length
+    )
+      return fail('REVISION_CONFLICT', 'Use a current ready endpoint for speech');
+    const input = parsed.data;
+    if (this.#commands.has(input.commandId) || this.#commands.size >= 256)
+      return fail('REVISION_CONFLICT', 'Speech command is stale or at capacity');
+    this.#commands.add(input.commandId);
+    const v: Owner = {
+      token: s,
+      commandId: input.commandId,
+      turnId: input.commandId,
+      streamId: crypto.randomUUID(),
+      language: input.language,
+      rates: [...rates],
+      began: this.now(),
+      deadline: this.now() + 60000,
+      phase: 'processing',
+      controller: new AbortController(),
+      input: null,
+      inputBytes: 0,
+      nextChunk: 0,
+      sent: 0,
+      played: 0,
+      announced: false,
+      ended: false,
+    };
+    this.#owner = v;
+    try {
+      const response = await this.chat(input, v);
+      if (!response.ok || response.data.kind !== 'reply') {
+        if (this.#owner === v) this.clear(true);
+        return response;
+      }
+      if (!this.current(v)) return fail('REVISION_CONFLICT', 'Speech turn canceled');
+      return await this.synthesize(v, response.data);
+    } finally {
+      if (this.#owner === v && v.phase === 'processing') this.clear(true);
+    }
+  }
   chunk(raw: unknown): Result<{ acceptedChunks: number }> {
     const parsed = SpeechInputChunkSchema.safeParse(raw),
       v = this.#owner;
@@ -404,7 +456,7 @@ export class SpeechTurns {
         return fail('REVISION_CONFLICT', 'Speech turn canceled');
       }
       if (!spoken.ok) {
-        this.clear(true);
+        this.clear(true, !this.retainApprovedTextOnTtsFailure);
         return fail('UNAVAILABLE', 'Speech synthesis unavailable');
       }
       const audio = spoken.data;

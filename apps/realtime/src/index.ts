@@ -3,15 +3,48 @@ import {
   assertMockMode,
   localMockRequestAllowed,
   MOCK_TOKEN,
+  SessionCoordinator,
 } from '@lemmi/server';
-import { DeviceEventSchema, ServerEventSchema, fail, type ServerEvent } from '@lemmi/contracts';
+import {
+  DeviceEventSchema,
+  ServerEventSchema,
+  fail,
+  operations,
+  type ServerEvent,
+  type Result,
+} from '@lemmi/contracts';
 import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
 import { localSpeechConfig, createLocalSpeechAdapters } from '@lemmi/server';
+import { photoStoryDemoPack, alexProfileDetail } from '@lemmi/activities';
+import { reviewedPhotoDemo } from '../../../packages/server/src/adapters/photo-story-demo';
 function startMockGateway() {
   assertMockMode();
-  const coordinator = new MockCoordinator();
+  const photoDemo = process.env.LEMMI_PHOTO_STORY_DEMO === '1';
+  const llm =
+    photoDemo && process.env.LEMMI_PHOTO_STORY_CHAT === 'openrouter' ? openRouterConfig() : null;
+  if (llm && !llm.ok) throw new Error('OpenRouter mode requires private model/key configuration');
+  const selected = photoDemo ? localSpeechConfig() : null;
+  const speech =
+    selected?.ok &&
+    selected.data.sttBackend !== 'disabled' &&
+    selected.data.ttsBackend !== 'disabled'
+      ? createLocalSpeechAdapters(selected.data)
+      : undefined;
+  const coordinator = photoDemo
+    ? new SessionCoordinator(
+        'live',
+        llm?.ok ? createOpenRouterAdapter(llm.data) : reviewedPhotoDemo(),
+        speech,
+        Date.now,
+        undefined,
+        { pack: photoStoryDemoPack, availableAssetIds: ['photo-story-garden', 'photo-story-park'] },
+      )
+    : new MockCoordinator();
+  if (photoDemo) coordinator.acceptPersistentProfile(alexProfileDetail);
+  const sweep = setInterval(() => coordinator.sweepSpeech(), 250);
+  sweep.unref();
   type SocketData = { lastSequence: number; outSequence: number; lastSeen: number; hello: boolean };
   const sockets = new Set<Bun.ServerWebSocket<SocketData>>();
   function emit(ws: Bun.ServerWebSocket<SocketData>, type: ServerEvent['type'], payload: unknown) {
@@ -74,7 +107,46 @@ function startMockGateway() {
         return Response.json(fail('VALIDATION_ERROR', 'Invalid JSON'), { status: 400 });
       }
       const operation = url.pathname.slice('/internal/mock/'.length);
-      const result = coordinator.handle(operation, body);
+      if (
+        !Object.hasOwn(operations, operation) ||
+        !operations[operation as keyof typeof operations].input.safeParse(body).success
+      )
+        return Response.json(fail('VALIDATION_ERROR', 'Invalid local operation input'), {
+          status: 400,
+        });
+      let result:Result<unknown>;
+      if (photoDemo && (operation === 'conversation.text' || operation === 'speech.speak'))
+        result = await (operation === 'speech.speak'
+          ? coordinator.speakText(body)
+          : coordinator.submitText(body));
+      else if (photoDemo && operation === 'speech.start')
+        result = coordinator.requestCapture(body, [16000, 22050, 24000, 44100, 48000]);
+      else if (photoDemo && operation === 'speech.chunk')
+        result = coordinator.acceptCaptureChunk(body);
+      else if (photoDemo && operation === 'speech.end')
+        result = await coordinator.finishCapture(body);
+      else if (photoDemo && operation === 'speech.receipt')
+        result = coordinator.playbackReceipt(body);
+      else if (photoDemo && operation === 'speech.output') {
+        const scope = body as { sessionId?: string };
+        if (scope?.sessionId !== coordinator.snapshot()?.id)
+          result = fail('NOT_FOUND', 'Session not found');
+        else {
+          const metadata = coordinator.speechOutputInfo();
+          const drained = coordinator.drainSpeechOutput();
+          result = {
+            ok: true as const,
+            data: { metadata, chunks: drained?.chunks ?? [], ended: drained?.end ?? false },
+          };
+        }
+      } else {
+        result = coordinator.handle(operation, body);
+        if (photoDemo && operation === 'photoStory.status' && result.ok)
+          result = {
+            ok: true,
+            data: { ...(result.data as object), chat: llm?.ok ? 'openrouter' : 'reviewed_demo' },
+          };
+      }
       broadcast();
       return Response.json(result, {
         headers: { 'Cache-Control': 'no-store' },

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { clients } from '#lib/clients.ts';
   import type { OperationOutput } from '@lemmi/contracts';
+  import { photoEventRecap } from '@lemmi/activities';
   let overview = $state<OperationOutput<'overview.load'> | null>(null);
   let message = $state('Loading mock overview…');
   let journal = $state<OperationOutput<'journal.load'> | null>(null);
@@ -43,6 +44,12 @@
   <h2>Factual mock journal</h2>
   <p>In-memory events only. No excerpts or AI summary.</p>
   {#if journal?.sessions.length}{#each journal.sessions as record}<h3>{record.sessionId}</h3>
+      {@const recap = photoEventRecap(journal, record.sessionId)}
+      <p>
+        {recap.text} Viewed: {recap.viewedPhotoIds.join(', ') || 'none'}. Skipped: {recap.skippedPhotoIds.join(
+          ', ',
+        ) || 'none'}.
+      </p>
       <ul>
         {#each record.events as event}<li>{event.type} · {event.source}</li>{/each}
       </ul>{/each}{:else}<p>No mock sessions recorded.</p>{/if}<button onclick={load}
