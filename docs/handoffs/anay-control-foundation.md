@@ -2,6 +2,8 @@
 
 **Scope:** fictional Alex, one configured caregiver subject, one assigned device `stackchan-alex`. This implements the first control increment from [Emilia's handoff](anay-device-integration.md). It does not complete F13, speech, sign-in UI, persistence or real caregiver contact.
 
+**Persistent credential follow-up:** `anay/persistent-device-credentials` extends this baseline with explicit caregiver-selected enrollment in PostgreSQL mode. Keys survive gateway restarts until revoked; codes and sessions never do. Default one-hour credentials remain unchanged. `expiresAt` / `credentialExpiresAt` may be null only for the persistent key response. Use the [current persistent-key handoff](anay-persistent-device-credentials.md) for exact behavior and Emilia's firmware task; the original standalone control mode below remains ephemeral.
+
 ## What is implemented
 
 - One existing `SessionCoordinator`, extracted from the mock coordinator. `MockCoordinator` remains an explicit mock wrapper. The gateway selects mock **or** authenticated control mode at startup; it never runs competing session authorities.

@@ -10,6 +10,8 @@ import {
 } from '@lemmi/server';
 import {
   ClaimDeviceInputSchema,
+  ClaimDeviceResultSchema,
+  PairDeviceInputSchema,
   DeviceEventSchema,
   createClients,
   createHttpTransport,
@@ -316,4 +318,30 @@ test('live Stop and access revocation still work at command capacity; leases dif
     fresh.handle('session.start', { profileId: 'profile-alex', commandId: 'b', endpoint: 'robot' }),
   ) as any;
   expect(a.leaseId).not.toBe(b.leaseId);
+});
+
+test('persistent enrollment is explicit, requires database mode and validates nullable expiry', () => {
+  const access = new DeviceAccess();
+  expect(access.pair('caregiver', { ...pair, credentialMode: 'persistent' }).ok).toBe(false);
+  expect(access.pair('caregiver', pair).ok).toBe(true);
+  expect(PairDeviceInputSchema.safeParse({ ...pair, credentialMode: 'persistent' }).success).toBe(
+    true,
+  );
+  expect(PairDeviceInputSchema.safeParse({ ...pair, credentialMode: 'admin' }).success).toBe(false);
+  expect(
+    ClaimDeviceInputSchema.safeParse({
+      pairingId: 'fixture',
+      code: 'x'.repeat(24),
+      localConfirmed: true,
+      credentialMode: 'persistent',
+    }).success,
+  ).toBe(false);
+  expect(
+    ClaimDeviceResultSchema.safeParse({
+      deviceId: pair.deviceId,
+      profileId: pair.profileId,
+      credential: 'x'.repeat(43),
+      expiresAt: null,
+    }).success,
+  ).toBe(true);
 });
