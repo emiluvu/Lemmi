@@ -12,6 +12,10 @@ Maintain this deployment/acceptance record alongside the [backend API reference]
 
 **Undeployed increment, November 14:** `anay/app-data-schema` reviews Emilia's `4e8993f` draft and promotes only corrected album/playlist metadata in migration `002_media_collections.sql`. PostgreSQL 14.24 upgrade/rollback and existing backend tests pass locally; no public API or shared/deployed database changed. Consent/journal/help/jobs/deletion/camera tables remain proposal-only. See [review, checks and next handoff](handoffs/anay-app-data-schema-review.md). The schema increment is now merged into `main` (`a6f7ff9`) and incorporated into `anay/speech-pipeline`; neither source merge changes the deployed revision recorded above.
 
+## Undeployed multi-profile increment
+
+Branch `anay/multi-profile-endpoints` builds on `anay/speech-pipeline` and adds isolated profile sessions, browser/robot handoff, persistent scoped enrollment, fictional profile creation/selection and a live participant frontend. See [integration handoff](handoffs/anay-multi-profile-endpoints.md). No deployment, physical firmware acceptance or real participant rollout is implied; the deployed revision below is unchanged. Local feature verification: 129 Bun tests / 2,310 expectations with isolated PostgreSQL, type/Svelte/build/format and production participant/control/chat/data/speech fixture smokes passed. Actual browser microphone/speaker and K151 checks remain unrun. Details are recorded in the handoff and build plan.
+
 ## Deployment
 
 For the undeployed teaching increment, changed-code formatting and whitespace checks passed; repository-wide formatting still reports 83 unchanged files. The deployed services below remain unchanged.

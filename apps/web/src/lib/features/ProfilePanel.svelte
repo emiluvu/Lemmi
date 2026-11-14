@@ -5,6 +5,7 @@
   import AdditionalInformation from '#lib/features/AdditionalInformation.svelte';
   import AvatarArt from '#lib/features/AvatarArt.svelte';
   import { avatarChoices, avatarArtwork } from '#lib/avatars.ts';
+  import { alexProfileDetail } from '#lib/alex-demo-profile.ts';
   import type { AvatarId, CaregiverProfile } from '@lemmi/contracts';
   let {
     close,
@@ -86,7 +87,7 @@
   let editing = $state(false);
   let name = $state('');
   let avatar = $state<AvatarId>('lemming');
-  let biography = $state('');
+  let biography = $state(alexProfileDetail.approvedFacts.map((fact) => fact.value).join('\n'));
   let biographyDraft = $state('');
   let busy = $state(false);
   let message = $state('Loading profile…');
@@ -324,7 +325,16 @@
             ></textarea></label
           >
         {:else}<p>{biography || 'No biography added.'}</p>{/if}
-        <p class="helper">Temporary draft only. Biography saving is not available yet.</p>
+        <p class="helper">
+          Fictional Alex background from the supplied demo profile. Edits remain temporary drafts;
+          this does not update the deployed biography.
+        </p>
+        <h3>Interests</h3>
+        <p>Gardening, beaches, and general banking conversation.</p>
+        <p class="helper">
+          Cooking is avoided. Banking conversation must not request account details or offer
+          financial advice. Remembering and excerpt saving remain off.
+        </p>
       </section>
       <ConversationSummary
         profileId={profile.id}

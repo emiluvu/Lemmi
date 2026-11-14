@@ -107,7 +107,16 @@ server {
         proxy_buffering off;
     }
 
-    location ~ ^/(access(/logout)?|v1/(devices/stackchan-alex/(pairings|revoke)|device-pairings/claim))$ {
+    location ~ ^/(access(/logout)?|v1/(devices/[^/]+/(pairings|revoke)|device-pairings/claim))$ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host YOUR_DOMAIN;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+    }
+
+    # Multi-profile participant frontend and explicit fictional-demo setup.
+    location ~ ^/(participant|_app/.*|v1/demo/(profiles|enroll|current|release))$ {
+        client_max_body_size 4k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;
@@ -115,14 +124,14 @@ server {
     }
 
     # Optional database-backed profile and media resources.
-    location ~ ^/v1/profiles/profile-alex/(photos|assets)$ {
+    location ~ ^/v1/profiles/[^/]+/(photos|assets)$ {
         client_max_body_size 29m;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
     }
-    location ~ ^/v1/(profiles/profile-alex(/assets/[^/]+)?|participant/profiles/profile-alex|assets/[^/]+(/metadata)?)$ {
+    location ~ ^/v1/(profiles/[^/]+(/assets/[^/]+)?|participant/profiles/[^/]+|assets/[^/]+(/metadata)?)$ {
         client_max_body_size 32k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
@@ -139,7 +148,7 @@ Preserve `Authorization`, `Origin`, request paths/query strings and WebSocket up
 
 Your updater should run from the dedicated deployment checkout, serialize updates, fetch/pull **only `backend-deploy`** with fast-forward-only behavior, install from the frozen Bun lockfile, and pass checks/build before restarting. Keep the known working revision/release available if preparation fails. Use normal merge commits on the branch to integrate subsequent reviewed backend work; no automatic deployment is configured by this repository.
 
-**Restart behavior:** with database mode enabled, approved profiles/facts/media, issued credential hashes and bounded session/factual-event checkpoints persist. **Startup deliberately revokes device credentials and ends prior unfinished sessions**; no pairing code, active conversation, capture or playback is restored. Pair again and start explicitly after gateway restarts. Without database mode, the earlier in-memory behavior remains. The shared domain-key browser cookie is stateless and can remain valid until its eight-hour expiry when the same key is retained; this never restores a device token or session. Key rotation plus restart invalidates those cookies/connections. See [database storage/recovery behavior](../db/README.md#storage-and-interruption-behavior). Coordinate restarts with teammates. Full durable journal/jobs/deletion workflows remain pending.
+**Restart behavior:** with database mode enabled, approved profiles/facts/media, issued credential hashes and bounded session/factual-event checkpoints persist. **After migration 002, startup preserves unexpired enrollment hashes and ends prior unfinished sessions**; no pairing code, active conversation, capture or playback is restored. Reconnect with the stored enrollment and start explicitly after gateway restarts. Without database mode, the earlier in-memory behavior remains. Use `LEMMI_DEMO_ENROLLMENT=1` only for the fictional demo selector/enrollment documented in [the handoff](handoffs/anay-multi-profile-endpoints.md). Keep caregiver identity separate. The shared domain-key browser cookie is stateless and can remain valid until its eight-hour expiry when the same key is retained; this never restores a device token or session. Key rotation plus restart invalidates those cookies/connections. See [database storage/recovery behavior](../db/README.md#storage-and-interruption-behavior). Coordinate restarts with teammates. Full durable journal/jobs/deletion workflows remain pending.
 
 Once domain and host setup are available, record actual observations in the build plan:
 

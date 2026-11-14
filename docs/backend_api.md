@@ -4,7 +4,7 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 
 **Feature-branch scope:** `anay/speech-pipeline` adds opt-in voice transport described below. These additions have not been deployed; [deployed host status](backend-status.md) remains separate.
 
-**Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
+**Feature scope:** multiple independently authorized fictional profiles and browser/robot endpoints; `profile-alex` and `stackchan-alex` remain compatible initial IDs. Preview cards are presentation-only. [Multi-profile routes and enrollment](handoffs/anay-multi-profile-endpoints.md) require this feature branch and an explicit deployment; deployed revision remains recorded in backend-status.md. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
 
 **Deployed baseline:** `04d050e` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
 
@@ -19,7 +19,7 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 | Authenticated device WSS | Controls/text plus opt-in capture/audio output on this feature branch; physical K151 integration pending | Emilia; computer control harness |
 | OpenRouter chat | Deployed text greeting/public WSS passed; feature branch also passed a real isolated 20-turn synthetic voice rehearsal. Broader conversational/human quality remains unverified | Anay server only |
 | Local STT/TTS | Private wrapper/adapters implemented; English CPU synthetic checks including a repeated voice run passed locally, but host/human quality remains imperfect | Anay server only |
-| Robot/browser microphone → STT → chat → TTS → playback | Backend capture/STT/chat/TTS/PCM output implemented opt-in and tested with synthetic input/simulated receipts; actual hardware/browser flow pending | Anay + Emilia + Kylie |
+| Robot/browser microphone → STT → chat → TTS → playback | Backend capture/STT/chat/TTS/PCM output implemented opt-in and tested with synthetic input/simulated receipts; browser PCM transport/local controls implemented in multi-profile increment; actual microphone/speaker/hardware acceptance pending | Anay + Emilia + Kylie |
 | Photos/guessing/matching | State/pack/action/view/context/event contracts and fixtures exist; three reducers/catalog hosting remain unavailable | Lukas logic; Kylie rendering; Anay host |
 | Teach Lemmi | Branch-only conversation handlers, reviewed English prompts, active-time expiry, scripted local text demo and synthetic speech/device verification; durable policy/journal observation and hardware acceptance pending | Anay integration; Lukas content; Kylie views; Emilia controls |
 | Camera/health/preferences | Preliminary contracts/clients/fixtures; executable live integrations remain unavailable | All four owners at their assigned boundaries |
@@ -33,7 +33,7 @@ Anay edits canonical backend/contracts. Kylie renders safe projections and submi
 
 **Undeployed schema review (`anay/app-data-schema`, merged into `main` at `a6f7ff9`):** migration `002_media_collections.sql` adds album/playlist metadata with stable membership IDs and scoped image/music references. No HTTP, client, protocol or authorization surface changes; collection CRUD and reviewed-pack hosting remain A05. Journal/consent/contact/jobs/deletion/camera portions of Emilia's full draft remain inactive. See [review and verification](handoffs/anay-app-data-schema-review.md) and [database setup](../db/README.md). The deployed availability table above is unchanged.
 
-[Database/profile/assets handoff](handoffs/anay-database-profile-assets.md) and [database setup](../db/README.md) define the current exact fields, permissions, format limits and restart behavior. PostgreSQL is opt-in via private `LEMMI_DATABASE_URL`/`LEMMI_PRIVATE_MEDIA_DIR` plus the configured caregiver subject. `bun run db:migrate` / `db:bootstrap` prepare only fictional Alex. One gateway owns the database; boot checks reject stale writes. Credential hashes and bounded session/factual-event checkpoints are persisted; restart deliberately revokes pairing credentials and ends old sessions. Full contact/policy/journal/deletion workflows remain pending despite schema foundations.
+[Database/profile/assets handoff](handoffs/anay-database-profile-assets.md) and [database setup](../db/README.md) define the current exact fields, permissions, format limits and restart behavior. PostgreSQL is opt-in via private `LEMMI_DATABASE_URL`/`LEMMI_PRIVATE_MEDIA_DIR` plus the configured caregiver subject. `bun run db:migrate` / `db:bootstrap` prepare only fictional Alex. One gateway owns the database; boot checks reject stale writes. Credential hashes and bounded session/factual-event checkpoints are persisted; restart preserves unexpired enrollment hashes and ends old sessions. Full contact/policy/journal/deletion workflows remain pending despite schema foundations.
 
 Public additions: caregiver GET/PATCH `/v1/profiles/:id`, POST `/v1/profiles/:id/photos` or `/assets`, GET `/v1/profiles/:id/assets/:assetId`; paired-device GET `/v1/participant/profiles/:id`, `/v1/assets/:assetId`, `/v1/assets/:assetId/metadata`. All reject example/unassigned scope, verify credentials server-side and disable caching. Device tokens never go to managed-identity introspection. Private `POST /internal/data` is solely the authenticated SvelteKit → existing gateway adapter, never a public route. Proxy only the new explicit resource paths and keep internal routes/services private.
 
@@ -81,7 +81,7 @@ Credentials are **not interchangeable**:
 - Speech: independent service credential shared only by trusted backend/engine wrapper.
 - Mock: `LEMMI_MOCK_TOKEN` defaults to `local-mock-only`; development convention, not pairing/authentication for real users/data.
 
-No tokens, pairing codes, private media, provider errors, prompts or contact destinations belong in query strings/logs/source/fixtures. Pairing codes and active authority remain transient. With database mode, credential hashes and factual/session checkpoints persist, but startup explicitly revokes tokens and ends interrupted sessions; restart still requires re-pairing. Complete journal/deletion workflows remain pending.
+No tokens, pairing codes, private media, provider errors, prompts or contact destinations belong in query strings/logs/source/fixtures. Pairing codes and active authority remain transient. With database mode, credential hashes and factual/session checkpoints persist, startup retains unexpired tokens and ends interrupted sessions; restart requires explicit session start, without repeated pairing. Complete journal/deletion workflows remain pending.
 
 ### Explicit VoidAuth token binding
 
@@ -102,7 +102,7 @@ The current live gateway has no equivalent public health/readiness HTTP route. M
 
 ### Private domain access gate (deployment branch)
 
-Set `LEMMI_ACCESS_KEY` (independent 32–256 visible characters) on web/gateway. Live process configuration requires the key and fails closed if it is missing, invalid or reused; local mock mode needs no key. With it enabled, all implemented live public API/WSS paths require either `X-Lemmi-Access-Key` or a signed browser cookie. Existing caregiver introspection, paired device Bearer authorization and internal server token checks remain separate; the key alone grants no role/resource authority. The current mock pages remain loopback-only.
+Set `LEMMI_ACCESS_KEY` (independent 32–256 visible characters) on web/gateway. Live process configuration requires the key and fails closed if it is missing, invalid or reused; local mock mode needs no key. With it enabled, all implemented live public API/WSS paths require either `X-Lemmi-Access-Key` or a signed browser cookie. Existing caregiver introspection, paired device Bearer authorization and internal server token checks remain separate; the key alone grants no caregiver/private-data authority. With explicit `LEMMI_DEMO_ENROLLMENT=1`, it enables enrollment into assigned fictional demo profiles only. The current mock pages remain loopback-only.
 
 | Route / credential | Behavior |
 | --- | --- |
@@ -166,7 +166,7 @@ The following table covers every current `operations` entry in [services.ts](../
 | `profile.save` | `profile, expectedRevision` | `CaregiverProfile` | Mock revision-checked update; cannot enable remembering/excerpts |
 | `profile.previews` | `{}` | Preview profile array | Static `Example profile — preview only` cards; no live operations |
 | `session.start` | `profileId, commandId, endpoint` | `SessionSnapshot` | Starts mock session; live start currently WSS only |
-| `session.get` | `sessionId` | `SessionSnapshot` | Reads current mock session; live browser read seam pending |
+| `session.get` | `sessionId` | `SessionSnapshot` | Mock RPC reads current session; live browser receives scoped WSS state snapshots |
 | `session.command` | `SessionCommand` below | `SessionSnapshot` | Mock controls/handoff/teaching; speak/turn_end unavailable; live controls/teaching WSS below |
 | `conversation.submit` | `ConversationTextCommand` | `ConversationTextResult` | Local mock teaching only, scripted replies; never caches text through generic dispatch; live text remains WSS |
 | `activities.list` | `profileId` | `{activityId,packId,packVersion,implemented}[]` | Four mock catalog entries; only music implemented; live catalog pending |
@@ -204,11 +204,11 @@ All are SvelteKit handlers on the configured HTTPS origin; JSON requests/respons
 | `POST /v1/device-pairings/claim` | Possession of pending secret pairing code, plus firmware local confirmation | `{pairingId,code,localConfirmed:true}` | `{deviceId,profileId,credential,expiresAt}` |
 | `POST /v1/devices/stackchan-alex/revoke` | Assigned caregiver managed access token | `{deviceId:'stackchan-alex',commandId}` | `{revoked:true}` |
 
-Actual route pattern is `/v1/devices/[deviceId]/[action]`, but only Alex's configured device is assigned. Route/body device IDs must match. Unknown example/unassigned profile/device IDs fail scope checks; do not add a functional second profile to get around this.
+Route pattern is `/v1/devices/[deviceId]/[action]`. Route/body device IDs must match and the verified caregiver must have membership for the assigned profile. Preview/unassigned scope remains rejected.
 
-The 24-character random code lasts five minutes and is single-use. Repeat pair ID/body returns the same still-pending code; after expiry/claim/revoke use a fresh command ID. Only one pending pairing/device credential is allowed; revoke before replacement. Claim returns the random device credential **once**, valid for one hour. A lost successful response cannot retrieve it again: revoke/re-pair explicitly. Claims are globally limited to 20/minute for this demo. `localConfirmed:true` is a firmware contract, not cryptographic proof of a physical button press or consent to microphone/camera access.
+The 24-character random code lasts five minutes and is single-use. Repeat pair ID/body returns the same still-pending code; after expiry/claim/revoke use a fresh command ID. One pending pairing/current credential is allowed per device; revoke before replacement. Different devices pair independently. Claim returns the random device credential **once**, valid for one hour. A lost successful response cannot retrieve it again: revoke/re-pair explicitly. Claims are globally limited to 20/minute for this demo. `localConfirmed:true` is a firmware contract, not cryptographic proof of a physical button press or consent to microphone/camera access.
 
-Revocation clears pending enrollment/current credential, ends the session and closes an existing socket. Replaying an old revoke command cannot revoke a new pairing. Pairing/revoke command history is bounded to 256; new pairings fail at capacity while revocation remains available. Gateway restart clears all credentials/codes; device must not automatically capture/restart on reconnect.
+Revocation clears the target device enrollment and socket. Revoking the active endpoint ends its profile session; revoking an observer does not interrupt another endpoint. Replaying an old revoke command cannot revoke a new pairing. Pairing/revoke command history is bounded to 256; new pairings fail at capacity while revocation remains available. Gateway restart clears pending codes and running session/media state. PostgreSQL preserves unexpired enrollment hashes; endpoints reconnect without automatic capture or playback.
 
 **Database ownership fence (`04d050e`):** pairing checks that the device row belongs to the current gateway boot; a stale authority returns `UNAVAILABLE`. Claim writes only when the row still has that same boot marker and never assigns/replaces ownership itself. If persistence/ownership checks fail, no usable credential is returned; explicitly re-pair against the current gateway. Regression coverage verifies stale claim/pair rejection, preservation of the replacement marker, and successful authentication by the current authority.
 
@@ -216,7 +216,7 @@ Revocation clears pending enrollment/current credential, ends the session and cl
 
 ## 6. Firmware / authenticated WebSocket protocol
 
-Connect `wss://<configured-host-or-IP>[:port]/v1/device-stream` using `Authorization: Bearer <paired-device-credential>` in the upgrade request. Same gateway/session as HTTP controls; no dependency on an open browser tab. One connection at a time, reserved atomically during upgrade. No URL tokens, insecure certificate bypass or caregiver/provider credentials on the device.
+Connect `wss://<configured-host-or-IP>[:port]/v1/device-stream` using `Authorization: Bearer <paired-device-credential>` in the upgrade request. Same gateway/session as HTTP controls; no dependency on an open browser tab. Multiple connections are supported; each device has one atomically reserved connection. Browser cookie authentication requires the exact configured Origin. No URL tokens, insecure certificate bypass or caregiver/provider credentials on the device.
 
 Protocol envelope, validated by `DeviceEventSchema` / `ServerEventSchema`:
 
@@ -323,7 +323,7 @@ Camera allow/decline/started/ended and device.health schemas remain preliminary;
 
 ### Session contract
 
-`SessionSnapshot` includes `id,profileId,generation,profileRevision,privacyRevision,policyRevision,phase,endpoint,leaseId,micMuted,captureGrant,communicationSupport,conversationMode,teaching,mode`. Endpoint is `browser|robot`; phase enum is `ready|listening|processing|speaking|waiting|paused|unavailable|ended`. Not all schema phases are reachable in the current transport. A nonnull capture grant is legal only while current/unmuted/listening with matching generation/lease; this feature branch grants one only through explicit negotiated `input.speak`; deployment/hardware acceptance remains separate.
+`SessionSnapshot` includes `id,profileId,generation,profileRevision,privacyRevision,policyRevision,phase,endpoint,activeEndpointId?,leaseId,micMuted,captureGrant,communicationSupport,conversationMode,teaching,mode`. Endpoint is `browser|robot`; phase enum is `ready|listening|processing|speaking|waiting|paused|unavailable|ended`. Not all schema phases are reachable in the current transport. A nonnull capture grant is legal only while current/unmuted/listening with matching generation/lease; this feature branch grants one only through explicit negotiated `input.speak`; deployment/hardware acceptance remains separate.
 
 `SessionCommand = {commandId,sessionId,expectedGeneration,action}`. Runtime actions: `pause`, `resume`, `stop`, `{type:'mute',muted}`, `{type:'handoff',endpoint}`, `teaching.start`, `teaching.next`, `teaching.not_sure`, `teaching.finish`, `teaching.prefer`, `teaching.avoid`. `speak` and `turn_end` remain unavailable through this generic command path; negotiated speech uses its dedicated wire events. Mock HTTP supports handoff; the live device event union has no handoff event yet. Resume is explicit and capture-off, Stop is terminal, and initiated help requests have their own lifecycle.
 

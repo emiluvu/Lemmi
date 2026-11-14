@@ -2,10 +2,10 @@
 
 Generated on November 14, 2026 with the built-in image generation tool at the user's request. The supplied game and train screenshots are visual inspiration only; they are not redistributed in the app. These are decorative app assets, not approved activity content or robot exports.
 
-| File | Use |
-| --- | --- |
+| File                         | Use                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `conversation-meadow-v1.png` | Static conversation backdrop: cream clearing with sage foliage, flowers and shaded stones at the edges. |
-| `cream-paper-v1.png` | Repeated low-contrast material for folders, cards, portrait backgrounds and the surrounding canvas. |
+| `cream-paper-v1.png`         | Repeated low-contrast material for folders, cards, portrait backgrounds and the surrounding canvas.     |
 
 The original five avatar PNGs, avatar mapping/component and dashboard banner are preserved. No new animal artwork is generated. Existing page geometry, controls and client calls are retained. Contrast is protected with pale surface washes; the conversation backdrop has an additional wash at phone widths. Decorations are CSS backgrounds, excluded from the accessibility tree, and have no animation or pointer interaction. Solid background colors remain fallbacks.
 
@@ -32,4 +32,3 @@ Primary request: create a quiet warm-cream hand-painted paper texture in the cut
 Composition: square, edge-to-edge seamless tile with equal brightness on all edges, no directional vignette, no border, no seams, no corners. Warm pale ivory base #f7ecd6 with subtle tiny cellulose fibers, extremely soft irregular gouache pigment pooling, occasional barely visible fine flecks in pale oatmeal. Gentle tactile handmade stationery, restrained and clean, very low contrast so dark UI text stays readable. A polished illustrated game inventory panel material rather than photographic crumpled parchment.
 Style: matte soft gouache and pencil-grain texture. All detail very fine relative to image, evenly distributed, no distracting large marks. Bright soft warm cream overall, slight depth in tiny fibers, no gradient from one side to the other.
 Constraints: entire image is only a tileable texture. NO text, symbols, drawings, flowers, objects, icons, animals, frames, watermark, folds, tears, stains, dark fibers, visible speckled noise, drop shadows, 3D render. This is a background material asset, not a UI mockup.
-

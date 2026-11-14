@@ -1,12 +1,19 @@
 import type { SQL } from 'bun';
 import { createHash } from 'node:crypto';
 import { fail, ok, type Result } from '@lemmi/contracts';
-import { DataRequestSchema } from '../../../contracts/src/profile-assets';
+import { DataRequestSchema, DemoSetupRequestSchema } from '../../../contracts/src/profile-assets';
 import { DataRepository, DataError, type DataPrincipal } from './repository';
 import { DatabaseDeviceAuthority } from './device-authority';
 import { PrivateMedia } from './private-media';
 import { database } from './database';
 import type { SessionCoordinator } from '../session-coordinator';
+type ProfileSessions = Pick<
+  SessionCoordinator,
+  'acceptPersistentProfile' | 'persistenceSnapshot'
+> & {
+  pauseForProfileUpdate(patch: Record<string, unknown>, profileId?: string): void;
+  forProfile?(profileId: string): SessionCoordinator;
+};
 
 export function dataConfig(env: Record<string, string | undefined> = process.env) {
   if (!env.LEMMI_DATABASE_URL) return null;
@@ -24,9 +31,9 @@ export class PersistentData {
   constructor(
     readonly repository: DataRepository,
     readonly subject: string,
-    private coordinator: SessionCoordinator,
+    private coordinator: ProfileSessions,
     now: () => number,
-    invalidated: () => void,
+    invalidated: (deviceId?: string) => void,
   ) {
     this.devices = new DatabaseDeviceAuthority(repository, now, invalidated);
   }
@@ -41,7 +48,13 @@ export class PersistentData {
     try {
       await this.repository.bootstrap(this.subject);
       await this.devices.start();
-      this.coordinator.acceptPersistentProfile(await this.repository.approvedProfile(this.subject));
+      const profiles = await this.repository.listProfiles(this.subject);
+      for (const profile of profiles) {
+        if (this.coordinator.forProfile || profile.id === 'profile-alex')
+          this.coordinator.acceptPersistentProfile(
+            await this.repository.approvedProfile(this.subject, profile.id),
+          );
+      }
     } catch (error) {
       await this.close();
       throw error;
@@ -82,12 +95,16 @@ export class PersistentData {
       }
     }
   }
-  async principal(actor: unknown, credential: unknown): Promise<DataPrincipal> {
+  async principal(
+    actor: unknown,
+    credential: unknown,
+    profileId = 'profile-alex',
+  ): Promise<DataPrincipal> {
     if (typeof actor === 'string' && actor === this.subject && credential === undefined)
       return {
         kind: 'caregiver',
         subject: actor,
-        profileId: 'profile-alex',
+        profileId,
         bootId: this.devices.bootId,
       };
     if (typeof credential === 'string' && actor === undefined) {
@@ -103,11 +120,92 @@ export class PersistentData {
     }
     throw new DataError('FORBIDDEN', 'Assigned caregiver or current paired device required');
   }
+  // Caller must enforce explicit demo-enrollment configuration and private setup access.
+  async demoHandle(raw: unknown) {
+    const parsed = DemoSetupRequestSchema.safeParse(raw);
+    if (!parsed.success) throw new DataError('VALIDATION_ERROR', 'Invalid demo setup request');
+    const request = parsed.data;
+    const epoch = await this.repository
+      .sql`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${this.devices.bootId}::uuid`;
+    if (!epoch.length) throw new DataError('UNAVAILABLE', 'Gateway ownership changed');
+    if (request.operation === 'endpoint.current' || request.operation === 'endpoint.release') {
+      const identity = await this.devices.authenticate(request.credential);
+      if (!identity || (request.endpoint && request.endpoint !== (identity.endpoint ?? 'robot')))
+        throw new DataError('FORBIDDEN', 'Endpoint access has ended');
+      const profiles = await this.repository.listProfiles(this.subject, true);
+      if (!profiles.some((profile) => profile.id === identity.profileId))
+        throw new DataError('FORBIDDEN', 'Demo profile is not assigned');
+      if (request.operation === 'endpoint.release') {
+        const revoked = await this.devices.revoke(this.subject, {
+          deviceId: identity.deviceId,
+          commandId: crypto.randomUUID(),
+        });
+        if (!revoked.ok) return revoked;
+        return ok({ released: true });
+      }
+      return ok({
+        deviceId: identity.deviceId,
+        profileId: identity.profileId,
+        endpoint: identity.endpoint ?? 'robot',
+        expiresAt: new Date(identity.expiresAt).toISOString(),
+        profile: profiles.find((profile) => profile.id === identity.profileId),
+      });
+    }
+    if (request.operation === 'profile.list')
+      return ok(await this.repository.listProfiles(this.subject, true));
+    if (request.operation === 'profile.create') {
+      const profile = await this.repository.createProfile(
+        this.subject,
+        request.input,
+        true,
+        this.devices.bootId,
+      );
+      this.coordinator.acceptPersistentProfile(profile);
+      return ok(
+        (await this.repository.listProfiles(this.subject, true)).find(
+          (value) => value.id === profile.id,
+        )!,
+      );
+    }
+    const profiles = await this.repository.listProfiles(this.subject, true);
+    if (!profiles.some((profile) => profile.id === request.profileId))
+      throw new DataError('FORBIDDEN', 'Demo profile is not assigned');
+    if (request.deviceId && !request.previousCredential)
+      throw new DataError('FORBIDDEN', 'Existing device changes require its credential');
+    if (request.previousCredential) {
+      const previous = await this.devices.authenticate(request.previousCredential);
+      if (
+        !previous ||
+        (request.deviceId && previous.deviceId !== request.deviceId) ||
+        (request.previousEndpoint && request.previousEndpoint !== (previous.endpoint ?? 'robot'))
+      )
+        throw new DataError('FORBIDDEN', 'Endpoint is not assigned');
+    }
+    return ok(
+      await this.devices.enroll(
+        this.subject,
+        request.profileId,
+        request.endpoint,
+        request.previousCredential,
+      ),
+    );
+  }
   private uploadBusy = false;
   async handle(raw: unknown, actor: unknown, credential: unknown) {
     const request = DataRequestSchema.safeParse(raw);
     if (!request.success) throw new DataError('VALIDATION_ERROR', 'Invalid resource request');
-    const principal = await this.principal(actor, credential);
+    let profileId =
+      'profileId' in request.data
+        ? request.data.profileId
+        : 'input' in request.data
+          ? request.data.input.profileId
+          : undefined;
+    if (request.data.operation === 'asset.read' && typeof actor === 'string') {
+      const rows = await this.repository
+        .sql`SELECT profile_id FROM lemmi.media_assets WHERE id=${request.data.assetId}::uuid`;
+      profileId = rows[0]?.profile_id;
+    }
+    const principal = await this.principal(actor, credential, profileId);
     switch (request.data.operation) {
       case 'profile.read':
         return ok(
@@ -116,7 +214,7 @@ export class PersistentData {
       case 'profile.update': {
         const input = request.data.input;
         const profile = await this.repository.update(principal, input, () =>
-          this.coordinator.pauseForProfileUpdate(input.patch),
+          this.coordinator.pauseForProfileUpdate(input.patch, input.profileId),
         );
         this.coordinator.acceptPersistentProfile(profile);
         return ok(profile);

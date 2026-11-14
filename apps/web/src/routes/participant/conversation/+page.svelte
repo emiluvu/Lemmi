@@ -5,6 +5,7 @@
   import { clients } from '#lib/clients.ts';
   import AvatarArt from '#lib/features/AvatarArt.svelte';
   import PhotoStory from '#lib/features/PhotoStory.svelte';
+  import MockParticipant from '#lib/features/MockParticipant.svelte';
   import { activityScreenFixtures } from '@lemmi/contracts/fixtures';
   import type { ParticipantProfile, ActivityView, ActivityAction } from '@lemmi/contracts';
   const photoPreview = activityScreenFixtures.find(
@@ -12,6 +13,8 @@
       view.activityId === 'photo_album' && view.phase === 'ready',
   );
   let storyOpen = $state(false);
+  let teachingOpen = $state(false);
+  let teachingDemo = $state<{ stopForExit: () => Promise<boolean> }>();
   let storyMessage = $state('');
   const photoFiles = getContext<PhotoStoryPreviewContext>(photoStoryPreviewKey);
   let selectedPhotoId = $state<string | null>(null);
@@ -105,10 +108,16 @@
     password = value.replace(/\D/g, '').slice(0, 4);
     if (password.length === 4) checkPassword();
   }
-  function checkPassword(event?: SubmitEvent) {
+  async function checkPassword(event?: SubmitEvent) {
     event?.preventDefault();
     if (password.length !== 4) return;
     if (password === '1234') {
+      if (teachingDemo && !(await teachingDemo.stopForExit())) {
+        password = '';
+        message =
+          'Stop could not be confirmed. Close this dialog, refresh shared state, and try Stop again.';
+        return;
+      }
       password = '';
       exitDialog.close();
       void goto('/caregiver');
@@ -130,7 +139,12 @@
     aria-label="Exit conversation"
     title="Return to dashboard">✕</button
   >
-  {#if storyOpen && currentPhotoPreview && profile}
+  {#if teachingOpen}
+    <div class="teaching-demo">
+      <p class="eyebrow">Local scripted text demo · microphone and speaker off</p>
+      <MockParticipant bind:this={teachingDemo} />
+    </div>
+  {:else if storyOpen && currentPhotoPreview && profile}
     <PhotoStory
       view={currentPhotoPreview}
       avatarId={profile.avatarId}
@@ -154,6 +168,7 @@
       <h2>Ready when you are</h2>
       <p>Voice conversation is not connected yet.</p>
       <p class="conversation-capture">Microphone off · Camera off</p>
+      {#if profile}<button onclick={() => (teachingOpen = true)}>Try Teach Lemmi</button>{/if}
       {#if profile && photoPreview}<button
           class="secondary"
           onclick={() => {
@@ -244,6 +259,13 @@
 </dialog>
 
 <style>
+  .teaching-demo {
+    width: min(100%, 840px);
+    padding: 28px;
+    border-radius: 24px;
+    background: #fffdf7f5;
+    text-align: left;
+  }
   :global(body:has(.conversation-screen) .drawer-toggle),
   :global(body:has(.conversation-screen) .app-topbar),
   :global(body:has(.conversation-screen) .app-rail) {

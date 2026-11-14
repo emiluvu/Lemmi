@@ -93,7 +93,7 @@ First-use setup can link through Profile → Approved content → Contacts → D
 
 ### Dashboard example profiles
 
-The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile. Keep the functional profile visually identifiable. Preview cards have no live status badges or enabled help/camera/session controls. Provide no live profile-switch flow.
+The authorized multi-profile increment supplies a live participant setup selector for Alex and independently created fictional profiles. Keep the selected participant visible, remember the browser assignment, and cancel/clear prior state on Change participant. Separate browser contexts represent separate frontend instances; same-profile browser/robot endpoints share one session with an explicit audio handoff. Preview cards remain **Example profile — preview only**, with no live controls or copied Alex context. Use the shared setup/WSS clients in [the integration handoff](handoffs/anay-multi-profile-endpoints.md); caregiver permissions stay separate.
 
 ## 5. Shared panels and state variants — not extra pages
 

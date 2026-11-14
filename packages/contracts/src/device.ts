@@ -75,6 +75,7 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
     type: z.literal('device.hello'),
     payload: z.strictObject({
       firmwareVersion: z.string().max(80),
+      endpoint: z.enum(['browser', 'robot']).optional(),
       cameraSupported: z.boolean(),
       pettingSupported: z.boolean(),
       playback: PlaybackCapabilitySchema.optional(),
@@ -94,6 +95,7 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
     type: z.enum([
       'heartbeat',
       'input.start',
+      'input.handoff',
       'input.stop',
       'input.pause',
       'input.resume',
@@ -195,8 +197,10 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       textChat: z.boolean().optional(),
       teaching: z.boolean().optional(),
       controls: z
-        .array(z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak']))
-        .max(8),
+        .array(
+          z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak', 'handoff']),
+        )
+        .max(9),
     }),
   }),
   z.strictObject({
