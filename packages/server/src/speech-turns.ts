@@ -25,6 +25,7 @@ export interface SpeechAdapters {
 type ReplyResult = Extract<ConversationTextResult, { kind: 'reply' }>;
 type Owner = {
   fixedFor?: string;
+  teachingFor?: string;
   approvedPrompt?: boolean;
   token: SessionSnapshot;
   turnId: string;
@@ -184,6 +185,53 @@ export class SpeechTurns {
       inputBytes: 0,
       nextChunk: 0,
       promise: undefined,
+    };
+    this.#owner = next;
+    return next.turnId;
+  }
+  // A teaching control invalidates the old generation. Only the coordinator may
+  // mint this fresh output turn after its validated transition; capture stays off.
+  replaceForTeachingReply(owner: object, transition: () => boolean): string | null {
+    const previous = this.#owner;
+    if (
+      !previous ||
+      previous !== owner ||
+      previous.phase !== 'processing' ||
+      this.now() >= previous.deadline ||
+      !this.current(previous)
+    )
+      return null;
+    if (!transition()) return null;
+    const token = this.snapshot();
+    if (
+      this.#owner ||
+      !previous.controller.signal.aborted ||
+      !token ||
+      token.phase !== 'ready' ||
+      token.conversationMode !== 'teach_lemmi' ||
+      token.id !== previous.token.id ||
+      token.generation <= previous.token.generation
+    )
+      return null;
+    const next: Owner = {
+      ...previous,
+      teachingFor: previous.turnId,
+      token,
+      turnId: crypto.randomUUID(),
+      streamId: crypto.randomUUID(),
+      controller: new AbortController(),
+      began: this.now(),
+      deadline: previous.deadline,
+      input: null,
+      inputBytes: 0,
+      nextChunk: 0,
+      promise: undefined,
+      output: undefined,
+      metadata: undefined,
+      sent: 0,
+      played: 0,
+      announced: false,
+      ended: false,
     };
     this.#owner = next;
     return next.turnId;
@@ -416,7 +464,7 @@ export class SpeechTurns {
       if (!this.current(v)) {
         const fixed = this.#owner;
         if (
-          fixed?.fixedFor === v.turnId &&
+          (fixed?.fixedFor === v.turnId || fixed?.teachingFor === v.turnId) &&
           response.data.reply.source === 'fixed' &&
           response.data.reply.turnId === fixed.turnId &&
           response.data.session.generation === fixed.token.generation &&

@@ -25,3 +25,38 @@ output, playback gaps and immediate cancellation; type/Svelte check and producti
 build passed. Chrome inspection confirmed the larger closed-mouth preview.
 Real speech synchronization and all five animated identities still need counterpart
 visual review; deployment and hardware remain unchanged.
+
+## Integrated Lukas logic — November 14
+
+Merged origin/codex/teach-lemmi at 4690bf6 into integration/frontend-backend,
+retaining the newer enrollment/session authority and designed app layout. The
+previous "remaining voice continuity" notes above are superseded in this local
+source by Lukas's silence endpoint, explicit question/listen opt-in, and fresh
+teaching reply authority. Voice entry/finish utterances are still not advertised.
+
+`VoiceTeaching.svelte` wraps Lukas's VoiceClient with the shared TeachingChoices
+and large animated AvatarArt. `/participant/conversation` → Play Teach Lemmi
+opens it; `/participant/voice` renders the same component. Start Teach Lemmi
+connects and sequences session start before teaching start using current snapshots.
+The current model reply replaces the invitation text. No topic/feedback buttons
+or teaching text form remain on these voice surfaces. Safety and explicit
+microphone controls remain. Caregiver exit waits for server-confirmed Stop;
+unmount/background closes local media. VoiceClient's playing state now follows
+scheduled local playback spans rather than the end of the first consumed frame,
+so the mouth stays closed during buffering and closes immediately on Stop.
+
+The dev-only Vite voice proxy and private configuration from Lukas's branch are
+preserved. This is a local voice demo against an explicitly configured backend,
+not a new production credential mechanism. The existing enrolled /participant
+live surface remains available; no auth or deployment configuration was replaced.
+No private access bundle was loaded or credential reused in this integration pass.
+
+Observed: type/Svelte check and production build passed. Full suite with local
+socket permission and canonical TMPDIR: 181 passed, 20 database-dependent skipped,
+0 failures (before the additional focused avatar test). Browser inspection confirmed
+conversation entry → large-avatar teaching panel and the explicit disabled Start
+state when this server has no private voice configuration. No real capture/model
+rehearsal, backend deployment, database acceptance or hardware check was performed.
+Anay reviews the new speech authority boundary before deployment; Kylie reviews
+visual/keyboard flow. Configure a separately assigned Alex demo endpoint privately
+before real voice rehearsal; do not share the robot's active credential.

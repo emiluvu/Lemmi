@@ -180,7 +180,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       mode: z.literal('live'),
       deviceId: IdSchema,
       profileId: IdSchema,
-      credentialExpiresAt: z.string().datetime(),
+      credentialExpiresAt: z.string().datetime().nullable(),
       audio: z.union([
         z.literal(false),
         z.strictObject({

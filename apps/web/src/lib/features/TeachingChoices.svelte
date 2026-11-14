@@ -6,6 +6,8 @@
     available = false,
     speechAvailable = false,
     listening = false,
+    reply = '',
+    automaticReplies = false,
     command,
   }: {
     session: SessionSnapshot;
@@ -13,6 +15,8 @@
     available?: boolean;
     speechAvailable?: boolean;
     listening?: boolean;
+    reply?: string;
+    automaticReplies?: boolean;
     command: (type: string) => void;
   } = $props();
   let status = $derived(
@@ -47,12 +51,16 @@
     <p class="teaching-status" role="status">{status}</p>
     {#if showTopic}
       <h3>{session.teaching.topicLabel}</h3>
-      <p class="teaching-prompt">{session.teaching.prompt}</p>
+      <p class="teaching-prompt">{reply || session.teaching.prompt}</p>
       <p>Share whatever you would like. Take your time.</p>
       {#if speechAvailable}
         <aside class="voice-guidance" aria-label="Voice guidance">
           <p>
-            {listening ? 'Speak when you are ready.' : 'Use Speak now when you are ready to talk.'}
+            {listening
+              ? 'Speak when you are ready.'
+              : automaticReplies
+                ? 'After Lemmi finishes a question, it will listen for your reply.'
+                : 'Use Speak now when you are ready to talk.'}
           </p>
           <p>You can say “Different topic” or “Not sure”.</p>
         </aside>

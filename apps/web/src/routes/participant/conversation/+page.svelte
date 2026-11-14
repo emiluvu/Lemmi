@@ -5,7 +5,7 @@
   import { clients } from '#lib/clients.ts';
   import AvatarArt from '#lib/features/AvatarArt.svelte';
   import PhotoStory from '#lib/features/PhotoStory.svelte';
-  import MockParticipant from '#lib/features/MockParticipant.svelte';
+  import VoiceTeaching from '#lib/features/VoiceTeaching.svelte';
   import { activityScreenFixtures } from '@lemmi/contracts/fixtures';
   import type { ParticipantProfile, ActivityView, ActivityAction } from '@lemmi/contracts';
   const photoPreview = activityScreenFixtures.find(
@@ -15,6 +15,7 @@
   let storyOpen = $state(false);
   let teachingOpen = $state(false);
   let teachingDemo = $state<{ stopForExit: () => Promise<boolean> }>();
+
   let storyMessage = $state('');
   const photoFiles = getContext<PhotoStoryPreviewContext>(photoStoryPreviewKey);
   let selectedPhotoId = $state<string | null>(null);
@@ -114,8 +115,7 @@
     if (password === '1234') {
       if (teachingDemo && !(await teachingDemo.stopForExit())) {
         password = '';
-        message =
-          'Stop could not be confirmed. Close this dialog, refresh shared state, and try Stop again.';
+        message = 'Stop could not be confirmed. Close this dialog and use Stop before leaving.';
         return;
       }
       password = '';
@@ -141,8 +141,7 @@
   >
   {#if teachingOpen}
     <div class="teaching-demo">
-      <p class="eyebrow">Local scripted text demo · microphone and speaker off</p>
-      <MockParticipant bind:this={teachingDemo} />
+      <VoiceTeaching bind:this={teachingDemo} />
     </div>
   {:else if storyOpen && currentPhotoPreview && profile}
     <PhotoStory
@@ -168,7 +167,7 @@
       <h2>Ready when you are</h2>
       <p>Voice conversation is not connected yet.</p>
       <p class="conversation-capture">Microphone off · Camera off</p>
-      {#if profile}<button onclick={() => (teachingOpen = true)}>Try Teach Lemmi</button>{/if}
+      {#if profile}<button onclick={() => (teachingOpen = true)}>Play Teach Lemmi</button>{/if}
       {#if profile && photoPreview}<button
           class="secondary"
           onclick={() => {
