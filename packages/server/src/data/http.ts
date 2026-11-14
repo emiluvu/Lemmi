@@ -1,4 +1,4 @@
-import { fail, ResultSchema } from '@lemmi/contracts';
+import { fail, ResultSchema, SessionSnapshotSchema } from '@lemmi/contracts';
 import { authenticateCaregiver } from '../caregiver-auth';
 import { bearer, controlResponse } from '../control-config';
 import { boundedJson } from '../http-body';
@@ -9,11 +9,14 @@ import {
   AssetIdSchema,
   ProfileDetailSchema,
   ProfileUpdateSchema,
+  ApplyCommunicationSupportSchema,
+  CommunicationSupportStateSchema,
 } from '../../../contracts/src/profile-assets';
 import { ParticipantProfileSchema } from '@lemmi/contracts';
 import type { Fetcher } from '@lemmi/contracts';
 
 export type DataRoute =
+  | { kind: 'support'; profileId: string; apply?: boolean }
   | { kind: 'profile'; profileId: string; caregiver?: boolean; participant?: boolean }
   | { kind: 'upload'; profileId: string; photosOnly?: boolean }
   | { kind: 'asset'; assetId: string; metadata?: boolean; participant?: boolean };
@@ -29,7 +32,15 @@ export async function handleDataHttp(
   const url = new URL(request.url);
   const method = request.method;
   const allowed =
-    route.kind === 'profile' ? ['GET', 'PATCH'] : route.kind === 'upload' ? ['POST'] : ['GET'];
+    route.kind === 'support'
+      ? route.apply
+        ? ['POST']
+        : ['GET']
+      : route.kind === 'profile'
+        ? ['GET', 'PATCH']
+        : route.kind === 'upload'
+          ? ['POST']
+          : ['GET'];
   if (method === 'PATCH' && route.kind === 'profile' && !route.caregiver)
     return controlResponse(fail('FORBIDDEN', 'Participant scope is read-only'));
   if (!allowed.includes(method))
@@ -63,12 +74,31 @@ export async function handleDataHttp(
   }
   let operation: Record<string, unknown>;
   let schema =
-    route.kind === 'asset'
-      ? AssetMetadataSchema
-      : route.kind === 'profile' && !route.caregiver && method === 'GET'
-        ? ParticipantProfileSchema
-        : ProfileDetailSchema;
-  if (method === 'PATCH' || method === 'POST') {
+    route.kind === 'support'
+      ? route.apply
+        ? SessionSnapshotSchema
+        : CommunicationSupportStateSchema
+      : route.kind === 'asset'
+        ? AssetMetadataSchema
+        : route.kind === 'profile' && !route.caregiver && method === 'GET'
+          ? ParticipantProfileSchema
+          : ProfileDetailSchema;
+  if (route.kind === 'support' && !route.apply) {
+    operation = { operation: 'support.read', profileId: route.profileId };
+  } else if (route.kind === 'support') {
+    let raw: unknown;
+    try {
+      raw = await boundedJson(request, 4096);
+    } catch {
+      return controlResponse(fail('VALIDATION_ERROR', 'Invalid or oversized JSON'));
+    }
+    const parsed = ApplyCommunicationSupportSchema.safeParse(raw);
+    if (!parsed.success)
+      return controlResponse(fail('VALIDATION_ERROR', 'Invalid support apply request'));
+    if (parsed.data.profileId !== route.profileId)
+      return controlResponse(fail('FORBIDDEN', 'Resource path/body mismatch'));
+    operation = { operation: 'support.apply', input: parsed.data };
+  } else if (method === 'PATCH' || method === 'POST') {
     let raw: unknown;
     try {
       raw = await boundedJson(request, route.kind === 'upload' ? 28 * 1024 * 1024 : 32768);

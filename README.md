@@ -8,6 +8,8 @@ Undeployed persistent-device-key work: [enroll once and retain a scoped key acro
 
 Backend integration reference: [backend_api.md](docs/backend_api.md) — current routes, clients, events, auth, speech interfaces, limits and pending handoffs; maintained with backend changes.
 
+Undeployed backend increment: [chat hardening and communication support](docs/handoffs/anay-chat-support-hardening.md) provides reviewed English scenarios, central presets and caregiver read/save/apply with cancellation and explicit continuation. Runtime migration `003` and proxy routing are documented; frontend/device acceptance remains pending.
+
 Deployed storage increment (`002_media_collections.sql`): [Emilia schema review](docs/handoffs/anay-app-data-schema-review.md) and [migration setup](db/README.md) cover the corrected album/playlist storage migration. No new collection API or journal/notification workflow is enabled.
 
 A personalized companion for familiar conversation, enjoyable activities, and connection with family.

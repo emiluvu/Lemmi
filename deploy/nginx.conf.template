@@ -43,6 +43,13 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
     }
+    location ~ ^/v1/profiles/profile-alex/communication-support(/apply)?$ {
+        client_max_body_size 4k;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host YOUR_DOMAIN;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+    }
     location ~ ^/v1/(profiles/profile-alex(/assets/[^/]+)?|participant/profiles/profile-alex|assets/[^/]+(/metadata)?)$ {
         client_max_body_size 32k;
         proxy_pass http://127.0.0.1:3000;

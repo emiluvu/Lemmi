@@ -73,6 +73,7 @@ dbtest(
     ).toEqual([
       '001_foundation.sql',
       '002_media_collections.sql',
+      '003_communication_support.sql',
       '003_persistent_device_credentials.sql',
     ]);
     expect(

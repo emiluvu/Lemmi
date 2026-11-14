@@ -82,6 +82,7 @@ export function startControlGateway(options: Options) {
         coordinator,
         now,
         invalidated,
+        () => broadcast(),
       )
     : null;
   const access = data?.devices ?? new DeviceAccess(now, invalidated);
@@ -254,6 +255,7 @@ export function startControlGateway(options: Options) {
               return controlResponse(ok(result.data.metadata));
             return controlResponse(result);
           } catch (error) {
+            broadcast();
             return controlResponse(dataFailure(error));
           }
         }
