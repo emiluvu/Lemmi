@@ -273,3 +273,8 @@ export const speechPolicyFixtures = ['conversational', 'guided', 'quiet'].map((p
   preset,
   configVersion: 1 as const,
 }));
+export {
+  speechCaptureSessionFixture,
+  speechDeviceEventFixtures,
+  speechServerEventFixtures,
+} from './speech-fixtures';

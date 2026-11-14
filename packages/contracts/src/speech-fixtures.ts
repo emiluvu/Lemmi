@@ -1,0 +1,151 @@
+// Fictional wire fixtures, with generated silence bytes; no credential or recorded audio.
+import type { DeviceEvent, ServerEvent } from './device';
+import type { SessionSnapshot } from './session';
+
+const base = {
+  protocol_version: 1 as const,
+  event_id: 'speech-fixture',
+  session_id: 'session-speech-fixture',
+  turn_id: null,
+  generation: 0,
+  sequence: 0,
+};
+export const speechCaptureSessionFixture: SessionSnapshot = {
+  id: base.session_id,
+  profileId: 'profile-alex',
+  generation: 0,
+  profileRevision: 0,
+  privacyRevision: 0,
+  policyRevision: 0,
+  phase: 'listening',
+  endpoint: 'robot',
+  leaseId: 'lease-speech-fixture',
+  micMuted: false,
+  captureGrant: {
+    turnId: 'turn-speech-fixture',
+    streamId: 'input-speech-fixture',
+    generation: 0,
+    leaseId: 'lease-speech-fixture',
+    language: 'en',
+    expiresAt: '2030-01-01T00:00:20.000Z',
+  },
+  communicationSupport: { preset: 'guided', configVersion: 1 },
+  conversationMode: 'open',
+  teaching: null,
+  mode: 'live',
+};
+export const speechDeviceEventFixtures: DeviceEvent[] = [
+  {
+    ...base,
+    session_id: null,
+    type: 'device.hello',
+    payload: {
+      firmwareVersion: 'fictional-audio-fixture/1',
+      cameraSupported: false,
+      pettingSupported: false,
+      audio: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1, frameMs: 20 },
+      playback: { encoding: 'pcm_s16le', channels: 1, sampleRates: [22050] },
+    },
+  },
+  {
+    ...base,
+    event_id: 'speak-fixture',
+    sequence: 1,
+    type: 'input.speak',
+    payload: { language: 'en' },
+  },
+  {
+    ...base,
+    event_id: 'frame-fixture',
+    sequence: 2,
+    turn_id: 'turn-speech-fixture',
+    type: 'audio.chunk',
+    payload: {
+      leaseId: 'lease-speech-fixture',
+      streamId: 'input-speech-fixture',
+      chunkIndex: 0,
+      encoding: 'pcm_s16le',
+      data: btoa('\0'.repeat(640)),
+    },
+  },
+  {
+    ...base,
+    event_id: 'end-fixture',
+    sequence: 3,
+    turn_id: 'turn-speech-fixture',
+    type: 'audio.end',
+    payload: { leaseId: 'lease-speech-fixture', streamId: 'input-speech-fixture', chunkCount: 1 },
+  },
+  {
+    ...base,
+    event_id: 'receipt-fixture',
+    sequence: 4,
+    turn_id: 'turn-speech-fixture',
+    type: 'audio.receipt',
+    payload: {
+      leaseId: 'lease-speech-fixture',
+      streamId: 'output-speech-fixture',
+      status: 'started',
+      playedChunks: 0,
+    },
+  },
+];
+export const speechServerEventFixtures: ServerEvent[] = [
+  {
+    ...base,
+    type: 'state.changed',
+    payload: { mode: 'live', session: speechCaptureSessionFixture },
+  },
+  {
+    ...base,
+    event_id: 'output-start-fixture',
+    turn_id: 'turn-speech-fixture',
+    sequence: 1,
+    type: 'response.start',
+    payload: {
+      turnId: 'turn-speech-fixture',
+      leaseId: 'lease-speech-fixture',
+      streamId: 'output-speech-fixture',
+      encoding: 'pcm_s16le',
+      channels: 1,
+      sampleRate: 22050,
+      chunkBytes: 882,
+      chunkCount: 2,
+      byteLength: 1764,
+    },
+  },
+  {
+    ...base,
+    event_id: 'output-frame-fixture',
+    turn_id: 'turn-speech-fixture',
+    sequence: 2,
+    type: 'audio.chunk',
+    payload: {
+      leaseId: 'lease-speech-fixture',
+      streamId: 'output-speech-fixture',
+      chunkIndex: 0,
+      encoding: 'pcm_s16le',
+      data: btoa('\0'.repeat(882)),
+    },
+  },
+  {
+    ...base,
+    event_id: 'output-end-fixture',
+    turn_id: 'turn-speech-fixture',
+    sequence: 3,
+    type: 'audio.end',
+    payload: { leaseId: 'lease-speech-fixture', streamId: 'output-speech-fixture', chunkCount: 2 },
+  },
+  {
+    ...base,
+    event_id: 'output-cancel-fixture',
+    turn_id: 'turn-speech-fixture',
+    sequence: 4,
+    type: 'response.cancel',
+    payload: {
+      leaseId: 'lease-speech-fixture',
+      streamId: 'output-speech-fixture',
+      reason: 'interrupted',
+    },
+  },
+];

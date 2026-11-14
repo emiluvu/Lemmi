@@ -13,12 +13,14 @@ export interface OpenRouterConfig {
   model: string;
   timeoutMs: number;
   maxTokens: number;
+  reasoningEffort?: 'default' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 }
 export function openRouterConfig(
   env: Record<string, string | undefined> = process.env,
 ): Result<OpenRouterConfig> {
   const apiKey = env.OPENROUTER_API_KEY ?? '';
   const model = env.OPENROUTER_MODEL ?? '';
+  const reasoningEffort = env.LEMMI_LLM_REASONING_EFFORT ?? 'default';
   if (!apiKey || !model)
     return fail('UNAVAILABLE', 'Configure OPENROUTER_API_KEY and OPENROUTER_MODEL on the server');
   if (
@@ -31,11 +33,18 @@ export function openRouterConfig(
       'Use a valid private API key and an explicit OpenRouter model ID',
     );
   try {
+    if (
+      !['default', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(
+        reasoningEffort,
+      )
+    )
+      throw new Error('Unsupported reasoning effort');
     return ok({
       apiKey,
       model,
       timeoutMs: integerSetting(env.LEMMI_LLM_TIMEOUT_MS, 20000, 1000, 20000),
       maxTokens: integerSetting(env.LEMMI_LLM_MAX_TOKENS, 160, 32, 512),
+      reasoningEffort: reasoningEffort as OpenRouterConfig['reasoningEffort'],
     });
   } catch {
     return fail('VALIDATION_ERROR', 'Invalid LLM timeout/token limit');
@@ -84,6 +93,12 @@ export function createOpenRouterAdapter(
             ],
             stream: false,
             max_tokens: config.maxTokens,
+            reasoning: {
+              exclude: true,
+              ...(config.reasoningEffort && config.reasoningEffort !== 'default'
+                ? { effort: config.reasoningEffort }
+                : {}),
+            },
             provider: { data_collection: 'deny', zdr: true, allow_fallbacks: false },
           }),
         });
@@ -96,6 +111,11 @@ export function createOpenRouterAdapter(
         if (signal.aborted) return fail('UNAVAILABLE', 'Chat turn canceled');
         const choice = data?.choices?.[0];
         const text: unknown = choice?.message?.content;
+        if (choice?.finish_reason === 'length')
+          return fail(
+            'UNAVAILABLE',
+            'Model exhausted its token budget; configure supported reasoning effort or a larger bounded allowance',
+          );
         if (
           data.error ||
           choice?.finish_reason !== 'stop' ||

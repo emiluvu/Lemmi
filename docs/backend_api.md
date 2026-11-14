@@ -2,6 +2,8 @@
 
 This is the current implementation reference for **Kylie's frontend, Emilia's firmware, Lukas's activities and Anay's speech/services**. Update it whenever a backend-facing route, schema, event, authorization rule, configuration key or availability changes. Runtime schemas/source remain authoritative; a proposed interface is not permission to invent a parallel backend.
 
+**Feature-branch scope:** `anay/speech-pipeline` adds opt-in voice transport described below. These additions have not been deployed; [deployed host status](backend-status.md) remains separate.
+
 **Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
 
 **Deployed baseline:** `04d050e` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
@@ -12,10 +14,10 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 | --- | --- | --- |
 | Local mock HTTP RPC | Implemented; loopback-only, bounded in-memory state, no actual media/contact | Kylie/Lukas development, computer smoke tests |
 | Scoped device pairing/claim/revoke HTTP | Implemented; real VoidAuth setup/introspection and public claim verified on deployed host. Public caregiver-bearer pairing/revoke requests have not been exercised in the live rehearsal | Kylie caregiver setup; Emilia provisioning |
-| Authenticated device WSS | Controls and optional **text** chat implemented through one coordinator; actual K151 network integration pending | Emilia; computer control harness |
-| OpenRouter chat | Configured on deployed host; actual fictional greeting and public WSS text turn passed. Broader conversational quality/readiness remains unverified | Anay server only |
-| Local STT/TTS | Authenticated wrapper/adapters running privately; prior synthetic check passed on another host, but deployed-host recognition is intermittent and its quality gate is incomplete | Anay server only |
-| Robot/browser microphone → STT → chat → TTS → playback | **Not implemented end to end**; no capture grant or media ingestion/output on the live gateway | Anay + Emilia + Kylie |
+| Authenticated device WSS | Controls/text plus opt-in capture/audio output on this feature branch; physical K151 integration pending | Emilia; computer control harness |
+| OpenRouter chat | Deployed text greeting/public WSS passed; feature branch also passed a real isolated 20-turn synthetic voice rehearsal. Broader conversational/human quality remains unverified | Anay server only |
+| Local STT/TTS | Private wrapper/adapters implemented; English CPU synthetic checks including a repeated voice run passed locally, but host/human quality remains imperfect | Anay server only |
+| Robot/browser microphone → STT → chat → TTS → playback | Backend capture/STT/chat/TTS/PCM output implemented opt-in and tested with synthetic input/simulated receipts; actual hardware/browser flow pending | Anay + Emilia + Kylie |
 | Photos/guessing/matching | State/pack/action/view/context/event contracts and fixtures exist; three reducers/catalog hosting remain unavailable | Lukas logic; Kylie rendering; Anay host |
 | Camera/health/teaching/preferences | Preliminary contracts/clients/fixtures; executable live integrations remain unavailable | All four owners at their assigned boundaries |
 | Production profile/assets REST | PostgreSQL mode enabled on deployed host; scoped participant profile verified live. Caregiver edit/media checks used production fixture smokes; exact routes/limits below | Kylie; Anay data backend |
@@ -26,7 +28,7 @@ Anay edits canonical backend/contracts. Kylie renders safe projections and submi
 
 ### A18/A19 profile/private-media increment
 
-**Undeployed schema review (`anay/app-data-schema`):** migration `002_media_collections.sql` adds album/playlist metadata with stable membership IDs and scoped image/music references. No HTTP, client, protocol or authorization surface changes; collection CRUD and reviewed-pack hosting remain A05. Journal/consent/contact/jobs/deletion/camera portions of Emilia's full draft remain inactive. See [review and verification](handoffs/anay-app-data-schema-review.md) and [database setup](../db/README.md). The deployed availability table above is unchanged.
+**Undeployed schema review (`anay/app-data-schema`, merged into `main` at `a6f7ff9`):** migration `002_media_collections.sql` adds album/playlist metadata with stable membership IDs and scoped image/music references. No HTTP, client, protocol or authorization surface changes; collection CRUD and reviewed-pack hosting remain A05. Journal/consent/contact/jobs/deletion/camera portions of Emilia's full draft remain inactive. See [review and verification](handoffs/anay-app-data-schema-review.md) and [database setup](../db/README.md). The deployed availability table above is unchanged.
 
 [Database/profile/assets handoff](handoffs/anay-database-profile-assets.md) and [database setup](../db/README.md) define the current exact fields, permissions, format limits and restart behavior. PostgreSQL is opt-in via private `LEMMI_DATABASE_URL`/`LEMMI_PRIVATE_MEDIA_DIR` plus the configured caregiver subject. `bun run db:migrate` / `db:bootstrap` prepare only fictional Alex. One gateway owns the database; boot checks reject stale writes. Credential hashes and bounded session/factual-event checkpoints are persisted; restart deliberately revokes pairing credentials and ends old sessions. Full contact/policy/journal/deletion workflows remain pending despite schema foundations.
 
@@ -237,7 +239,7 @@ First message is `device.hello`, for example:
 
 An alternative audio capability shape permits `{encoding:'pcm_s16le',sampleRate:16000,channels:1,frameMs:20}`; it does **not** authorize capture/ingestion or prove actual hardware support. Server responds `device.ready`, hello `command.ack`, then `state.changed` with the current safe session/null.
 
-`device.ready.payload` is `{mode:'live',deviceId,profileId,credentialExpiresAt,audio:false,camera:false,textChat?:boolean,controls:[...]}`. `textChat`/`text` control indicates configured adapter only, not a successful provider call. Camera/audio remain unsupported on this connected path.
+`device.ready.payload` is `{mode:'live',deviceId,profileId,credentialExpiresAt,audio:false,camera:false,textChat?:boolean,controls:[...]}`. `textChat`/`text` control indicates configured adapter only, not a successful provider call. Camera remains unavailable. Audio stays false unless the gateway enables speech and the client supplies the playback capability described below.
 
 | Incoming type | Payload | Session/behavior |
 | --- | --- | --- |
@@ -261,7 +263,7 @@ Session-bound controls require the latest generation and assigned active session
 | `error` | `{code,message,commandId?}`; sanitized stable error |
 | `response.text` | `{turnId,text,language:'en'|'de',source:'model'|'fixed'}`; envelope `turn_id` matches reply turn |
 
-Socket maximum payload 4,096 bytes; maximum 30 incoming messages/second; output backpressure limit 16 KiB. Heartbeat timeout is six seconds, checked every 500 ms (other controls do not substitute for heartbeat). Disconnect/watchdog pauses and clears pending turns; reconnect never resumes capture/media. Credential expiry/revoke ends session and closes access. Firmware must independently stop capture/playback/camera/motion under local Stop/watchdog even when no server acknowledgment can arrive; that hardware behavior is not established by a fake-device test.
+Socket maximum payload 4,096 bytes; maximum 60 capture frames plus 30 other messages/second (90 total); output backpressure limit 16 KiB. Heartbeat timeout is six seconds, checked every 500 ms (other controls do not substitute for heartbeat). Disconnect/watchdog pauses and clears pending turns; reconnect never resumes capture/media. Credential expiry/revoke ends session and closes access. Firmware must independently stop capture/playback/camera/motion under local Stop/watchdog even when no server acknowledgment can arrive; that hardware behavior is not established by a fake-device test.
 
 ### Text turn behavior
 
@@ -277,17 +279,47 @@ Stop/pause/mute/handoff/disconnect/revoke cancels pending generation and clears 
 
 An exact pending/current-turn duplicate avoids a second model request and duplicate socket output. Same ID/different content conflicts. Older/interrupted turns are not replayable. History is at most six dialogue messages; text command fingerprints are capped at 256 per session and last-reply cache is transient. Raw utterances do not enter generic command cache, journals, durable jobs or summaries. Explicit recognized Stop/help/refusal/concern examples bypass the model; these narrow phrase fixtures are not reliable intent/emergency detection. Contact remains unconfigured and never becomes a simulated send on a live call.
 
+### Opt-in voice turns and playback
+
+Exact examples, configuration, cancellation semantics and morning handoff: [speech pipeline protocol](handoffs/anay-speech-pipeline.md). Shared schemas are in `packages/contracts/src/speech.ts`; silence fixtures export from `@lemmi/contracts/fixtures`.
+
+| Direction/type | Payload / boundary |
+| --- | --- |
+| Client `device.hello` addition | Optional `playback:{encoding:'pcm_s16le',channels:1,sampleRates:[22050]}` alongside 16 kHz/20 ms input capability |
+| Server `device.ready.audio` | False by default; enabled object reports input format, `maxCaptureMs:20000`, negotiated `playback`, `outputWindowChunks:4` |
+| Client `input.speak` | `{language:'en'\|'de'}`, null envelope turn; explicit fresh ready/waiting unmuted action |
+| Server `state.changed` captureGrant | `{turnId,generation,leaseId,streamId,language,expiresAt}` only in current unmuted listening state |
+| Client `audio.chunk` | `{leaseId,streamId,chunkIndex,encoding:'pcm_s16le',data}` with granted envelope turn; exactly 640 bytes, canonical 856-char base64; contiguous zero-based chunk index |
+| Client `audio.end` | `{leaseId,streamId,chunkCount}` and current turn; count 1–1000, exactly accepted frames |
+| Server `response.start` | `{turnId,leaseId,streamId,encoding:'pcm_s16le',channels:1,sampleRate,chunkBytes,chunkCount,byteLength}`; at most 30 seconds, metadata internally consistent |
+| Server `audio.chunk` | `{leaseId,streamId,chunkIndex,encoding,data}` and matching turn; about 20 ms, even-sized final partial allowed |
+| Server `audio.end` | `{leaseId,streamId,chunkCount}`; sending finished, not playback complete |
+| Client `audio.receipt` | `{leaseId,streamId,status:'started'\|'progress'\|'completed'\|'failed',playedChunks}`; authenticated cumulative consumed count, not buffered count |
+| Server `response.cancel` | `{leaseId,streamId,reason:'interrupted'}`; flush local output in addition to authoritative state cancellation |
+
+Speech requires `LEMMI_SPEECH_ENABLED=1`, valid private independent STT/TTS settings and configured OpenRouter. No output resampling: advertise an actual supported native rate (16/22.05/24/44.1/48 kHz); current Piper is 22.05 kHz. Legacy clients and default startup stay audio-disabled. No new public HTTP audio or raw inference endpoints are added.
+
+One 20-second/640,000-byte capture, one turn/output, no inference queue. Current engine seam buffers the bounded complete utterance then recognizes after explicit end; incremental STT and silence end detection remain pending against the technical-spec target. Frame-time checks allow at most a one-second lead. Rate/watchdog/media durations use monotonic elapsed time; credential expiry uses UTC. A single 20-second deadline covers STT→model→TTS. Four output chunks ahead of consumed receipts; started deadline five seconds and playback deadline duration plus five seconds. For ordinary replies, only a started receipt sets speaking; completion returns capture-off waiting. Fixed concern/refusal replies follow the paused-session behavior below. Completion never grants capture.
+
+Mic mute cancels pending input work but preserves approved output. Repeated unmute during capture cancels it; unmute alone never opens capture. Pause/Stop/help/disconnect/revoke/context change cancel; late results/receipts cannot restore state. There is no raw audio/transcript/journal persistence. Endpoint receipts remain reports, not independent proof of hardware output. Unsupported rate/language/engine, malformed/expired/gapped frames and backpressure fail explicitly.
+
+#### Fixed voice replies while paused
+
+Recognized urgent/unwell/topic-refusal phrases bypass the model and pause the session. The canceled input turn remains canceled. The coordinator synchronously creates fresh fixed-output authority with a new turn ID, a new stream and the current paused generation; the gateway publishes that paused snapshot before TTS finishes so Stop can use the current generation. Only that server-owned fixed reply may produce audio while paused. Ordinary model output never acquires this exception.
+
+The existing wire schemas are unchanged: `response.text` has `source:'fixed'`; its turn ID matches `response.start` and audio events. Clients bind the new output to that fixed text, current generation/lease and local permission. A paused snapshot alone never grants playback. Use the new generation/turn/stream for receipts; capture-turn IDs are obsolete. Session phase remains `paused` through synthesis, started/progress/completed receipts, failure and expiry; capture stays off. Firmware/UI must represent fixed playback independently from session phase and continue to honor local Stop/pause/watchdog before server acknowledgments.
+
+The original 20-second post-capture inference deadline also bounds fixed TTS; fresh authorization does not extend it. Later Pause/Stop/help, disconnect/revoke, profile/context change, handoff or explicit Resume cancels fixed work. Mic mute cancels pending synthesis without unpausing; already approved output retains the usual mute semantics. Failed TTS/unsupported formats are explicit errors, and no playback success is fabricated. Real caregiver contact remains unavailable. Hardware enforcement of this wire behavior is pending counterpart review.
+
 ### Defined but not executable device events
 
-`audio.chunk`, `camera.allow`, `camera.decline`, `camera.started`, `camera.ended`, `device.health` have preliminary schemas, **but the connected gateway does not ingest/execute them**. Capture grants remain null. There is no implemented `audio.end`, speech/audio output event/receipt path, camera.request/start/end/state server event, production activity event stream, robot teaching action or expression renderer command. Do not invent these event names/payloads in a consumer.
-
-Current proposed `audio.chunk`: `leaseId`, `streamId`, `encoding:'pcm_s16le'`, base64 `data` exactly 856 characters decoding to 640 bytes. That represents 20 ms at 16 kHz mono int16; Emilia's native framing/reframing and real transport remain unverified. Do not stream merely because the schema accepts the shape.
+Camera allow/decline/started/ended and device.health schemas remain preliminary; the gateway does not execute them. Production activity event streaming, robot teaching commands and expression rendering remain pending. Never infer camera or activity permission from negotiated audio.
 
 ## 7. Session, activity and data projections
 
 ### Session contract
 
-`SessionSnapshot` includes `id,profileId,generation,profileRevision,privacyRevision,policyRevision,phase,endpoint,leaseId,micMuted,captureGrant,communicationSupport,conversationMode,teaching,mode`. Endpoint is `browser|robot`; phase enum is `ready|listening|processing|speaking|waiting|paused|unavailable|ended`. Not all schema phases are reachable in the current transport. A nonnull capture grant is legal only while current/unmuted/listening with matching generation/lease; **no current live handler grants one**.
+`SessionSnapshot` includes `id,profileId,generation,profileRevision,privacyRevision,policyRevision,phase,endpoint,leaseId,micMuted,captureGrant,communicationSupport,conversationMode,teaching,mode`. Endpoint is `browser|robot`; phase enum is `ready|listening|processing|speaking|waiting|paused|unavailable|ended`. Not all schema phases are reachable in the current transport. A nonnull capture grant is legal only while current/unmuted/listening with matching generation/lease; this feature branch grants one only through explicit negotiated `input.speak`; deployment/hardware acceptance remains separate.
 
 `SessionCommand = {commandId,sessionId,expectedGeneration,action}`. Runtime actions: `pause`, `resume`, `stop`, `{type:'mute',muted}`, `{type:'handoff',endpoint}`. Schema additionally defines `speak`, `turn_end` and teaching actions, but they return unavailable. Mock HTTP supports handoff; the live device event union has no handoff event yet. Resume is explicit and capture-off, Stop is terminal, and initiated help requests have their own lifecycle.
 
@@ -337,7 +369,7 @@ Use [Ubuntu speech setup/configuration/API/privacy guide](../services/local-spee
 | `POST /v1/tts` | Token, UUID header, JSON `{text,language:'en'|'de'}` | Raw mono signed int16 little-endian PCM + `X-Lemmi-Sample-Rate`, `X-Lemmi-Encoding`, `X-Lemmi-Language` |
 | `POST /v1/cancel` | Token, JSON `{requestId:<UUID>}` | `{ok:true,data:{applied:boolean}}`; also remembers bounded early-cancel IDs |
 
-STT input: **16 kHz mono**, positive even byte count ≤640,000 (20 seconds); this bounded whole-turn wrapper is separate from proposed 640-byte device chunks. TTS text ≤600 chars; output ≤30 seconds at 8–48 kHz. Current English Piper voice outputs **22,050 Hz**. Test-only in-memory resampling does not settle the device playback format. Unsupported German voice is unavailable, never silently English.
+STT input: **16 kHz mono**, positive even byte count ≤640,000 (20 seconds); this bounded whole-turn wrapper receives the assembled, validated 640-byte device frames after explicit end. TTS text ≤600 chars; output ≤30 seconds at 8–48 kHz. Current English Piper voice outputs **22,050 Hz**. Live output negotiates native playback rates; test-only resampling is only for synthetic input fixtures. Unsupported German voice is unavailable, never silently English.
 
 One inference job, no queue; eight request-thread cap, five-second connection/body bounds, 20-second inference bound. Best-effort cancel can terminate/reload the engine worker; callers independently reject late results. A client disconnect alone is not proof of immediate native inference cancellation. Speech errors are bounded/sanitized; no engine prompt/audio/transcript tracebacks are returned. Host RAM/IPC/native buffers remain transient without a secure-erasure claim; model/dependency caches persist, raw audio/transcripts do not intentionally persist.
 
@@ -354,7 +386,7 @@ chat.complete({ system, history, text, language }, signal)
 
 Independently select STT/TTS `local-http|disabled`, URL, engine/model/device/voice settings at startup. Concrete engines currently faster-whisper 1.2.1/base CPU-int8 and Piper 1.8.0/English LJ Speech medium CPU. Another backend requires an explicit adapter implementation/configuration, not a silent fallback. NVIDIA/VM/Mac/AMD acceleration and German speech quality remain untested.
 
-OpenRouter is server-only: fixed HTTPS endpoint; explicit model; one attempt; no tools or client-selected provider URL; timeout ≤20 seconds, max tokens default 160 (32–512). Text response must be complete/plain/bounded and meet support question limits. Prompt/runtime validation is not proof of semantic safety or approved facts; selected-model rehearsal remains required. Routing/retention/account configuration and external data-handling limits are documented in [speech handoff](handoffs/anay-speech-chat.md#configure-openrouter-text-chat); no universal deletion guarantee.
+OpenRouter is server-only: fixed HTTPS endpoint; explicit model; one attempt; no tools or client-selected provider URL; timeout ≤20 seconds, max tokens default 160 (32–512). `LEMMI_LLM_REASONING_EFFORT=default|none|minimal|low|medium|high|xhigh|max` is explicit; model support must be verified. Reasoning is excluded; truncation fails without retry. GLM 5.3 Flash synthetic rehearsal used low/512 because default reasoning exhausted 160 tokens. Text response must be complete/plain/bounded and meet support question limits. Prompt/runtime validation is not proof of semantic safety or approved facts; selected-model rehearsal remains required. Routing/retention/account configuration and external data-handling limits are documented in [speech handoff](handoffs/anay-speech-chat.md#configure-openrouter-text-chat); no universal deletion guarantee.
 
 ## 9. Configuration and running integration checks
 
@@ -367,8 +399,8 @@ Templates: [root .env.example](../.env.example), [private speech template](../se
 | Caregiver verifier | `LEMMI_AUTH_INTROSPECTION_URL`, `LEMMI_AUTH_ISSUER`, `LEMMI_AUTH_AUDIENCE`, `LEMMI_AUTH_TOKEN_BINDING`, `LEMMI_AUTH_CLIENT_ID`, `LEMMI_AUTH_CLIENT_SECRET`, `LEMMI_CAREGIVER_SUBJECT` |
 | Persistence/media | `LEMMI_DATABASE_URL`, `LEMMI_PRIVATE_MEDIA_DIR`, `BODY_SIZE_LIMIT`; setup uses `LEMMI_CAREGIVER_SUBJECT` and private PostgreSQL configuration |
 | Paired computer harness | `LEMMI_DEVICE_CREDENTIAL`, optional `LEMMI_DEVICE_CA_FILE`; these are not server admin credentials |
-| OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `LEMMI_LLM_TIMEOUT_MS`, `LEMMI_LLM_MAX_TOKENS`, client `LEMMI_CHAT_LANGUAGE` |
-| Speech adapters | `LEMMI_STT_BACKEND`, `LEMMI_TTS_BACKEND`, `LEMMI_STT_URL`, `LEMMI_TTS_URL`, `LEMMI_SPEECH_TOKEN`, `LEMMI_SPEECH_TIMEOUT_MS` |
+| OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `LEMMI_LLM_TIMEOUT_MS`, `LEMMI_LLM_MAX_TOKENS`, `LEMMI_LLM_REASONING_EFFORT`, client `LEMMI_CHAT_LANGUAGE` |
+| Speech adapters | `LEMMI_SPEECH_ENABLED`, `LEMMI_STT_BACKEND`, `LEMMI_TTS_BACKEND`, `LEMMI_STT_URL`, `LEMMI_TTS_URL`, `LEMMI_SPEECH_TOKEN`, `LEMMI_SPEECH_TIMEOUT_MS` |
 | Local engine process | `LEMMI_SPEECH_PORT`, `LEMMI_SPEECH_STT_ENGINE`, `LEMMI_SPEECH_STT_MODEL_PATH`, `LEMMI_SPEECH_STT_DEVICE`, `LEMMI_SPEECH_STT_COMPUTE`, `LEMMI_SPEECH_THREADS`, `LEMMI_SPEECH_TTS_ENGINE`, `LEMMI_SPEECH_VOICE_EN`, `LEMMI_SPEECH_VOICE_DE` |
 
 Use pinned Bun 1.4.4 and `bun install --frozen-lockfile`. Existing checks: `bun run check`, `bun run test`, `bun run build`, `bun run format:check`. With mock dev running/no active session: `bun run smoke:web`. After build: `bun run smoke:control`; optional `bun scripts/smoke-control.ts --chat-fixture` validates chat through a test-only provider fixture with real TLS verification, never a real key/model call.
