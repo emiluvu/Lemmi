@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { getContext } from 'svelte';
+  import { caregiverAppearanceKey, type CaregiverAppearance } from '#lib/caregiver-appearance.ts';
   let { label, initials }: { label: string; initials: string } = $props();
-  let preview = $state<string | null>(null);
+  const appearance = getContext<CaregiverAppearance>(caregiverAppearanceKey);
+  const preview = $derived(appearance.photo);
   let message = $state('');
   function change(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
@@ -15,19 +17,14 @@
       input.value = '';
       return;
     }
-    if (preview) URL.revokeObjectURL(preview);
-    preview = URL.createObjectURL(file);
+    appearance.setPhoto(file);
     message = 'Temporary preview only. Photo saving is not connected yet.';
     input.value = '';
   }
   function remove() {
-    if (preview) URL.revokeObjectURL(preview);
-    preview = null;
+    appearance.setPhoto(null);
     message = 'Preview removed.';
   }
-  onDestroy(() => {
-    if (preview) URL.revokeObjectURL(preview);
-  });
 </script>
 
 <div class="photo-picker">

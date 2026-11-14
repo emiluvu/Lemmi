@@ -1,5 +1,12 @@
 # Dashboard header artwork
 
+## Photo story Games preview
+
+- File: `photo-story-bubbles.png`, copied unchanged from user-supplied “Lemming and Bird Blow Soap Bubbles.png” (1,411,502 bytes).
+- Permission: user explicitly requested use in the Photo story demo in the Games tab; creator/license beyond that permission is unspecified.
+- Description: a caramel lemming and a blue bird blowing colorful soap bubbles together.
+- Used only as dedicated Games preview artwork, separate from profile uploads and participant photo packs. No AI discussion, live activity execution, or patient data is attached.
+
 ## Repositioned banner
 
 - Asset ID: `lemmings-wildflowers-banner-v2`, version 2.

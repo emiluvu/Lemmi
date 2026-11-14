@@ -1,5 +1,11 @@
 # Lemmi — Build and demo plan
 
+Kylie navigation correction, November 14: user requested reversal of the Dashboard color strip; plain link restored. Caregiver Setting retained. Formatting passed.
+
+Kylie caregiver settings/navigation observation, November 14: caregiver-only settings/photo preview and unavailable account controls added; sidebar Dashboard now has a full-width green strip separated from settings. Existing root-layout appearance context is presentation-only. Bun `check` (0 Svelte errors/warnings) and production `build` passed. Account auth/password services and persistent caregiver photo storage remain Anay handoffs; browser visual/keyboard checks were not run.
+
+Kylie Games catalog observation, November 14, 2026: Photo story / 20 questions detail dialogs and visual previews plus page-visit Add more (Music / Picture matching) implemented in the caregiver Games tab. Games Photo story uses no profile-upload source and awaits dedicated user assets. Guessing uses shared `activityScreenFixtures` without local game rules or live transitions. Bun 1.4.4 `check` passed (0 Svelte errors/warnings) and `build` passed. Browser interaction/keyboard/zoom and live activity/AI/hardware checks were not run; these are not P0 completion results. See `docs/handoffs/kylie-caregiver-ui.md` for the activity host handoff.
+
 Use [Anay's task checklist](anay_tasks.md) for backend checkboxes, teammate blockers and Anay-agent file claims. This document retains team ownership, milestones and observed acceptance results.
 
 **Status:** Shared mock starter implemented; named feature work and live/hardware acceptance pending

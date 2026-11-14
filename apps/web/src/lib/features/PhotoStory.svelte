@@ -27,9 +27,6 @@
 <section class="photo-story" aria-labelledby="photo-story-title">
   <header class="story-header">
     <div>
-      <p class="eyebrow">
-        {preview ? 'Design preview · no live activity' : 'Look at a picture together'}
-      </p>
       <h1 id="photo-story-title">Photo story</h1>
     </div>
     <div class="story-mascot"><AvatarArt {avatarId} /></div>
@@ -48,32 +45,34 @@
         onerror={() => (failedAsset = view.currentAssetId)}
       />{:else}<div class="story-image-unavailable">
         <span aria-hidden="true">▧</span>
-        <p>The picture is unavailable.</p>
+        <p>
+          {preview && !view.currentAssetId
+            ? 'No pictures approved yet. Add images in Profile → Additional Information → Photo story pictures.'
+            : 'The picture is unavailable.'}
+        </p>
       </div>{/if}
     <figcaption>
-      {view.caption ?? 'No caption provided.'}{#if preview}<small
-          >Illustrative preview artwork, not a personal photograph.</small
-        >{/if}
+      Tell me more about this photo!
     </figcaption>
   </figure>
-  <p class="story-prompt">{view.prompt ?? 'We can just look, or talk about this picture.'}</p>
-  <div class="story-actions" aria-label="Photo story actions">
-    {#each view.choices as choice}<button
+  {#if !preview}
+    <p class="story-prompt">{view.prompt ?? 'We can just look, or talk about this picture.'}</p>
+    <div class="story-actions" aria-label="Photo story actions">
+      {#each view.choices as choice}<button
+          type="button"
+          class:secondary={choice.action.type !== 'photo.talk'}
+          disabled={busy || !available}
+          onclick={() => submit(choice.action)}>{choice.label}</button
+        >{/each}
+    </div>
+    <div class="story-controls" aria-label="Session controls">
+      <button type="button" class="secondary" onclick={() => control('pause')}>Pause</button><button
         type="button"
-        class:secondary={choice.action.type !== 'photo.talk'}
-        disabled={busy || !available}
-        onclick={() => submit(choice.action)}>{choice.label}</button
-      >{/each}
-  </div>
-  <p role="status" class="story-message">{message}</p>
-  <div class="story-controls" aria-label="Session controls">
-    <button type="button" class="secondary" onclick={() => control('pause')}>Pause</button><button
-      type="button"
-      onclick={() => control('stop')}>Stop</button
-    ><button type="button" class="secondary" onclick={() => control('help')}
-      >{preview ? 'Demo help — no real message' : 'Get help'}</button
-    >
-  </div>
+        onclick={() => control('stop')}>Stop</button
+      ><button type="button" class="secondary" onclick={() => control('help')}>Get help</button>
+    </div>
+  {/if}
+  {#if message}<p role="status" class="story-message">{message}</p>{/if}
 </section>
 
 <style>
@@ -98,9 +97,6 @@
     font-size: clamp(30px, 4vw, 44px);
     color: #30442b;
   }
-  .story-header .eyebrow {
-    margin: 0;
-  }
   .story-mascot {
     flex: 0 0 100px;
     height: 90px;
@@ -124,12 +120,6 @@
     background: #f3eadf;
     font-size: 23px;
     font-weight: 650;
-  }
-  figcaption small {
-    display: block;
-    margin-top: 4px;
-    font-size: 14px;
-    font-weight: 400;
   }
   .story-prompt {
     margin: 20px 0;

@@ -77,25 +77,6 @@
       </p>
     </section>
   </div>
-  <div class="excerpt-setting">
-    <div>
-      <h3 id="excerpt-label">Save conversation excerpts</h3>
-      <p id="excerpt-description">
-        Keep permitted statement excerpts for summary review. Separate from remembering interests.
-      </p>
-    </div>
-    <button
-      type="button"
-      class="excerpt-switch"
-      role="switch"
-      aria-labelledby="excerpt-label"
-      aria-describedby="excerpt-description"
-      aria-checked={excerptSavingEnabled}
-      disabled={privacySaving || privacyDisabled}
-      onclick={toggleExcerpts}><span aria-hidden="true"></span></button
-    >
-  </div>
-  <p class="excerpt-feedback" role="status">{privacySaving ? 'Saving setting…' : privacyMessage}</p>
   <section class="interest-trends" aria-labelledby="interest-trends-title">
     <h3 id="interest-trends-title">Interest &amp; Hobby Trends</h3>
     <p>Topics mentioned over time</p>
@@ -128,4 +109,23 @@
       </p>
     </details>
   {/if}
+  <div class="excerpt-setting">
+    <div>
+      <h3 id="excerpt-label">Save conversation excerpts</h3>
+      <p id="excerpt-description">
+        Keep permitted statement excerpts for summary review. Separate from remembering interests.
+      </p>
+    </div>
+    <button
+      type="button"
+      class="excerpt-switch"
+      role="switch"
+      aria-labelledby="excerpt-label"
+      aria-describedby="excerpt-description"
+      aria-checked={excerptSavingEnabled}
+      disabled={privacySaving || privacyDisabled}
+      onclick={toggleExcerpts}><span aria-hidden="true"></span></button
+    >
+  </div>
+  <p class="excerpt-feedback" role="status">{privacySaving ? 'Saving setting…' : privacyMessage}</p>
 </section>

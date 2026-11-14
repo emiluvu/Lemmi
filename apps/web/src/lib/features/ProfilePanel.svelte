@@ -11,16 +11,48 @@
     saved,
     color,
     photo,
+    background,
   }: {
     close: () => void;
-    saved: (profile: CaregiverProfile, color: string, photo: File | null | undefined) => void;
+    saved: (
+      profile: CaregiverProfile,
+      color: string,
+      photo: File | null | undefined,
+      background: File | null | undefined,
+    ) => void;
     color: string;
     photo: string | null;
+    background: string | null;
   } = $props();
   let draftColor = $state('#9eab93');
   let draftPhoto = $state<string | null>(null);
   let newPhoto = $state<File | null | undefined>(undefined);
   let photoUrl: string | null = null;
+  let draftBackground = $state<string | null>(null);
+  let newBackground = $state<File | null | undefined>(undefined);
+  let backgroundUrl: string | null = null;
+  function clearBackgroundUrl() {
+    if (backgroundUrl) URL.revokeObjectURL(backgroundUrl);
+    backgroundUrl = null;
+  }
+  function chooseBackground(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (
+      !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) ||
+      file.size > 5 * 1024 * 1024
+    ) {
+      message = 'Choose a JPG, PNG, or WebP image smaller than 5 MB.';
+      return;
+    }
+    clearBackgroundUrl();
+    newBackground = file;
+    backgroundUrl = URL.createObjectURL(file);
+    draftBackground = backgroundUrl;
+  }
+  onDestroy(clearBackgroundUrl);
   const colors = [
     { name: 'Sage', value: '#9eab93' },
     { name: 'Olive', value: '#6f725b' },
@@ -68,6 +100,9 @@
     clearPhotoUrl();
     draftPhoto = photo;
     newPhoto = undefined;
+    clearBackgroundUrl();
+    draftBackground = background;
+    newBackground = undefined;
   }
   onMount(() => {
     dialog.showModal();
@@ -109,8 +144,8 @@
       biography = biographyDraft;
       editing = false;
       message =
-        'Name and animal avatar saved to the mock profile. Color and photo apply for this page visit; biography remains a temporary draft.';
-      saved(result.data, draftColor, newPhoto);
+        'Name and animal avatar saved to the mock profile. Appearance changes apply for this page visit; biography remains a temporary draft.';
+      saved(result.data, draftColor, newPhoto, newBackground);
     } else
       message = `${result.error.code}: ${result.error.message}. Your edits are still here. Close and reopen to load the latest profile.`;
   }
@@ -118,7 +153,7 @@
 
 <dialog bind:this={dialog} class="profile-dialog" onclose={close} aria-labelledby="profile-title">
   <div class="profile-panel-top">
-    <button class="quiet" onclick={() => dialog.close()}>← Back to profiles</button>
+    <button class="profile-back-button" onclick={() => dialog.close()}> ← Back to profiles </button>
     <div class="controls">
       <button
         class="edit-profile"
@@ -148,15 +183,41 @@
   {#if profile}
     <div
       class="profile-summary"
-      style:background={editing ? draftColor : color}
+      class:has-background={Boolean(editing ? draftBackground : background)}
+      style:background-color={editing ? draftColor : color}
+      style:background-image={(editing ? draftBackground : background)
+        ? `url("${editing ? draftBackground : background}")`
+        : 'none'}
       style:color={(editing ? draftColor : color) === '#6f725b' ? '#ffffff' : '#10214c'}
     >
-      <div class="photo-circle">
-        {#if editing ? draftPhoto : photo}<img
-            src={editing ? draftPhoto : photo}
-            alt={`${profile.preferredName}’s profile`}
-          />{:else}<span aria-hidden="true">{profile.preferredName.slice(0, 2).toUpperCase()}</span
-          >{/if}
+      <div class="portrait-edit-wrap">
+        <div class="photo-circle">
+          {#if editing ? draftPhoto : photo}<img
+              src={editing ? draftPhoto : photo}
+              alt={`${profile.preferredName}’s profile`}
+            />{:else}<span aria-hidden="true"
+              >{profile.preferredName.slice(0, 2).toUpperCase()}</span
+            >{/if}
+        </div>
+        {#if editing}<label class="portrait-edit-control" title="Change profile photo">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              aria-label="Change profile photo"
+              onchange={choosePhoto}
+              disabled={busy}
+            />
+            <span aria-hidden="true"
+              ><svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z" /></svg
+              ></span
+            >
+          </label>{/if}
       </div>
       <h2>{profile.preferredName}</h2>
       <p class="helper">Caregiver-provided · fictional demo profile</p>
@@ -165,15 +226,6 @@
       {#if editing}
         <section class="appearance-editor">
           <h2>Profile appearance</h2>
-          <label class="photo-upload"
-            >Change profile photo<input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              aria-label="Change profile photo"
-              onchange={choosePhoto}
-              disabled={busy}
-            /></label
-          >
           {#if draftPhoto}<button
               type="button"
               class="quiet"
@@ -185,7 +237,7 @@
               }}>Remove photo</button
             >{/if}
           <fieldset class="color-fieldset" disabled={busy}>
-            <legend>Profile color</legend>
+            <legend>Background</legend>
             <div class="color-options">
               {#each colors as option}<label
                   class="color-option"
@@ -195,14 +247,41 @@
                     type="radio"
                     name="profile-color"
                     value={option.value}
-                    bind:group={draftColor}
+                    checked={!draftBackground && draftColor === option.value}
+                    onchange={() => {
+                      draftColor = option.value;
+                      clearBackgroundUrl();
+                      draftBackground = null;
+                      newBackground = null;
+                    }}
                   />{option.name}</label
                 >{/each}
+              <label
+                class="color-option background-upload-option"
+                class:background-selected={Boolean(draftBackground)}
+              >
+                <span aria-hidden="true">↑</span><span>Upload<small>Drop an image</small></span
+                ><input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-label="Upload profile background"
+                  onchange={chooseBackground}
+                  disabled={busy}
+                /></label
+              >
             </div>
+            {#if draftBackground}<button
+                type="button"
+                class="quiet"
+                disabled={busy}
+                onclick={() => {
+                  clearBackgroundUrl();
+                  draftBackground = null;
+                  newBackground = null;
+                }}>Remove background</button
+              >{/if}
+            <p class="helper background-file-hint">JPG, PNG, or WebP · Up to 5 MB</p>
           </fieldset>
-          <p class="helper">
-            Photo and color stay for this page visit. Saving them permanently is not connected yet.
-          </p>
         </section>
       {/if}
       <fieldset class="avatar-fieldset" disabled={!editing || busy}>
@@ -249,7 +328,7 @@
         {changeExcerptSetting}
         privacyDisabled={busy || editing}
       />
-      <AdditionalInformation />
+      <AdditionalInformation profileId={profile.id} />
       {#if editing}<div class="controls">
           <button type="submit" disabled={busy || !name.trim()}
             >{busy ? 'Saving…' : 'Apply profile changes'}</button

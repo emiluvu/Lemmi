@@ -59,12 +59,6 @@
   <div>
     <h1>Camera Check-In</h1>
   </div>
-  <a
-    class="camera-page-close"
-    href="/caregiver"
-    aria-label="Close camera check-in page"
-    title="Back to dashboard">✕</a
-  >
 </div>
 <p>
   Camera is off by default. A request requires local Allow on the paired robot; opening this page

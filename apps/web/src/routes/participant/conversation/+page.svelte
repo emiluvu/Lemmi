@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onMount, getContext } from 'svelte';
+  import { photoStoryPreviewKey, type PhotoStoryPreviewContext } from '#lib/photo-story-preview.ts';
   import { clients } from '#lib/clients.ts';
   import AvatarArt from '#lib/features/AvatarArt.svelte';
   import PhotoStory from '#lib/features/PhotoStory.svelte';
@@ -12,6 +13,27 @@
   );
   let storyOpen = $state(false);
   let storyMessage = $state('');
+  const photoFiles = getContext<PhotoStoryPreviewContext>(photoStoryPreviewKey);
+  let selectedPhotoId = $state<string | null>(null);
+  const approvedPhotos = $derived(
+    photoFiles.photos.filter((photo) => photo.profileId === profile?.id),
+  );
+  const selectedPhoto = $derived(
+    approvedPhotos.find((photo) => photo.id === selectedPhotoId) ?? approvedPhotos[0] ?? null,
+  );
+  const currentPhotoPreview = $derived(
+    photoPreview
+      ? {
+          ...photoPreview,
+          currentAssetId: selectedPhoto?.id ?? null,
+          assetIds: selectedPhoto ? [selectedPhoto.id] : [],
+          caption: selectedPhoto?.caption || null,
+          choices: photoPreview.choices.filter(
+            (choice) => !['photo.next', 'photo.previous'].includes(choice.action.type),
+          ),
+        }
+      : null,
+  );
   function previewAction(action: ActivityAction) {
     if (action.type === 'activity.leave') {
       storyOpen = false;
@@ -19,7 +41,7 @@
       return;
     }
     storyMessage =
-      'Design preview only. Photo navigation and discussion need the shared activity host.';
+      'Picture preview only. AI discussion needs the shared activity host; these local images are not sent to AI.';
   }
   function previewControl(action: 'pause' | 'stop' | 'help') {
     if (action === 'stop') {
@@ -90,23 +112,43 @@
 
 <svelte:head><title>Talk with Lemmi</title></svelte:head>
 
-<section class="conversation-screen" aria-labelledby="conversation-title">
+<section
+  class="conversation-screen"
+  aria-labelledby={storyOpen ? 'photo-story-title' : 'conversation-title'}
+>
   <button
     class="conversation-exit"
     onclick={openExit}
     aria-label="Exit conversation"
     title="Return to dashboard">✕</button
   >
-  {#if storyOpen && photoPreview && profile}
-    <PhotoStory
-      view={photoPreview}
-      avatarId={profile.avatarId}
-      submit={previewAction}
-      control={previewControl}
-      photoSrc="/images/lemmings-wildflowers.png"
-      preview
-      message={storyMessage}
-    />
+  {#if storyOpen && currentPhotoPreview && profile}
+    <div class="story-preview-layout">
+      {#if approvedPhotos.length > 1}<div
+          class="story-photo-strip"
+          role="group"
+          aria-label="Choose an approved preview picture"
+        >
+          {#each approvedPhotos as photo, index}<button
+              type="button"
+              class="secondary"
+              aria-pressed={selectedPhoto?.id === photo.id}
+              onclick={() => {
+                selectedPhotoId = photo.id;
+                storyMessage = '';
+              }}><img src={photo.url} alt="" /><span>Picture {index + 1}</span></button
+            >{/each}
+        </div>{/if}
+      <PhotoStory
+        view={currentPhotoPreview}
+        avatarId={profile.avatarId}
+        submit={previewAction}
+        control={previewControl}
+        photoSrc={selectedPhoto?.url ?? null}
+        preview
+        message={storyMessage}
+      />
+    </div>
   {:else}
     <div class="conversation-center">
       <p class="eyebrow">Your AI companion</p>
@@ -206,7 +248,6 @@
         demo passcode.
       </p>{/if}
   </form>
-  <p class="helper">Demo exit gate only. This does not secure caregiver data.</p>
 </dialog>
 
 <style>
@@ -242,6 +283,30 @@
     display: grid;
     justify-items: center;
     width: min(100%, 640px);
+  }
+  .story-preview-layout {
+    width: min(100%, 1040px);
+  }
+  .story-photo-strip {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .story-photo-strip button {
+    display: grid;
+    justify-items: center;
+    padding: 8px 12px;
+    font-size: 16px;
+  }
+  .story-photo-strip img {
+    width: 72px;
+    height: 54px;
+    object-fit: contain;
+  }
+  .story-photo-strip button[aria-pressed='true'] {
+    border: 3px solid var(--outline-brown);
+    background: #e0e9cf;
   }
   h1 {
     margin: 4px 0 24px;
@@ -381,11 +446,6 @@
   .conversation-exit-dialog .quiet {
     font-size: 16px;
     min-height: 44px;
-  }
-  .conversation-exit-dialog .helper {
-    font-size: 13px;
-    color: #3d4835;
-    margin-bottom: 0;
   }
   #password-recovery {
     font-size: 15px;
