@@ -111,7 +111,7 @@
   /><meta name="description" content="Lemmi local mock development starter" /></svelte:head
 >
 <a class="skip-link" href="#main-content">Skip to content</a>
-{#if !data.live}
+{#if !data.live || page.url.pathname.startsWith('/caregiver')}
   <header class="app-topbar">
     <button
       bind:this={menuButton}
@@ -197,8 +197,8 @@
       </div>
     </div>
     <p class="drawer-footnote">
-      <UIIcon name="leaf" size={18} /> A caregiver workspace for the fictional demo. Sign-in is not connected
-      yet.
+      <UIIcon name="leaf" size={18} /> Fictional demo workspace. Private caregiver settings require separate
+      sign-in, which is not connected here yet.
     </p>
   </aside>
 {/if}

@@ -36,7 +36,7 @@ server {
     }
 
     # Explicit fictional demo/browser routes, independently authorized by the app.
-    location ~ ^/(participant|_app/.*|v1/demo/(profiles|enroll|current|release))$ {
+    location ~ ^/(participant(/conversation)?|caregiver(/(settings|check-in|sign-in))?|_app/.*|v1/demo/(profiles|enroll|current|release))?$ {
         client_max_body_size 4k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
@@ -46,7 +46,7 @@ server {
 
     # Reviewed generic UI artwork/fonts only, never participant/private media.
     # Static resources contain no credentials or profile data; no broad /images alias.
-    location ~ ^/(fonts/nunito-latin-variable\.ttf|images/(avatars/(dog|cat|bunny|bird|lemming)\.png|surfaces/(cream-paper-v1|conversation-meadow-v1)\.png))$ {
+    location ~ ^/(fonts/nunito-latin-variable\.ttf|images/(avatars/(dog|cat|bunny|bird|lemming)\.png|surfaces/(cream-paper-v1|conversation-meadow-v1)\.png|(photo-story-bubbles|lemmings-wildflowers|lemmings-wildflowers-banner-v2)\.png))$ {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;

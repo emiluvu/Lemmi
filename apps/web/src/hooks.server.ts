@@ -6,8 +6,8 @@ import {
   createPrivateAccessHandler,
 } from '@lemmi/server';
 const accessHandler = createPrivateAccessHandler();
-// Mock pages stay local. Live mode exposes only the narrowly scoped device resource routes
-// through the trusted local TLS proxy; each route independently verifies its authorization.
+// The public demo pages use only the fictional setup projection. Private caregiver
+// resources still require their independent caregiver authorization.
 export const handle: Handle = async ({ event, resolve }) => {
   let peer: string | null = null;
   try {
@@ -22,8 +22,17 @@ export const handle: Handle = async ({ event, resolve }) => {
     /^\/v1\/(profiles\/[^/]+(?:\/(?:(photos|assets)(?:\/[^/]+)?|communication-support(?:\/apply)?))?|participant\/profiles\/[^/]+|assets\/[^/]+(?:\/metadata)?)$/.test(
       event.url.pathname,
     );
+  const demoPage = [
+    '/',
+    '/caregiver',
+    '/caregiver/settings',
+    '/caregiver/check-in',
+    '/caregiver/sign-in',
+    '/participant',
+    '/participant/conversation',
+  ].includes(event.url.pathname);
   const participantRoute =
-    event.url.pathname === '/participant' ||
+    demoPage ||
     event.url.pathname.startsWith('/v1/demo/') ||
     event.url.pathname.startsWith('/_app/');
   const accessRoute = event.url.pathname === '/access' || event.url.pathname === '/access/logout';
@@ -41,8 +50,10 @@ export const handle: Handle = async ({ event, resolve }) => {
       )
         return new Response('Trusted HTTPS proxy required', { status: 403 });
       if (accessRoute) return accessHandler(event.request, config.accessKey, config.publicOrigin);
+      if (demoPage && process.env.LEMMI_DEMO_ENROLLMENT !== '1')
+        return new Response('Fictional demo setup is disabled', { status: 404 });
       if (!hasPrivateAccess(event.request, config.accessKey)) {
-        if (event.url.pathname === '/participant')
+        if (demoPage)
           return new Response(null, {
             status: 303,
             headers: { Location: '/access', 'Cache-Control': 'no-store' },
@@ -52,6 +63,11 @@ export const handle: Handle = async ({ event, resolve }) => {
           { status: 401, headers: { 'Cache-Control': 'no-store' } },
         );
       }
+      if (event.url.pathname === '/')
+        return new Response(null, {
+          status: 303,
+          headers: { Location: '/caregiver', 'Cache-Control': 'no-store' },
+        });
       const response = await resolve(event);
       response.headers.set('Cache-Control', 'no-store');
       return response;

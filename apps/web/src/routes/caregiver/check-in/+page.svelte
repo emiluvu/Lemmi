@@ -3,12 +3,17 @@
   import CameraStatus from '#lib/features/CameraStatus.svelte';
   import { clients } from '#lib/clients.ts';
   import type { CheckInSnapshot } from '@lemmi/contracts';
+  let { data } = $props();
 
   let checkIn = $state<CheckInSnapshot | null>(null);
   let message = $state('Loading camera status…');
   let busy = $state(false);
 
   async function load() {
+    if (data.live) {
+      message = 'Camera check-ins are not available on this backend. Camera remains off.';
+      return;
+    }
     const result = await clients.checkIn.status({ profileId: 'profile-alex' });
     if (result.ok) {
       checkIn = result.data;
@@ -68,14 +73,24 @@
 </div>
 <p>
   Camera is off by default. A request requires local Allow on the paired robot; opening this page
-  never starts capture. This mock has no image stream or recording.
+  never starts capture. No image stream or recording is available here.
 </p>
 
-<CameraStatus {checkIn} />
+{#if data.live}<section class="status-panel">
+    <h2>Camera off</h2>
+    <p>Camera check-ins are not available on this backend.</p>
+  </section>
+{:else}<CameraStatus {checkIn} />{/if}
 
 <div class="controls" aria-label="Camera check-in controls">
-  <button onclick={request} disabled={busy || checkIn?.state === 'active'}>Request camera</button>
-  <button class="secondary" onclick={end} disabled={busy || checkIn?.state !== 'active'}>
+  <button onclick={request} disabled={data.live || busy || checkIn?.state === 'active'}
+    >Request camera</button
+  >
+  <button
+    class="secondary"
+    onclick={end}
+    disabled={data.live || busy || checkIn?.state !== 'active'}
+  >
     End check-in
   </button>
   <button class="quiet" onclick={() => void load()} disabled={busy}>Refresh status</button>

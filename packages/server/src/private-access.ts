@@ -48,7 +48,7 @@ export function hasPrivateAccess(request: Request, key: string | null, now = Dat
 }
 
 const page = (message: string) =>
-  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Lemmi private access</title><main><h1>Lemmi private access</h1><p>${message}</p><form method="post" action="/access"><label>Access key <input name="key" type="password" required maxlength="256" autocomplete="off"></label><button type="submit">Unlock</button></form><p><a href="/participant">Open participant</a></p><form method="post" action="/access/logout"><button type="submit">Lock this browser</button></form></main></html>`;
+  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Lemmi private access</title><main><h1>Lemmi private access</h1><p>${message}</p><form method="post" action="/access"><label>Access key <input name="key" type="password" required maxlength="256" autocomplete="off"></label><button type="submit">Unlock</button></form><p><a href="/caregiver">Open caregiver workspace</a></p><p><a href="/participant/conversation">Open participant</a></p><form method="post" action="/access/logout"><button type="submit">Lock this browser</button></form></main></html>`;
 const headers = {
   'Cache-Control': 'no-store',
   'Content-Type': 'text/html; charset=utf-8',

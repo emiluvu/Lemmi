@@ -8,9 +8,38 @@
   import { goto } from '$app/navigation';
   import UIIcon from '#lib/features/UIIcon.svelte';
   import AvatarArt from '#lib/features/AvatarArt.svelte';
-  import type { OperationOutput, CaregiverProfile } from '@lemmi/contracts';
+  import {
+    createParticipantSetup,
+    type ParticipantProfile,
+    type OperationOutput,
+    type CaregiverProfile,
+  } from '@lemmi/contracts';
+  import { previewProfiles } from '@lemmi/contracts/fixtures';
+  import LiveProfilePanel from '#lib/features/LiveProfilePanel.svelte';
+  let { data } = $props();
   let overview = $state<OperationOutput<'overview.load'> | null>(null);
-  let message = $state('Loading mock overview…');
+  const setup = createParticipantSetup();
+  let liveProfiles = $state<ParticipantProfile[]>([]);
+  let selectedProfile = $state<ParticipantProfile | null>(null);
+  let creating = $state(false);
+  let newName = $state('');
+  let busy = $state(false);
+  const displayedProfiles = $derived(data.live ? liveProfiles : overview ? [overview.profile] : []);
+  const previews = $derived(data.live ? previewProfiles : (overview?.previews ?? []));
+  async function createProfile(event: SubmitEvent) {
+    event.preventDefault();
+    if (busy || !newName.trim()) return;
+    busy = true;
+    const result = await setup.create(newName.trim());
+    busy = false;
+    if (result.ok) {
+      liveProfiles = [...liveProfiles, result.data];
+      newName = '';
+      creating = false;
+      message = '';
+    } else message = result.error.message;
+  }
+  let message = $state('Loading profiles…');
   let search = $state('');
   let profileOpen = $state(false);
   let profileColor = $state('#9eab93');
@@ -56,6 +85,18 @@
     if (profileBackground) URL.revokeObjectURL(profileBackground);
   });
   async function load() {
+    if (data.live) {
+      if (!data.demoEnrollment) {
+        message = 'Fictional demo setup is disabled.';
+        return;
+      }
+      const result = await setup.profiles();
+      if (result.ok) {
+        liveProfiles = result.data;
+        message = '';
+      } else message = result.error.message;
+      return;
+    }
     const result = await clients.overview.load({ profileId: 'profile-alex' });
     if (result.ok) {
       overview = result.data;
@@ -108,24 +149,47 @@
     tabindex="0"
   >
     {#if message}<p role="status">{message}</p>{/if}
-    {#if overview}
+    {#if overview || data.live}
       <div class="profile-tools">
         <label class="profile-search">
           <span class="sr-only">Search profiles</span>
           <input bind:value={search} type="search" placeholder="Search profiles" />
         </label>
         <div class="create-profile-control">
-          <button disabled aria-describedby="create-unavailable"
+          <button
+            disabled={!data.live || !data.demoEnrollment || busy}
+            onclick={() => (creating = !creating)}
+            aria-describedby="create-unavailable"
             ><span aria-hidden="true">＋</span> Create profile</button
           >
-          <p id="create-unavailable" class="helper">Profile creation is not available yet.</p>
+          <p id="create-unavailable" class="helper">
+            {data.live
+              ? 'Create a separate fictional demo profile.'
+              : 'Profile creation is not available in the local mock.'}
+          </p>
         </div>
       </div>
+      {#if creating}<form class="card" onsubmit={createProfile}>
+          <label for="new-profile-name">Fictional participant name</label>
+          <input
+            id="new-profile-name"
+            bind:value={newName}
+            maxlength="80"
+            required
+            autocomplete="off"
+          />
+          <button disabled={busy || !newName.trim()}>Create fictional profile</button>
+          <button type="button" class="quiet" onclick={() => (creating = false)}>Cancel</button>
+        </form>{/if}
       <p class="profile-scope">
-        {overview.profile.preferredName} is the functional fictional demo. Other cards are previews only.
+        {data.live
+          ? 'Live fictional profiles. Journals, camera and games remain unavailable or labeled previews.'
+          : 'Alex is the functional fictional demo. Other cards are previews only.'}
       </p>
       <div class="profile-grid">
-        {#if overview.profile.preferredName.toLowerCase().includes(search.trim().toLowerCase())}
+        {#each displayedProfiles.filter((profile) => profile.preferredName
+            .toLowerCase()
+            .includes(search.trim().toLowerCase())) as profile (profile.id)}
           <section class="profile-card functional-profile">
             <div
               class="profile-portrait"
@@ -137,29 +201,36 @@
               <div class="photo-circle">
                 {#if profilePhoto}<img
                     src={profilePhoto}
-                    alt={`${overview.profile.preferredName}’s profile`}
+                    alt={`${profile.preferredName}’s profile`}
                   />{:else}<span aria-hidden="true"
-                    >{overview.profile.preferredName.slice(0, 2).toUpperCase()}</span
+                    >{profile.preferredName.slice(0, 2).toUpperCase()}</span
                   >{/if}
               </div>
               <span class="portrait-companion"
-                ><AvatarArt avatarId={overview.profile.avatarId} decorative /></span
+                ><AvatarArt avatarId={profile.avatarId} decorative /></span
               >
             </div>
             <div class="profile-card-body">
-              <h2>{overview.profile.preferredName}</h2>
+              <h2>{profile.preferredName}</h2>
               <p class="profile-kind">Fictional demo profile</p>
               <p class="companion-label">
                 <span class="companion-dot" aria-hidden="true"></span>{avatarArtwork[
-                  overview.profile.avatarId
+                  profile.avatarId
                 ].label} companion
               </p>
-              <button class="profile-open" onclick={() => (profileOpen = true)}
-                >View profile <UIIcon name="arrow" size={19} /></button
+              <button
+                class="profile-open"
+                onclick={() => {
+                  if (data.live) selectedProfile = profile;
+                  else profileOpen = true;
+                }}>View profile <UIIcon name="arrow" size={19} /></button
               >
               <div class="profile-actions">
-                <a class="profile-action-button" href="/participant/conversation"
-                  ><UIIcon name="leaf" size={18} /> Conversation</a
+                <a
+                  class="profile-action-button"
+                  href={data.live
+                    ? `/participant/conversation?profile=${encodeURIComponent(profile.id)}`
+                    : '/participant/conversation'}><UIIcon name="leaf" size={18} /> Conversation</a
                 >
                 <a class="profile-action-button" href="/caregiver/check-in"
                   ><UIIcon name="camera" size={18} /> Camera</a
@@ -167,8 +238,8 @@
               </div>
             </div>
           </section>
-        {/if}
-        {#each overview.previews.filter((preview) => preview.preferredName
+        {/each}
+        {#each previews.filter((preview) => preview.preferredName
             .toLowerCase()
             .includes(search.trim().toLowerCase())) as preview (preview.id)}
           <section class="profile-card preview-profile">
@@ -186,7 +257,7 @@
             </div>
           </section>
         {/each}
-        {#if ![overview.profile, ...overview.previews].some((profile) => profile.preferredName
+        {#if ![...displayedProfiles, ...previews].some((profile) => profile.preferredName
             .toLowerCase()
             .includes(search.trim().toLowerCase()))}<p class="empty-state">
             No profiles match your search.
@@ -211,7 +282,10 @@
       <section class="card">
         <span class="section-icon"><UIIcon name="robot" size={30} /></span>
         <h3>Stackchan</h3>
-        <p>Device pairing and live connection status are not configured yet.</p>
+        <p>
+          Each enrolled robot has its own identity. Open Conversation to connect a browser;
+          switching audio endpoints requires an explicit handoff.
+        </p>
       </section>
       <section class="card">
         <span class="section-icon"><UIIcon name="camera" size={30} /></span>
@@ -244,4 +318,9 @@
     color={profileColor}
     photo={profilePhoto}
     background={profileBackground}
+  />{/if}
+
+{#if selectedProfile}<LiveProfilePanel
+    profile={selectedProfile}
+    close={() => (selectedProfile = null)}
   />{/if}
