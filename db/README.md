@@ -6,6 +6,8 @@ Bun **1.4.4** supplies the PostgreSQL driver; there are no new dependencies or l
 
 ## One setup per machine
 
+Feature branch `anay/app-data-schema` adds [002_media_collections.sql](migrations/002_media_collections.sql): profile-scoped albums/photos, music metadata and playlists with stable entry IDs. This is storage only; no collection CRUD/hosting API is enabled. It is not deployed. Existing `001_foundation.sql` is unchanged. Read [Anay's review](../docs/handoffs/anay-app-data-schema-review.md) before promotion. Emilia's original [full draft](proposals/002_app_data.sql) and [handoff](../docs/handoffs/anay-app-data-schema.md) remain inactive design input; do not apply the full draft on top of active migrations.
+
 You do not need to select a primary host now. Each test machine can have its own database and private-media directory. Use fictional data. Devices are paired separately to the selected origin and require a new explicit pairing after gateway restart. Later, select one primary host and configure the other clients to use its authenticated HTTPS/WSS origin; do not connect multiple gateways to the same database. The gateway holds a PostgreSQL advisory lock enforcing one authority.
 
 Install/run PostgreSQL using your host's maintained package or Docker. With Docker, set `LEMMI_POSTGRES_PASSWORD` privately in the root `.env`, then:
@@ -73,3 +75,7 @@ bun run format:check
 The database tests/smoke refuse a target whose database name does not end in `_test`. They truncate fictional test records and must never target live/shared test data in use by someone else. Without the variable, the ordinary test suite skips the database integration cases; media/parser/HTTP/client tests still run. Run `test:data` with the variable to establish actual persistence. `smoke:data` uses the production SvelteKit build, real PostgreSQL, certificate-verified HTTPS, and a fixture identity provider. It exercises caregiver/participant routing, profile revision/retry behavior, actual private photo upload/read and committed device revocation. It sends no notifications and makes no external model requests. Native PostgreSQL commands used to prepare this workspace's temporary test cluster are not required on other machines; their actual host setup remains to be verified.
 
 See [A18/A19 handoff](../docs/handoffs/anay-database-profile-assets.md) for exact APIs and observed results.
+
+For the media migration upgrade/rollback suite, set `LEMMI_SCHEMA_TEST_DATABASE_URL` privately to a **different dedicated disposable** database ending `_schema_test`, then run `bun test tests/media-collections.test.ts`. This suite resets its selected `lemmi` schema and migration ledger to test a populated foundation upgrade; do not reuse the ordinary backend-test database or another agent's database. With both variables set, `bun run test` runs both suites against separate databases.
+
+For the historical full-draft diagnostic, use a third dedicated database ending `_review_test` via `LEMMI_REVIEW_DATABASE_URL` and run `bun scripts/review-app-data-proposal.ts`. It resets/removes that schema and reports boolean observations of missing draft guards; it is not a deployment command or an acceptance test for those behaviors.
