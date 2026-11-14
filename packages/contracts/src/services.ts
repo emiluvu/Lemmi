@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import {
+  ProfileDetailSchema,
+  ProfileUpdateSchema,
+  AssetCreateSchema,
+  AssetMetadataSchema,
+  AssetIdSchema,
+} from './profile-assets';
+import {
   IdSchema,
   RevisionSchema,
   ParticipantProfileSchema,
@@ -11,8 +18,21 @@ import {
   type Result,
 } from './common';
 import { SessionSnapshotSchema, SessionCommandSchema, EndpointSchema } from './session';
-import { ActivityIdSchema, ActivityViewSchema, ActivityCommandSchema } from './activity';
+import {
+  ActivityIdSchema,
+  ActivityViewSchema,
+  ActivityCommandSchema,
+  ActivityEventSchema,
+} from './activity';
 import { CheckInSnapshotSchema } from './device';
+import {
+  PairDeviceInputSchema,
+  PairDeviceResultSchema,
+  ClaimDeviceInputSchema,
+  ClaimDeviceResultSchema,
+  RevokeDeviceInputSchema,
+  RevokeDeviceResultSchema,
+} from './device-access';
 export const HelpSnapshotSchema = z.strictObject({
   id: IdSchema,
   profileId: IdSchema,
@@ -33,6 +53,12 @@ export const HelpSnapshotSchema = z.strictObject({
   reason: z.enum(['manual', 'urgent_concern']),
   message: z.string().max(200),
 });
+export const JournalEventSchema = z.union([
+  ...ActivityEventSchema.options.map((event) =>
+    event.extend({ source: z.literal('measured_event') }),
+  ),
+  z.strictObject({ type: z.literal('session_stopped'), source: z.literal('measured_event') }),
+]);
 export const JournalSchema = z.strictObject({
   profileId: IdSchema,
   mode: z.enum(['mock', 'live']),
@@ -40,21 +66,7 @@ export const JournalSchema = z.strictObject({
     .array(
       z.strictObject({
         sessionId: IdSchema,
-        events: z
-          .array(
-            z.strictObject({
-              type: z.enum([
-                'activity_started',
-                'activity_ended',
-                'track_selected',
-                'track_play_requested',
-                'session_stopped',
-              ]),
-              source: z.literal('measured_event'),
-              itemId: IdSchema.optional(),
-            }),
-          )
-          .max(100),
+        events: z.array(JournalEventSchema).max(100),
         summary: z.null(),
       }),
     )
@@ -69,7 +81,14 @@ const operation = <I extends z.ZodType, O extends z.ZodType>(input: I, output: O
   output,
 });
 export const operations = {
+  'device.pair': operation(PairDeviceInputSchema, PairDeviceResultSchema),
+  'device.claim': operation(ClaimDeviceInputSchema, ClaimDeviceResultSchema),
+  'device.revoke': operation(RevokeDeviceInputSchema, RevokeDeviceResultSchema),
   'profile.load': operation(profile, ParticipantProfileSchema),
+  'profile.detail': operation(profile, ProfileDetailSchema),
+  'profile.update': operation(ProfileUpdateSchema, ProfileDetailSchema),
+  'assets.create': operation(AssetCreateSchema, AssetMetadataSchema),
+  'assets.metadata': operation(z.strictObject({ assetId: AssetIdSchema }), AssetMetadataSchema),
   'profile.loadCaregiver': operation(profile, CaregiverProfileSchema),
   'profile.save': operation(
     z.strictObject({ profile: CaregiverProfileSchema, expectedRevision: RevisionSchema }),
@@ -191,7 +210,14 @@ export function createClients(transport: ServiceTransport) {
     listener: (value: Result<OperationOutput<K>>) => void,
   ) => subscribeOperation(transport, op, input, listener);
   return {
+    device: {
+      pair: (input: OperationInput<'device.pair'>) => call('device.pair', input),
+      claim: (input: OperationInput<'device.claim'>) => call('device.claim', input),
+      revoke: (input: OperationInput<'device.revoke'>) => call('device.revoke', input),
+    },
     profile: {
+      detail: (input: OperationInput<'profile.detail'>) => call('profile.detail', input),
+      update: (input: OperationInput<'profile.update'>) => call('profile.update', input),
       load: (input: OperationInput<'profile.load'>) => call('profile.load', input),
       loadCaregiver: (input: OperationInput<'profile.loadCaregiver'>) =>
         call('profile.loadCaregiver', input),
@@ -239,7 +265,11 @@ export function createClients(transport: ServiceTransport) {
       reviewSummary: (input: OperationInput<'journal.reviewSummary'>) =>
         call('journal.reviewSummary', input),
     },
-    assets: { resolve: (input: OperationInput<'assets.resolve'>) => call('assets.resolve', input) },
+    assets: {
+      create: (input: OperationInput<'assets.create'>) => call('assets.create', input),
+      metadata: (input: OperationInput<'assets.metadata'>) => call('assets.metadata', input),
+      resolve: (input: OperationInput<'assets.resolve'>) => call('assets.resolve', input),
+    },
     checkIn: {
       subscribe: (
         input: OperationInput<'checkIn.status'>,
@@ -266,10 +296,35 @@ export function createHttpTransport(
       if (!operations[op].input.safeParse(input).success)
         return { ok: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid command' } };
       try {
-        const response = await fetcher(`/v1/${mode}/${op}`, {
-          method: 'POST',
+        let path = `/v1/${mode}/${op}`;
+        let method = 'POST';
+        let body: unknown = input;
+        if (mode === 'live') {
+          if (op === 'profile.load' && 'profileId' in input) {
+            path = `/v1/participant/profiles/${encodeURIComponent(input.profileId as string)}`;
+            method = 'GET';
+            body = undefined;
+          }
+          if ((op === 'profile.detail' || op === 'profile.update') && 'profileId' in input) {
+            path = `/v1/profiles/${encodeURIComponent(input.profileId as string)}`;
+            method = op === 'profile.update' ? 'PATCH' : 'GET';
+            body = method === 'GET' ? undefined : input;
+          }
+          if (op === 'assets.create' && 'profileId' in input)
+            path = `/v1/profiles/${encodeURIComponent(input.profileId as string)}/assets`;
+          if (op === 'assets.metadata' && 'assetId' in input) {
+            path = `/v1/assets/${encodeURIComponent(input.assetId as string)}/metadata`;
+            method = 'GET';
+            body = undefined;
+          }
+          if (op === 'device.claim') path = '/v1/device-pairings/claim';
+          if ((op === 'device.pair' || op === 'device.revoke') && 'deviceId' in input)
+            path = `/v1/devices/${encodeURIComponent(input.deviceId as string)}/${op === 'device.pair' ? 'pairings' : 'revoke'}`;
+        }
+        const response = await fetcher(path, {
+          method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
+          body: body === undefined ? undefined : JSON.stringify(body),
           signal: AbortSignal.timeout(5000),
         });
         const result: unknown = await response.json();

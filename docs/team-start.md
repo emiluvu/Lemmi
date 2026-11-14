@@ -49,15 +49,17 @@ A production *build* can be smoke-tested locally with `bun run start:gateway` an
 
 ## What exists and who extends it
 
+[Backend API reference](backend_api.md) is the integration index for frontend, firmware, activities and speech. Check its implemented/mock/planned status before calling a route or adding a protocol consumer; update it whenever a backend-facing contract changes.
+
 | Path | Existing baseline | Owner’s next task |
 | --- | --- | --- |
 | `packages/contracts/src/` | Strict Zod schemas, inferred types, errors, profile/session/activity/device/check-in/preference/journal shapes; `operations`, typed clients and explicit HTTP/fixture transports | Anay maintains; counterparts agree missing fields/events before changing them |
-| `packages/contracts/src/fixtures.ts` | Alex, two preview-only cards, music metadata, unavailable views for all four activities, help/camera scenario snapshots | Each owner supplies domain examples; Anay integrates shared fixture/schema changes |
+| `packages/contracts/src/fixtures.ts` | Alex, two preview-only cards, music metadata, unavailable views plus separate state/screen/pause fixtures for all four activities, help/camera scenario snapshots | Each owner supplies domain examples; Anay integrates shared fixture/schema changes; see [A01–A04 handoff](handoffs/anay-activity-contracts.md) for exact fields and placeholder-only packs |
 | `packages/activities/src/index.ts` | Pure music create/reduce/project/system-input example with filtering and interruption behavior | Lukas completes reviewed music content and all other reducers, signals and teaching prompts; no I/O/server inside games |
-| `packages/server/src/mock-coordinator.ts` | One bounded in-memory session/activity authority, revisions/deduplication and simulated help | Anay replaces/adds live adapters, scoped auth, persistence, speech and durable contact flow |
+| `packages/server/src/session-coordinator.ts`, `mock-coordinator.ts` | One bounded in-memory session/activity authority; explicit mock wrapper and optional authenticated control-only mode | Anay adds persistence, speech and durable contact flow; see control handoff for pairing/auth limits |
 | `apps/realtime/src/index.ts` | Loopback mock RPC and one validated fake-device WebSocket connection; disconnect/watchdog pauses | Anay with Emilia: real device pairing/TLS, grants, media/control bounds, camera access and session integration |
 | `apps/web/src/` | Minimal participant/caregiver shells, clients, polling subscriptions and mock RPC proxy | Kylie owns UI outside `/v1`; Anay owns `/v1`, server access and auth. Evolve these files, do not create another app |
-| `apps/worker/src/index.ts`, `db/README.md` | Explicit worker/database ownership placeholders | Anay implements PostgreSQL schema/outbox, worker and deletion/privacy behavior |
+| `apps/worker/src/index.ts`, `db/` | Explicit worker placeholder; optional PostgreSQL schema/profile/private-media/device/session checkpoint implementation | See [database setup](../db/README.md); Anay completes contact/outbox, journal/policy/deletion workflows |
 | `firmware/stackchan/README.md`, `scripts/fake-device.ts` | Hardware handoff notes and a mock transport client, no firmware | Emilia inventories toolchain, tests local controls and combined hardware, then agrees WSS/audio/camera protocol with Anay |
 | `tests/` | Runtime boundary, retry/cancellation, scope, eligibility and actual HTTP/WebSocket integration tests | Owners extend relevant meaningful tests with each new seam |
 
@@ -65,8 +67,10 @@ SvelteKit is **3.2.0**, Svelte **5.57.3**, Vite **8.3.8**, Zod **4.6.7**, TypeSc
 
 ## What is explicitly unfinished
 
-- No K151 firmware, audio capture/playback, speech models, LLM integration, physical watchdog proof or real media assets. Play requests are not playback evidence.
-- No caregiver sign-in, device pairing, WSS/TLS, production resource routes, external access, database/migrations, persistent summaries, retained excerpts or real notification provider/outbox. The mock caregiver page is never a security boundary.
+**Speech update:** [local setup](../services/local-speech/README.md) and [speech/chat handoff](handoffs/anay-speech-chat.md) describe the optional text-chat gateway and authenticated local faster-whisper/Piper wrapper. English CPU synthetic TTS→STT is observed; OpenRouter calls use fixtures until an exact model/key is configured privately. The earlier starter limitations below now refer to **integrated device/browser media**, not absence of engine adapter code. Microphone grants/ingestion, STT→chat, speaker output/receipts, German voice and actual provider/hardware acceptance remain pending. No speech/model behavior is enabled by default mock startup.
+
+- No integrated K151/browser capture/playback, complete voice-chat round trip, physical watchdog proof or real activity media assets. Local engine assets are explicitly provisioned separately; play requests are not playback evidence.
+- No completed caregiver sign-in/deployment, external access, persistent summaries, retained excerpts or real notification provider/outbox. Optional authenticated device controls and PostgreSQL profile/assets resource routes are described in their handoffs; database mode is opt-in. The mock caregiver page is never a security boundary.
 - Guessing/photo/matching states and packs are placeholders, not finished game schemas. The teaching snapshot/command seam exists, but teaching execution is unavailable. Lukas/Anay must extend the discriminated schemas together. Shared contract additions are expected, not permission for a second session store.
 - Camera is off; request/end adapters return UNAVAILABLE. Camera UI snapshots/header/control schemas are preliminary, not a working authorization/consent/relay. F13 hardware and access gate precedes F14 polish.
 - Preferences load as empty with remembering off. Update/forget/signals, journal writes/summary edits and asset resolution return UNAVAILABLE. Policy retention, item retirement, source review, deletion and late-write races are not implemented.
@@ -74,6 +78,8 @@ SvelteKit is **3.2.0**, Svelte **5.57.3**, Vite **8.3.8**, Zod **4.6.7**, TypeSc
 - The starter is limited to bounded in-memory history (100 sessions, 100 events/session, 256 command IDs), not production retention. No diagnostic/clinical or emergency claims follow from its tests.
 
 For the current firmware/backend boundary and Anay’s next tasks, read the [device integration handoff](handoffs/anay-device-integration.md). It distinguishes compile-checked source from untested hardware and names the missing protocol exports.
+
+The next backend increment is documented in [Anay’s authenticated control handoff](handoffs/anay-control-foundation.md): `clients.device.pair/claim/revoke`, explicit unsupported-audio hello, scoped control WebSockets and configurable managed-provider token verification. These are opt-in, require a trusted local TLS proxy/private configuration and do not expose the mock gateway. Default commands above remain mock-only. No actual provider/public host or K151 operation has been verified; media/contact and durable storage remain unavailable. `ServerEventSchema` now permits authenticated control-mode live snapshots/acks/heartbeat; this is narrower than the pending complete live protocol described above.
 
 ## Start each person’s Codex
 

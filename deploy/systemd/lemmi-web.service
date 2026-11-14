@@ -1,0 +1,17 @@
+[Unit]
+Description=Lemmi backend HTTP API
+After=network-online.target lemmi-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@ROOT@
+Environment=PATH=@ROOT@/.data/bin/bun-linux-x64:/usr/local/bin:/usr/bin:/bin
+ExecStart=@ROOT@/.data/bin/bun-linux-x64/bun run start:web
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

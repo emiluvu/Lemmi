@@ -8,6 +8,16 @@ This is the small shared implementation reference for all four Codex workstreams
 
 ## Implemented transport baseline
 
+**A18/A19 database/profile/assets increment:** optional PostgreSQL/private media now supports `profile.detail/update`, safe paired `profile.load`, approved-media creation/metadata and authenticated resource byte reads. [Exact fields/routes/setup/limits](handoffs/anay-database-profile-assets.md) cover credential persistence/restart, revision cancellation and shared clients. Legacy mock `profile.save/loadCaregiver/assets.resolve` do not become live by implication. Contact/policy tables are only storage foundations; A20–A25 workflows and production/counterpart/hardware verification remain pending.
+
+For the current executable interface inventory, use [backend_api.md](backend_api.md): public/private paths, client operation availability, device/text events, speech wire API, limits, credentials and unresolved production routes. Maintain it alongside schema/authority/client changes; proposed routes below are still not implementation claims.
+
+**Speech/text increment:** see [Anay → Emilia/Kylie](handoffs/anay-speech-chat.md). Optional authenticated `input.text`/`response.text` uses `SessionCoordinator.submitText` with session/generation checks, bounded transient dialogue and cancelable OpenRouter integration. `device.ready.textChat` indicates configuration only; audio/camera remain false. A private local STT/TTS wrapper is tested independently of the device. No mic grants/ingestion, complete STT→chat/playback, live LLM-provider acceptance or German voice validation is implied. Shared conversation schemas supplement device WSS; generic `/v1/live/<operation>` RPC remains unavailable and browser text transport is a pending handoff.
+
+**Activity contract increment A01–A04:** [Anay → Lukas/Kylie handoff](handoffs/anay-activity-contracts.md) documents implemented discriminated states, guessing graph validation, required nullable matching context, command/signal freshness helpers and strict factual event/transition schemas. Guessing views now include `roundPhase`/`offeredGuess`; matching views/commands use a nested nullable `presentation` instead of the old top-level presentation fields. Shared state/screen fixtures are available, while the host still runs only mock music. Missing reducers/content, A05 hosting/execution and A06 counterpart review remain pending.
+
+**Control foundation update:** see [Anay → Emilia/Kylie handoff](handoffs/anay-control-foundation.md). An opt-in authenticated control mode now shares the existing `SessionCoordinator`, with scoped device pairing/claim/revocation resource routes, `clients.device`, managed-provider introspection verification and `device.ready`/live control snapshots. `DeviceEventSchema` can represent `audio:{supported:false}` and explicit `input.start`. These additions do not implement media, camera, production event streaming, sign-in UI, persistent credentials or real notifications. Provider responses and device behavior have been tested with fixtures/computer clients only; actual provider/deployment/hardware and counterpart review remain pending. Default mock transport is preserved.
+
 `ServiceClients`, `createClients`, `createHttpTransport` and `createFixtureTransport` are exported from `@lemmi/contracts`. The local mock path uses POST `/v1/mock/<operation>` through SvelteKit to the loopback gateway’s internal adapter. These are development RPC endpoints, not replacements for the specified production resource routes. `/v1/live/<operation>` explicitly returns UNAVAILABLE; it never falls back to mocks. Browser subscriptions currently poll the same authority once per second and return an unsubscribe function; a production event stream remains Anay’s task.
 
 `DeviceEventSchema` and `ServerEventSchema` cover the initial fake-device hello/heartbeat/control/snapshot path. The fake client uses local `ws://` and a development-only token, not production pairing or TLS. Camera frame/health/control shapes and UI snapshots are preliminary schemas; media ingestion, camera authorization/streaming, teaching execution and learned-preference policy remain unavailable. Treat numeric media limits as proposed targets until measured. The web app uses SvelteKit 3: `vite.config.ts`, `#lib/*` imports and `$app/tsconfig`, not a new `svelte.config.js` or older aliases.
@@ -49,6 +59,14 @@ interface ActivityCommand {
   instanceId: string;
   expectedRevision: number;
   action: ActivityAction;
+  presentation?: MatchingPresentation; // required for match.*; echo current view
+}
+
+interface MatchingPresentation {
+  instanceId: string;
+  presentationId: string;
+  presentationRevision: number;
+  policyRevision: number;
 }
 
 interface ActivityView {
@@ -61,7 +79,7 @@ interface ActivityView {
   assetIds: string[];
   choices: { id: string; label: string; action: ActivityAction }[];
   capabilities: { audioRequired: boolean; largeScreenPreferred: boolean };
-  // Add validated discriminated per-activity fields at kickoff.
+  // Actual discriminated per-activity fields live in ActivityViewSchema.
 }
 ```
 

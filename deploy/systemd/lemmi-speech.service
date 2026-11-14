@@ -1,0 +1,15 @@
+[Unit]
+Description=Lemmi private local speech engines
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@ROOT@
+ExecStart=@ROOT@/.data/bin/bun-linux-x64/bun --env-file=services/local-speech/.env scripts/local-speech.ts
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

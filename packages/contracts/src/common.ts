@@ -11,6 +11,14 @@ export const ErrorCodeSchema = z.enum([
   'SAVE_FAILED',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
+export const ResultSchema = <T extends z.ZodType>(data: T) =>
+  z.discriminatedUnion('ok', [
+    z.strictObject({ ok: z.literal(true), data }),
+    z.strictObject({
+      ok: z.literal(false),
+      error: z.strictObject({ code: ErrorCodeSchema, message: z.string().max(300) }),
+    }),
+  ]);
 export type Result<T> =
   | { ok: true; data: T }
   | { ok: false; error: { code: ErrorCode; message: string } };
