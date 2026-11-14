@@ -462,6 +462,9 @@
                 disabled={!connected ||
                   !ownsEndpoint ||
                   photo.viewingMode !== 'talk' ||
+                  (!!photo &&
+                    photo.phase !== 'ended' &&
+                    (photo.viewingMode !== 'talk' || photoLoadError)) ||
                   !['ready', 'waiting'].includes(session.phase)}>Repeat question</button
               >
               <button
@@ -492,6 +495,9 @@
               }}
               disabled={!connected ||
                 session.micMuted ||
+                (!!photo &&
+                  photo.phase !== 'ended' &&
+                  (photo.viewingMode !== 'talk' || photoLoadError)) ||
                 !['ready', 'waiting'].includes(session.phase)}>Speak now</button
             >{/if}
         {/if}
@@ -506,6 +512,9 @@
               rows="3"
               disabled={!connected ||
                 !ownsEndpoint ||
+                (!!photo &&
+                  photo.phase !== 'ended' &&
+                  (photo.viewingMode !== 'talk' || photoLoadError)) ||
                 !['ready', 'waiting'].includes(session.phase) ||
                 !textAvailable ||
                 (!!session.teaching && !session.teaching.entityId)}
@@ -514,6 +523,9 @@
               type="submit"
               disabled={!connected ||
                 !ownsEndpoint ||
+                (!!photo &&
+                  photo.phase !== 'ended' &&
+                  (photo.viewingMode !== 'talk' || photoLoadError)) ||
                 !['ready', 'waiting'].includes(session.phase) ||
                 (!!session.teaching && !session.teaching.entityId) ||
                 !textAvailable ||

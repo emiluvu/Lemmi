@@ -90,7 +90,7 @@ try {
         }
       }
       if (
-        !/^\/(access(?:\/logout)?|participant|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|enroll|current|release))$/.test(
+        !/^\/(access(?:\/logout)?|participant|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|enroll|current|release|photo-assets\/(?:photo-story-garden|photo-story-park)))$/.test(
           path,
         )
       )
@@ -328,7 +328,7 @@ try {
   );
   check(
     scene.status === 200 && scene.headers.get('content-type') === 'image/svg+xml',
-    'Scoped current photo scene failed',
+    `Scoped current photo scene failed: status ${scene.status}, media type ${scene.headers.get('content-type')}`,
   );
   check((await scene.text()).includes('<svg'), 'Reviewed scene bytes missing');
   check(
