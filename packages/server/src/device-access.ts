@@ -19,7 +19,7 @@ export const DEVICE_TTL_MS = 60 * 60_000;
 export type DeviceIdentity = {
   deviceId: string;
   profileId: string;
-  expiresAt: number;
+  expiresAt: number | null;
   credentialId: string;
   endpoint?: 'browser' | 'robot';
 };
@@ -45,6 +45,7 @@ export class DeviceAccess {
   constructor(
     private readonly now = Date.now,
     private readonly invalidated: (deviceId?: string) => void = () => {},
+    private readonly persistentAllowed = false,
   ) {}
   assign(profileId: string, deviceId: string, endpoint: 'browser' | 'robot' = 'robot') {
     const old = this.assignments.get(deviceId);
@@ -59,6 +60,23 @@ export class DeviceAccess {
     this.assign(identity.profileId, identity.deviceId, identity.endpoint ?? 'robot');
     this.credentials.set(identity.deviceId, { hash: digest(secret), identity: { ...identity } });
   }
+  restoreCredential(hash: string, identity: DeviceIdentity) {
+    if (!this.persistentAllowed || !/^[0-9a-f]{64}$/.test(hash) || identity.expiresAt !== null)
+      throw new Error('Invalid durable device credential');
+    this.assign(identity.profileId, identity.deviceId, identity.endpoint ?? 'robot');
+    this.credentials.set(identity.deviceId, {
+      hash: Buffer.from(hash, 'hex'),
+      identity: { ...identity },
+    });
+  }
+  rememberRevocation(actor: string, commandId: string) {
+    if (!this.persistentAllowed || this.commands.size >= 256)
+      throw new Error('Invalid revocation restore');
+    this.commands.set(
+      `${actor}:revoke:${CONTROL_DEVICE_ID}:${commandId}`,
+      JSON.stringify({ deviceId: CONTROL_DEVICE_ID, commandId }),
+    );
+  }
   identities() {
     return [...this.credentials.values()].map((v) => ({ ...v.identity }));
   }
@@ -66,7 +84,7 @@ export class DeviceAccess {
     for (const [id, pairing] of this.pairings)
       if (pairing.expiresAt <= this.now()) this.pairings.delete(id);
     for (const [id, credential] of this.credentials)
-      if (credential.identity.expiresAt <= this.now()) {
+      if (credential.identity.expiresAt !== null && credential.identity.expiresAt <= this.now()) {
         this.credentials.delete(id);
         this.invalidated(id);
       }
@@ -76,6 +94,8 @@ export class DeviceAccess {
     this.sweep();
     if (this.assignments.get(input.deviceId)?.profileId !== input.profileId)
       return fail('FORBIDDEN', 'Device/profile is not assigned');
+    if (input.credentialMode === 'persistent' && !this.persistentAllowed)
+      return fail('UNAVAILABLE', 'Persistent credentials require database mode');
     const pending = this.pairings.get(input.deviceId);
     const credential = this.credentials.get(input.deviceId);
     const key = `${actor}:pair:${input.deviceId}:${input.commandId}`;
@@ -92,7 +112,10 @@ export class DeviceAccess {
     }
     if (this.commands.size >= 256)
       return fail('UNAVAILABLE', 'Control capacity reached; restart required');
-    if (credential && credential.identity.expiresAt > this.now())
+    if (
+      credential &&
+      (credential.identity.expiresAt === null || credential.identity.expiresAt > this.now())
+    )
       return fail('REVISION_CONFLICT', 'Revoke the paired device before pairing again');
     if (pending && pending.expiresAt > this.now())
       return fail('REVISION_CONFLICT', 'A pairing is already pending');
@@ -132,7 +155,7 @@ export class DeviceAccess {
       deviceId: pending.input.deviceId,
       profileId: pending.input.profileId,
       credentialId: crypto.randomUUID(),
-      expiresAt: this.now() + DEVICE_TTL_MS,
+      expiresAt: pending.input.credentialMode === 'persistent' ? null : this.now() + DEVICE_TTL_MS,
     };
     this.register(credential, {
       ...identity,
@@ -142,7 +165,7 @@ export class DeviceAccess {
       deviceId: identity.deviceId,
       profileId: identity.profileId,
       credential,
-      expiresAt: new Date(identity.expiresAt).toISOString(),
+      expiresAt: identity.expiresAt === null ? null : new Date(identity.expiresAt).toISOString(),
     });
   }
 
@@ -158,7 +181,7 @@ export class DeviceAccess {
       !!value &&
       value.credentialId === identity.credentialId &&
       value.profileId === identity.profileId &&
-      value.expiresAt > this.now()
+      (value.expiresAt === null || value.expiresAt > this.now())
     );
   }
   revoke(actor: string, input: RevokeDeviceInput): Result<{ revoked: true }> {

@@ -13,8 +13,12 @@ export class BrowserAudio {
   private chunks = 0;
   private deadline: ReturnType<typeof setTimeout> | null = null;
   private epoch = 0;
+  // Paused playback requires an application-owned fixed text reply at the exact
+  // current authority snapshot. Pause alone never grants permission for audio.
+  private fixedReply: { token: SessionSnapshot; turnId: string } | null = null;
   private output: {
     meta: SpeechOutputStart;
+    token: SessionSnapshot;
     received: number;
     played: number;
     ended: boolean;
@@ -154,6 +158,7 @@ export class BrowserAudio {
     this.state(false);
   }
   cancel() {
+    this.fixedReply = null;
     this.cancelInput();
     const output = this.output;
     this.output = null;
@@ -187,20 +192,52 @@ export class BrowserAudio {
     if (output?.ended && output.played === output.meta.chunkCount) {
       this.receipt('completed', output.played);
       this.output = null;
+      this.fixedReply = null;
     }
   }
+  private sameAuthority(token: SessionSnapshot, session: SessionSnapshot) {
+    return [
+      'id',
+      'generation',
+      'leaseId',
+      'profileRevision',
+      'privacyRevision',
+      'policyRevision',
+      'activeEndpointId',
+    ].every((key) => token[key as keyof SessionSnapshot] === session[key as keyof SessionSnapshot]);
+  }
   receive(event: ServerEvent, deviceId: string) {
+    const current = this.connection.session;
+    if (
+      event.type === 'response.text' &&
+      event.payload.source === 'fixed' &&
+      current &&
+      current.phase === 'paused' &&
+      current.activeEndpointId === deviceId &&
+      event.session_id === current.id &&
+      event.generation === current.generation &&
+      event.turn_id === event.payload.turnId
+    ) {
+      this.fixedReply = { token: { ...current }, turnId: event.payload.turnId };
+    }
     if (event.type === 'state.changed') {
       const session = event.payload.session;
+      const permittedFixed =
+        session &&
+        this.fixedReply &&
+        this.sameAuthority(this.fixedReply.token, session) &&
+        (!this.output || this.output.meta.turnId === this.fixedReply.turnId);
       if (
         !session ||
         session.activeEndpointId !== deviceId ||
-        session.phase === 'paused' ||
-        session.phase === 'ended'
+        session.phase === 'ended' ||
+        (session.phase === 'paused' && !permittedFixed) ||
+        (this.output && !this.sameAuthority(this.output.token, session))
       ) {
         this.cancel();
         return;
       }
+      if (session.phase !== 'paused') this.fixedReply = null;
       if (session.captureGrant && !session.micMuted && session.phase === 'listening') {
         if (!this.grant && this.stream) this.begin(session.captureGrant);
       } else if (this.grant) this.cancelInput();
@@ -219,10 +256,18 @@ export class BrowserAudio {
         event.session_id !== session.id ||
         event.generation !== session.generation ||
         event.payload.leaseId !== session.leaseId ||
-        session.activeEndpointId !== deviceId
+        event.turn_id !== event.payload.turnId ||
+        session.activeEndpointId !== deviceId ||
+        (session.phase === 'paused' &&
+          (!this.fixedReply ||
+            !this.sameAuthority(this.fixedReply.token, session) ||
+            this.fixedReply.turnId !== event.payload.turnId)) ||
+        ['ended', 'unavailable'].includes(session.phase)
       )
         return;
+      const fixedReply = this.fixedReply;
       this.cancel();
+      this.fixedReply = fixedReply;
       if (!this.context || this.context.state !== 'running') {
         this.connection.send(
           'audio.receipt',
@@ -240,6 +285,7 @@ export class BrowserAudio {
       }
       this.output = {
         meta: event.payload,
+        token: { ...session },
         received: 0,
         played: 0,
         ended: false,

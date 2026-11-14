@@ -191,3 +191,6 @@ Inspiration phrases: “visible picture matching accessible large targets,” �
 - **Solitaire:** last/bottom stretch priority, after committed work and other optional features. Do not add a working navigation card or spend core design time on it now.
 
 Add teaching-invitation, image-exploration and caregiver-card examples to the existing time-boxed inspiration board. Explain the adapted layout pattern and source; visual references do not establish clinical benefit or alert accuracy.
+
+
+November 14 integration clarification: the user explicitly authorized full fictional multi-profile support. Alex remains the initial profile; separately created fictional participants have isolated authorized context/assets/sessions. Existing labeled example cards remain preview-only. Multiple endpoints may observe one profile, with explicit handoff and one active audio owner. This supersedes earlier Alex-only demo restrictions for fictional profiles only; it does not authorize real participant data or infer care readiness. See [backend API](backend_api.md) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).

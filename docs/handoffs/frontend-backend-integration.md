@@ -50,3 +50,43 @@ Final preview-log inspection exposed rapid repeated reads in the imported mock s
 Anay should review the merge decisions above, run the combined migrations and **all 20 skipped database checks on fresh isolated test databases**, then run `smoke:participant`, `smoke:data`, and the speech production smoke against this built tree. No PostgreSQL test service/configuration was available on this Mac. Combining individually tested branches does not establish combined database acceptance.
 
 Then Anay can integrate the reviewed revision into the deployment branch and update the proxy/configuration using the existing handoff. No shared database/service changes were performed here. On the deployed build, verify `/access` → enroll Alex → text reply → Teach Lemmi → Pause/Stop/reconnect → profile isolation → browser/robot handoff. Actual browser microphone/speaker permissions, consumed playback, K151 local controls and deployment/network checks remain pending. Caregiver OIDC, full activities, journal/summary, real notifications, camera, durable preferences and deletion remain their owners' unfinished scope.
+
+
+## Backend integration follow-up — November 14, 2026
+
+Anay's follow-up is on **`anay/frontend-backend-integration`**, worktree `/tmp/lemmi-frontend-backend`, based on your published `437f065` and merged with deployed-source checkpoint **`7debf9a`** (runtime remains `17a8522`). Your branch and original local UI/firmware worktrees were preserved. This is a tested source candidate; it has not been pushed, merged into main/backend-deploy, or deployed by this pass.
+
+### Merge/review decisions completed
+
+- Retained current deployed persistent/null-expiry credentials, per-profile registry, transaction/membership/boot fences, current chat hardening, central communication support and existing helper bundle behavior. The coordinator callback publishes new paused generations through the registry, so Stop during fixed synthesis remains usable.
+- Preserved teaching's reviewed catalog, per-profile active-time sweep, owner-only progression/handoff, eligibility revisions, transient feedback and mock scripted route. Combined Stop phrase routing retains both branches' accepted phrases, without removing deployed medical/privacy/frightening/contact boundaries.
+- All six SQL migrations exactly match deployed `7debf9a`: `001_foundation.sql`, `002_media_collections.sql`, `002_multi_profile_endpoints.sql`, `003_communication_support.sql`, `003_persistent_device_credentials.sql`, `004_endpoint_revocations.sql`. The branch's old `003_device_revocation_receipts.sql` is removed. **Do not deploy that old file or alter the checksum of an applied migration.** No new migration is required by this integration.
+- Support-only saves retain the active teaching presentation, eligibility and approved prompt/fixed output. Apply-now cancels and updates the current invitation to the effective preset. Context writes block teaching start/progression/synthesis while pending, with Stop/Finish available. New regression tests exercise these seams.
+- Fixed browser PCM handling: paused audio is accepted only for a matching current fixed text/turn/authority. Receipt broadcasts no longer flush that output or erase its displayed text. Generation/profile/privacy/policy/lease/owner changes and local cancel still flush. Backgrounding uses the same local suppression path as explicit Pause, before waiting for server state.
+- Candidate proxy adds exact generic avatar/surface/font paths required by the live shell. It does not expose `/images` broadly, README files, private media, caregiver/mock pages or internal routes. Generic committed art/fonts contain no participant data. Upload/participant bytes still use existing authenticated asset routes.
+
+### Checks actually run here
+
+Bun **1.4.4**, frozen install, isolated PostgreSQL **17**, separate runtime/schema/support databases, no production credentials/configuration:
+
+| Check | Observed result |
+| --- | --- |
+| Full suite with all database checks enabled | **212 passed, 0 skipped, 0 failed / 3,991 expectations** |
+| Dedicated populated migration/credential compatibility suite | **10 passed / 74 expectations**, separate disposable databases |
+| Type/Svelte, production build, source formatting, diff whitespace | Passed |
+| Pairing-helper Python fixtures | **10 passed** |
+| Speech-service Python boundary fixtures | **7 passed** |
+| `bun run smoke:participant` | Passed built selector/create/enrollment/cookies, exact UI asset loading, simultaneous scoped browser/robot WSS, isolated chat, restart/current/release |
+| `bun scripts/smoke-data.ts --persistent` | Passed protected profile/media/support save/apply/retry/Resume/Stop and persistent-key scope/revoke, real isolated PostgreSQL and fixture identity/TLS |
+| `bun scripts/smoke-control.ts --chat-fixture` | Passed built HTTPS identity/pairing and verified WSS controls/chat |
+| `bun scripts/speech-gateway-smoke.ts --long-output` | Passed six-second PCM/four-chunk credit/receipt path; fixture engines/model and simulated consumption |
+
+The first combined suite exposed a Stop phrase lost in the merge; the broader reviewed routing was retained and the final suite passes. Browser fixed-output and teaching/support regressions were added after technical review rather than treating earlier standalone greens as integrated acceptance.
+
+### What Emilia can use and what remains
+
+Live participant route after a separately authorized deployment: **`/access` → `/participant`**. Existing browser cookie enrollment/setup/WSS is preserved; display Teach Lemmi only when `device.ready.teaching` advertises it. Teaching labels/prompts are snapshot fields; text replies use the existing current owner/session/generation checks. A live profile with no approved eligible interests can correctly show no teaching topic—this integration does not seed Alex's supplied mock biography into the private database or clone it into another profile.
+
+`/participant/conversation` remains the local mock scene, and caregiver PIN/UI remains presentation-only. This work does not introduce caregiver OIDC browser login, expose caregiver pages, upload supplied private photos/song bytes, enable public voice, or finish camera/contact/journal/preferences/deletion. Existing persistent keys are preserved; do not re-pair just because this UI is integrated.
+
+Before deployment: review the candidate, merge source deliberately, retain private rollback state and install the explicit candidate proxy allowlist. No database reset/reseed or additional migration is needed if the host already runs `17a8522`. Then verify the real browser `/access` → enroll/current → explicit Start → ordinary text → Teach Lemmi → Pause/Stop/reconnect → profile isolation/handoff. Actual browser permission/autoplay/keyboard/zoom, physical playback/K151 controls, human speech quality and venue/reboot acceptance remain pending. Public speech opt-in remains disabled until its own gate. No actual browser or hardware was available in this Linux verification pass; your prior Mac mock rehearsal is retained as distinct evidence.

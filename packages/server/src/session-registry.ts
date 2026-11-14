@@ -11,7 +11,7 @@ export class SessionRegistry {
     private readonly chat?: ChatAdapter,
     private readonly speech?: SpeechAdapters,
     private readonly now: () => number = Date.now,
-    private readonly onFixedReply: () => void = () => {},
+    private readonly changed: () => void = () => {},
   ) {
     this.acceptPersistentProfile({
       ...structuredClone(caregiverProfile),
@@ -28,20 +28,14 @@ export class SessionRegistry {
   all() {
     return [...this.entries.values()];
   }
-  acceptPersistentProfile(profile: ProfileDetail) {
+  acceptPersistentProfile(profile: ProfileDetail, contextChanged?: boolean) {
     let coordinator = this.entries.get(profile.id);
     if (!coordinator) {
       if (this.entries.size >= 100) throw new Error('Profile session capacity reached');
-      coordinator = new SessionCoordinator(
-        'live',
-        this.chat,
-        this.speech,
-        this.now,
-        this.onFixedReply,
-      );
+      coordinator = new SessionCoordinator('live', this.chat, this.speech, this.now, this.changed);
       this.entries.set(profile.id, coordinator);
     }
-    coordinator.acceptPersistentProfile(profile);
+    coordinator.acceptPersistentProfile(profile, contextChanged);
   }
   pauseForProfileUpdate(patch: Record<string, unknown>, profileId = 'profile-alex') {
     this.forProfile(profileId).pauseForProfileUpdate(patch);

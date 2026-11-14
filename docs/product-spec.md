@@ -282,3 +282,6 @@ A future reviewed activity marketplace may include suitable third-party activity
 - [Integration contracts](integration-contracts.md): named ownership, activity engine/UI seam, typed commands, mocks, audio/assets, and handoffs.
 
 - [Kylie design and UI guide](kylie-design-guide.md): interface/page inventory, inspiration workflow, avatar deliverables and frontend order.
+
+
+November 14 integration clarification: the user explicitly authorized full fictional multi-profile support. Alex remains the initial profile; separately created fictional participants have isolated authorized context/assets/sessions. Existing labeled example cards remain preview-only. Multiple endpoints may observe one profile, with explicit handoff and one active audio owner. This supersedes earlier Alex-only demo restrictions for fictional profiles only; it does not authorize real participant data or infer care readiness. See [backend API](backend_api.md) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SessionSnapshotSchema } from './session';
 import {
   AvatarIdSchema,
   CaregiverProfileSchema,
@@ -40,6 +41,22 @@ export const ProfileUpdateSchema = z.strictObject({
   commandId: IdSchema,
   patch: ProfilePatchSchema,
 });
+// Applies the already-saved profile preset. Saving alone remains future-session only.
+export const ApplyCommunicationSupportSchema = z.strictObject({
+  profileId: IdSchema,
+  expectedProfileRevision: RevisionSchema,
+  sessionId: IdSchema,
+  expectedGeneration: RevisionSchema,
+  commandId: IdSchema,
+});
+export type ApplyCommunicationSupport = z.infer<typeof ApplyCommunicationSupportSchema>;
+export const CommunicationSupportStateSchema = z.strictObject({
+  profileId: IdSchema,
+  profileRevision: RevisionSchema,
+  saved: CommunicationSupportSchema,
+  session: SessionSnapshotSchema.nullable(),
+});
+export type CommunicationSupportState = z.infer<typeof CommunicationSupportStateSchema>;
 export const AssetIdSchema = z.uuid();
 export const AssetMetadataSchema = z.strictObject({
   id: AssetIdSchema,
@@ -84,6 +101,8 @@ export const DataRequestSchema = z.discriminatedUnion('operation', [
     caregiver: z.boolean(),
   }),
   z.strictObject({ operation: z.literal('profile.update'), input: ProfileUpdateSchema }),
+  z.strictObject({ operation: z.literal('support.apply'), input: ApplyCommunicationSupportSchema }),
+  z.strictObject({ operation: z.literal('support.read'), profileId: IdSchema }),
   z.strictObject({ operation: z.literal('asset.create'), input: AssetCreateSchema }),
   z.strictObject({
     operation: z.literal('asset.read'),

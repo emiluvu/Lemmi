@@ -30,7 +30,7 @@ try {
     throw new Error(
       'Stored enrollment belongs to another profile/origin; choose a different output file',
     );
-  if (Date.parse(enrollment.expiresAt) <= Date.now())
+  if (enrollment.expiresAt !== null && Date.parse(enrollment.expiresAt) <= Date.now())
     throw new Error('Stored enrollment expired; remove it explicitly and enroll again');
   console.info(
     'Reusing saved device enrollment. Preserve this private file across normal firmware updates.',

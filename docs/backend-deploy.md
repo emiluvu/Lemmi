@@ -107,16 +107,7 @@ server {
         proxy_buffering off;
     }
 
-    location ~ ^/(access(/logout)?|v1/(devices/[^/]+/(pairings|revoke)|device-pairings/claim))$ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host YOUR_DOMAIN;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_buffering off;
-    }
-
-    # Multi-profile participant frontend and explicit fictional-demo setup.
-    location ~ ^/(participant|_app/.*|v1/demo/(profiles|enroll|current|release))$ {
-        client_max_body_size 4k;
+    location ~ ^/(access(/logout)?|v1/(devices/stackchan-alex/(pairings|revoke)|device-pairings/claim))$ {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;
@@ -124,14 +115,14 @@ server {
     }
 
     # Optional database-backed profile and media resources.
-    location ~ ^/v1/profiles/[^/]+/(photos|assets)$ {
+    location ~ ^/v1/profiles/profile-alex/(photos|assets)$ {
         client_max_body_size 29m;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
     }
-    location ~ ^/v1/(profiles/[^/]+(/assets/[^/]+)?|participant/profiles/[^/]+|assets/[^/]+(/metadata)?)$ {
+    location ~ ^/v1/(profiles/profile-alex(/assets/[^/]+)?|participant/profiles/profile-alex|assets/[^/]+(/metadata)?)$ {
         client_max_body_size 32k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
@@ -148,7 +139,7 @@ Preserve `Authorization`, `Origin`, request paths/query strings and WebSocket up
 
 Your updater should run from the dedicated deployment checkout, serialize updates, fetch/pull **only `backend-deploy`** with fast-forward-only behavior, install from the frozen Bun lockfile, and pass checks/build before restarting. Keep the known working revision/release available if preparation fails. Use normal merge commits on the branch to integrate subsequent reviewed backend work; no automatic deployment is configured by this repository.
 
-**Restart behavior:** with database mode enabled, approved profiles/facts/media, issued credential hashes and bounded session/factual-event checkpoints persist. **After migration 002, startup preserves unexpired enrollment hashes and ends prior unfinished sessions**; no pairing code, active conversation, capture or playback is restored. Reconnect with the stored enrollment and start explicitly after gateway restarts. Without database mode, the earlier in-memory behavior remains. Use `LEMMI_DEMO_ENROLLMENT=1` only for the fictional demo selector/enrollment documented in [the handoff](handoffs/anay-multi-profile-endpoints.md). Keep caregiver identity separate. The shared domain-key browser cookie is stateless and can remain valid until its eight-hour expiry when the same key is retained; this never restores a device token or session. Key rotation plus restart invalidates those cookies/connections. See [database storage/recovery behavior](../db/README.md#storage-and-interruption-behavior). Coordinate restarts with teammates. Full durable journal/jobs/deletion workflows remain pending.
+**Restart behavior:** with database mode enabled, approved profiles/facts/media, issued credential hashes and bounded session/factual-event checkpoints persist. **Startup retains explicitly persistent active credentials, clears short-lived credentials/pending codes, and ends prior unfinished sessions**; no pairing code, active conversation, capture or playback is restored. Persistent devices reconnect with the same key and explicitly Start; short-lived devices pair again and explicitly Start. Without database mode, the earlier in-memory behavior remains. The shared domain-key browser cookie is stateless and can remain valid until its eight-hour expiry when the same key is retained; this never restores a device token or session. Key rotation plus restart invalidates those cookies/connections. See [database storage/recovery behavior](../db/README.md#storage-and-interruption-behavior). Coordinate restarts with teammates. Full durable journal/jobs/deletion workflows remain pending.
 
 Once domain and host setup are available, record actual observations in the build plan:
 
@@ -164,3 +155,11 @@ The domain, new host access, privately configured domain key, identity-provider 
 ### Explicit VoidAuth token binding
 
 `LEMMI_AUTH_TOKEN_BINDING` defaults to `audience`, preserving the required `LEMMI_AUTH_AUDIENCE` check. For VoidAuth non-resource access tokens, explicitly select `client_id`; `client_id` must then equal the dedicated configured `LEMMI_AUTH_CLIENT_ID`. Missing/foreign clients are rejected. A present `aud` still must match `LEMMI_AUTH_AUDIENCE`; it is never ignored. Issuer, active status, Bearer type, one-hour expiry bound and configured caregiver subject checks remain enforced in both modes. This is a provider-specific integration choice, not automatic fallback or JWT-only verification. The loopback-only `scripts/setup-caregiver.ts --assign-alex` helper obtains the actual subject using an explicitly authorized one-time code/PKCE login; see [host setup](host-setup.md). Production browser login UI remains pending.
+
+Persistent credentials require `003_persistent_device_credentials.sql`; communication support requires `003_communication_support.sql` and the support proxy allowlist. Both are independently tracked full migration filenames despite their shared numeric prefix. The runner applies them once by full name/checksum. Do not rename/checksum-edit an applied migration. Preserve backups before upgrade. Downgrading to the old credential-clearing gateway while persistent keys are active requires explicit revocation with the new code or a reviewed schema/data restore; no automatic downgrade is provided.
+
+## Current fictional multi-profile host
+
+Runtime `17a8522` enables `LEMMI_DEMO_ENROLLMENT=1` for fictional profiles only. Keep the checked-in `deploy/nginx.conf.template` aligned with the actual proxy: `/participant`, `/_app/*`, four `/v1/demo/*` operations, scoped device/profile/media/support routes and WSS are allowed; internal, caregiver mock pages and inference/database remain blocked. Retain applied migration checksums; add `002_multi_profile_endpoints.sql` and `004_endpoint_revocations.sql` to the deployed schema. The compatibility migration retains old revoke receipts and existing persistent hashes; do not run the original conflicting branch `003_device_revocation_receipts.sql`.
+
+Each profile has an independent coordinator within the one gateway. Distinct enrolled endpoint identities may connect concurrently; one profile has one active audio owner with explicit handoff and Resume. A shared device token still names one endpoint. Demo enrollments have 30-day finite expiry; existing indefinite persistent tokens retain null expiry. Restart preserves unexpired/active enrollment hashes and ends sessions/grants/output. Preserve backups and use reviewed rollback procedures because old code cannot consume the new receipt/gateway-epoch schema unchanged.

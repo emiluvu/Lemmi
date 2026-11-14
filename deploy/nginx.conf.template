@@ -28,7 +28,25 @@ server {
         proxy_buffering off;
     }
 
-    location ~ ^/(access(/logout)?|v1/(devices/stackchan-alex/(pairings|revoke)|device-pairings/claim))$ {
+    location ~ ^/(access(/logout)?|v1/(devices/[^/]+/(pairings|revoke)|device-pairings/claim))$ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host YOUR_DOMAIN;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+    }
+
+    # Explicit fictional demo/browser routes, independently authorized by the app.
+    location ~ ^/(participant|_app/.*|v1/demo/(profiles|enroll|current|release))$ {
+        client_max_body_size 4k;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host YOUR_DOMAIN;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+    }
+
+    # Reviewed generic UI artwork/fonts only, never participant/private media.
+    # Static resources contain no credentials or profile data; no broad /images alias.
+    location ~ ^/(fonts/nunito-latin-variable\.ttf|images/(avatars/(dog|cat|bunny|bird|lemming)\.png|surfaces/(cream-paper-v1|conversation-meadow-v1)\.png))$ {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;
@@ -36,14 +54,21 @@ server {
     }
 
     # Optional database-backed profile and media resources.
-    location ~ ^/v1/profiles/profile-alex/(photos|assets)$ {
+    location ~ ^/v1/profiles/[^/]+/(photos|assets)$ {
         client_max_body_size 29m;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
     }
-    location ~ ^/v1/(profiles/profile-alex(/assets/[^/]+)?|participant/profiles/profile-alex|assets/[^/]+(/metadata)?)$ {
+    location ~ ^/v1/profiles/[^/]+/communication-support(/apply)?$ {
+        client_max_body_size 4k;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host YOUR_DOMAIN;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+    }
+    location ~ ^/v1/(profiles/[^/]+(/assets/[^/]+)?|participant/profiles/[^/]+|assets/[^/]+(/metadata)?)$ {
         client_max_body_size 32k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;

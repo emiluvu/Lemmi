@@ -34,6 +34,7 @@ export class PersistentData {
     private coordinator: ProfileSessions,
     now: () => number,
     invalidated: (deviceId?: string) => void,
+    private readonly changed: () => void = () => {},
   ) {
     this.devices = new DatabaseDeviceAuthority(repository, now, invalidated);
   }
@@ -77,6 +78,7 @@ export class PersistentData {
           };
         }),
         this.devices.bootId,
+        snapshot.supportSelections,
       );
     };
     const result = this.checkpoints.then(work);
@@ -84,6 +86,7 @@ export class PersistentData {
     return result;
   }
   async close() {
+    await this.profileWork;
     await this.checkpoints;
     const lock = this.lock;
     this.lock = undefined;
@@ -147,7 +150,7 @@ export class PersistentData {
         deviceId: identity.deviceId,
         profileId: identity.profileId,
         endpoint: identity.endpoint ?? 'robot',
-        expiresAt: new Date(identity.expiresAt).toISOString(),
+        expiresAt: identity.expiresAt === null ? null : new Date(identity.expiresAt).toISOString(),
         profile: profiles.find((profile) => profile.id === identity.profileId),
       });
     }
@@ -191,6 +194,23 @@ export class PersistentData {
     );
   }
   private uploadBusy = false;
+  private profileWork = Promise.resolve();
+  private profilePending = 0;
+  private changeProfile<T>(work: () => Promise<T>): Promise<T> {
+    if (this.profilePending >= 32)
+      return Promise.reject(
+        new DataError('UNAVAILABLE', 'Profile configuration queue is full; retry explicitly'),
+      );
+    this.profilePending++;
+    const result = this.profileWork.then(work).finally(() => {
+      this.profilePending--;
+    });
+    this.profileWork = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  }
   async handle(raw: unknown, actor: unknown, credential: unknown) {
     const request = DataRequestSchema.safeParse(raw);
     if (!request.success) throw new DataError('VALIDATION_ERROR', 'Invalid resource request');
@@ -206,18 +226,115 @@ export class PersistentData {
       profileId = rows[0]?.profile_id;
     }
     const principal = await this.principal(actor, credential, profileId);
+    const coordinator =
+      this.coordinator.forProfile?.(principal.profileId) ??
+      (this.coordinator as SessionCoordinator);
     switch (request.data.operation) {
+      case 'support.read': {
+        const id = request.data.profileId;
+        return this.changeProfile(async () => {
+          const profile = await this.repository.profile(principal, id, true);
+          const session = coordinator.snapshot();
+          return ok({
+            profileId: id,
+            profileRevision: profile.revision,
+            saved: profile.communicationSupport,
+            session: session?.phase === 'ended' ? null : session,
+          });
+        });
+      }
       case 'profile.read':
         return ok(
           await this.repository.profile(principal, request.data.profileId, request.data.caregiver),
         );
       case 'profile.update': {
         const input = request.data.input;
-        const profile = await this.repository.update(principal, input, () =>
-          this.coordinator.pauseForProfileUpdate(input.patch, input.profileId),
-        );
-        this.coordinator.acceptPersistentProfile(profile);
-        return ok(profile);
+        return this.changeProfile(async () => {
+          let release: () => unknown = () => {};
+          let began = false;
+          const contextChanged = Object.keys(input.patch).some(
+            (key) => key !== 'communicationSupport',
+          );
+          try {
+            const profile = await this.repository.update(principal, input, () => {
+              began = true;
+              release = coordinator.beginProfileUpdate(input.patch);
+              this.changed();
+            });
+            coordinator.acceptPersistentProfile(profile, contextChanged);
+            return ok(profile);
+          } catch (error) {
+            if (began) {
+              // A lost COMMIT response is not proof of rollback. Reconcile the
+              // actual authorized row before allowing any explicit continuation.
+              try {
+                const actual = await this.repository.profile(principal, input.profileId, true);
+                coordinator.acceptPersistentProfile(
+                  actual as import('@lemmi/contracts').ProfileDetail,
+                  contextChanged,
+                );
+              } catch {
+                // This fence intentionally lasts until gateway restart. Keeping
+                // Stop/help available is safer than resuming unknown biography.
+                coordinator.holdConfiguration();
+                coordinator.disconnect();
+                this.changed();
+                throw new DataError(
+                  'UNAVAILABLE',
+                  'Profile outcome could not be reconciled; restart the gateway after database recovery',
+                );
+              }
+            }
+            throw error;
+          } finally {
+            release();
+          }
+        });
+      }
+      case 'support.apply': {
+        const input = request.data.input;
+        return this.changeProfile(async () => {
+          let release: () => unknown = () => {};
+          try {
+            const result = await this.repository.withSupportProfile(principal, input, (profile) => {
+              const applied = coordinator.applyCommunicationSupport(
+                input,
+                profile,
+                principal.kind === 'caregiver' ? principal.subject : '',
+              );
+              if (applied.ok) {
+                release = coordinator.holdConfiguration();
+                this.changed();
+              }
+              return applied;
+            });
+            if (!result.ok) return result;
+            try {
+              await this.checkpoint(coordinator.persistenceSnapshot());
+            } catch {
+              coordinator.disconnect();
+              this.changed();
+              throw new DataError(
+                'UNAVAILABLE',
+                'Support checkpoint failed; interaction remains paused',
+              );
+            }
+            const latest = coordinator.snapshot();
+            if (
+              !latest ||
+              latest.id !== result.data.id ||
+              latest.generation !== result.data.generation ||
+              latest.phase !== 'paused'
+            )
+              throw new DataError(
+                'REVISION_CONFLICT',
+                'Session changed during support apply; reload its state',
+              );
+            return ok(latest);
+          } finally {
+            release();
+          }
+        });
       }
       case 'asset.create': {
         if (this.uploadBusy)

@@ -68,7 +68,8 @@
         next.id !== session?.id ||
         next.generation !== session?.generation ||
         next.activeEndpointId !== session?.activeEndpointId ||
-        ['paused', 'ended'].includes(next.phase)
+        next.phase === 'ended' ||
+        (next.phase === 'paused' && session?.phase !== 'paused')
       )
         reply = '';
       session = next;
@@ -254,8 +255,7 @@
     });
     const background = () => {
       if (document.visibilityState === 'hidden') {
-        audio?.cancel();
-        connection?.send('input.pause');
+        control('input.pause');
       }
     };
     const leaving = () => {

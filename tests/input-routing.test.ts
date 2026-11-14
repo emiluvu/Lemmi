@@ -23,8 +23,8 @@ test('reviewed English/German control phrases route before generation without ma
     ['Ich bekomme keine Luft.', 'urgent'],
     ['The sign says “stop”.', 'ordinary'],
     ['Can you explain the word help?', 'ordinary'],
-    ['Should I change my medicine?', 'ordinary'],
-    ['Where is my sister?', 'ordinary'],
+    ['Should I change my medicine?', 'medication'],
+    ['Where is my sister?', 'personal_location'],
   ] as const;
   for (const [text, route] of cases) expect(routeParticipantText(text)).toBe(route);
 });

@@ -90,7 +90,7 @@ try {
         }
       }
       if (
-        !/^\/(access(?:\/logout)?|participant|_app\/.*|v1\/demo\/(profiles|enroll|current|release))$/.test(
+        !/^\/(access(?:\/logout)?|participant|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|enroll|current|release))$/.test(
           path,
         )
       )
@@ -196,6 +196,22 @@ try {
       html.includes('Choose a participant') &&
       html.includes('Create fictional profile'),
     'Production participant setup page failed',
+  );
+  for (const [path, mime] of [
+    ['/fonts/nunito-latin-variable.ttf', 'font/ttf'],
+    ['/images/avatars/lemming.png', 'image/png'],
+    ['/images/surfaces/cream-paper-v1.png', 'image/png'],
+  ]) {
+    const asset = await request(path!, 'GET', undefined, gateCookie);
+    check(
+      asset.ok && (asset.headers.get('content-type') ?? '').includes(mime!),
+      'Participant UI asset failed',
+    );
+    await asset.body?.cancel();
+  }
+  check(
+    (await request('/images/README.md', 'GET', undefined, gateCookie)).status === 404,
+    'Static asset allowlist too broad',
   );
   const profiles = (await (
     await request('/v1/demo/profiles', 'GET', undefined, gateCookie)

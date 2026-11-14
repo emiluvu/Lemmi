@@ -1,4 +1,5 @@
 export * from './common';
+export * from './communication-support';
 export * from './session';
 export * from './activity';
 export * from './activity-validation';

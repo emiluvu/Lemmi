@@ -5,6 +5,8 @@ export const PairDeviceInputSchema = z.strictObject({
   deviceId: IdSchema,
   profileId: IdSchema,
   commandId: IdSchema,
+  // Explicit caregiver choice; database-backed gateways only.
+  credentialMode: z.literal('persistent').optional(),
 });
 export const PairDeviceResultSchema = z.strictObject({
   pairingId: IdSchema,
@@ -23,7 +25,8 @@ export const ClaimDeviceResultSchema = z.strictObject({
   deviceId: IdSchema,
   profileId: IdSchema,
   credential: z.string().min(40).max(100),
-  expiresAt: z.string().datetime(),
+  // null means valid until explicitly revoked, not permission to start capture.
+  expiresAt: z.string().datetime().nullable(),
 });
 export const RevokeDeviceInputSchema = z.strictObject({
   deviceId: IdSchema,

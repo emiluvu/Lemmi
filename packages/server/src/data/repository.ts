@@ -5,6 +5,9 @@ import {
   CaregiverProfileSchema,
   ParticipantProfileSchema,
   JournalEventSchema,
+  SupportSelectionSchema,
+  type SupportSelection,
+  type ApplyCommunicationSupport,
   type SessionSnapshot,
   type ParticipantProfile,
 } from '@lemmi/contracts';
@@ -83,7 +86,7 @@ export class DataRepository {
       if (!member.length) throw new DataError('FORBIDDEN', 'Caregiver is not assigned');
     } else {
       const device =
-        await tx`SELECT 1 FROM lemmi.devices WHERE id=${principal.deviceId} AND profile_id=${id} AND credential_id=${principal.credentialId}::uuid AND boot_id=${principal.bootId}::uuid AND revoked_at IS NULL AND credential_expires_at>now() FOR SHARE`;
+        await tx`SELECT 1 FROM lemmi.devices WHERE id=${principal.deviceId} AND profile_id=${id} AND credential_id=${principal.credentialId}::uuid AND boot_id=${principal.bootId}::uuid AND revoked_at IS NULL AND (credential_persistent OR credential_expires_at>now()) FOR SHARE`;
       if (!device.length) throw new DataError('FORBIDDEN', 'Device access has ended');
     }
     return rows[0];
@@ -198,7 +201,25 @@ export class DataRepository {
           await tx`INSERT INTO lemmi.profile_facts (id,profile_id,field,value,source,author,revision) VALUES (${fact.id}::uuid,${input.profileId},${fact.field},${fact.value},'caregiver_provided',${principal.subject},${next.revision})`;
       }
       await tx`INSERT INTO lemmi.mutation_receipts (profile_id,subject,operation,command_id,fingerprint,result_revision) VALUES (${input.profileId},${principal.subject},'profile.update',${input.commandId},${hash},${next.revision})`;
+      if (input.patch.communicationSupport)
+        await tx`INSERT INTO lemmi.profile_support_selections (profile_id,profile_revision,preset,config_version,actor_subject)
+          VALUES (${input.profileId},${next.revision},${next.communicationSupport.preset},1,${principal.subject})`;
       return this.detail(tx, changed[0]);
+    });
+  }
+  async withSupportProfile<T>(
+    principal: DataPrincipal,
+    input: ApplyCommunicationSupport,
+    apply: (profile: ProfileDetail) => T,
+  ): Promise<T> {
+    return this.sql.begin(async (tx) => {
+      const row = await this.scoped(tx, principal, input.profileId, true);
+      if (row.revision !== input.expectedProfileRevision)
+        throw new DataError(
+          'REVISION_CONFLICT',
+          'Reload the saved profile before applying support',
+        );
+      return apply(await this.detail(tx, row));
     });
   }
   private metadata(row: any): AssetMetadata {
@@ -303,6 +324,21 @@ export class DataRepository {
       return { metadata, bytes, revision: profile.revision };
     });
   }
+  async deviceMutation<T>(
+    subject: string,
+    bootId: string,
+    work: (tx: TransactionSQL) => Promise<T>,
+  ) {
+    return this.sql.begin(async (tx) => {
+      await this.scoped(
+        tx,
+        { kind: 'caregiver', subject, profileId: 'profile-alex', bootId },
+        'profile-alex',
+      );
+      await tx`SELECT 1 FROM lemmi.devices WHERE id='stackchan-alex' FOR UPDATE`;
+      return work(tx);
+    }) as Promise<T>;
+  }
   async restart(bootId: string) {
     await this.sql.begin(async (tx) => {
       await tx`INSERT INTO lemmi.gateway_state (singleton,boot_id) VALUES (true,${bootId}::uuid) ON CONFLICT (singleton) DO UPDATE SET boot_id=EXCLUDED.boot_id`;
@@ -318,7 +354,10 @@ export class DataRepository {
     snapshot: SessionSnapshot,
     events: { id: string; event: unknown }[],
     bootId?: string,
+    supportSelections: SupportSelection[] = [],
   ) {
+    if (supportSelections.length > 50)
+      throw new DataError('VALIDATION_ERROR', 'Support context is bounded');
     await this.sql.begin(async (tx) => {
       const profile =
         await tx`SELECT 1 FROM lemmi.profiles WHERE id=${snapshot.profileId} AND deletion_state='active' AND revision>=${snapshot.profileRevision} AND privacy_revision=${snapshot.privacyRevision} AND policy_revision=${snapshot.policyRevision} FOR UPDATE`;
@@ -333,6 +372,18 @@ export class DataRepository {
       for (const raw of events) {
         const event = JournalEventSchema.parse(raw.event);
         await tx`INSERT INTO lemmi.activity_events (id,profile_id,session_id,event) VALUES (${raw.id}::uuid,${snapshot.profileId},${snapshot.id},${tx.json(event)}) ON CONFLICT (id) DO NOTHING`;
+      }
+      for (const raw of supportSelections) {
+        const selection = SupportSelectionSchema.parse(raw);
+        if (
+          selection.generation > snapshot.generation ||
+          selection.profileRevision > snapshot.profileRevision
+        )
+          throw new DataError('VALIDATION_ERROR', 'Support context is newer than its session');
+        await tx`INSERT INTO lemmi.session_support_selections
+          (id,profile_id,session_id,generation,profile_revision,preset,config_version,source,actor_subject,selected_at)
+          VALUES (${selection.id}::uuid,${snapshot.profileId},${snapshot.id},${selection.generation},${selection.profileRevision},${selection.support.preset},1,${selection.source},${selection.actorSubject},${selection.selectedAt}::timestamptz)
+          ON CONFLICT (id) DO NOTHING`;
       }
     });
   }

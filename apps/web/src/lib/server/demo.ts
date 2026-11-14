@@ -125,6 +125,7 @@ export async function handleDemoHttp(
   const value = result.data.data;
   if (operation === 'enroll' && 'credential' in value && value.endpoint === 'browser') {
     const { credential: token, ...safe } = value;
+    if (value.expiresAt === null) throw new Error('Browser enrollment requires finite expiry');
     const expiry = Math.max(0, Math.floor((Date.parse(value.expiresAt) - Date.now()) / 1000));
     return Response.json(
       { ok: true, data: safe },

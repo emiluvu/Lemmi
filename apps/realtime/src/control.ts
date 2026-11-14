@@ -101,6 +101,7 @@ export function startControlGateway(options: Options) {
         sessions,
         now,
         invalidated,
+        () => broadcast(),
       )
     : null;
   const access = data?.devices ?? new DeviceAccess(now, invalidated);
@@ -303,6 +304,7 @@ export function startControlGateway(options: Options) {
               return controlResponse(ok(result.data.metadata));
             return controlResponse(result);
           } catch (error) {
+            broadcast();
             return controlResponse(dataFailure(error));
           }
         }
@@ -495,7 +497,10 @@ export function startControlGateway(options: Options) {
             mode: 'live',
             deviceId: ws.data.identity.deviceId,
             profileId: ws.data.identity.profileId,
-            credentialExpiresAt: new Date(ws.data.identity.expiresAt).toISOString(),
+            credentialExpiresAt:
+              ws.data.identity.expiresAt === null
+                ? null
+                : new Date(ws.data.identity.expiresAt).toISOString(),
             audio: ws.data.playbackRates.length
               ? {
                   encoding: 'pcm_s16le',

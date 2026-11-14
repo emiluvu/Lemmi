@@ -354,3 +354,6 @@ If time remains, add factual activity-use duration by date/activity. Call it Rec
 ### Final stretch entry
 
 Solitaire is the bottom/last stretch item, after all committed work and other optional features. Do not render it as a working card until implemented; a planning item or clearly unavailable state cannot satisfy a demo criterion.
+
+
+November 14 integration clarification: the user explicitly authorized full fictional multi-profile support. Alex remains the initial profile; separately created fictional participants have isolated authorized context/assets/sessions. Existing labeled example cards remain preview-only. Multiple endpoints may observe one profile, with explicit handoff and one active audio owner. This supersedes earlier Alex-only demo restrictions for fictional profiles only; it does not authorize real participant data or infer care readiness. See [backend API](backend_api.md) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).

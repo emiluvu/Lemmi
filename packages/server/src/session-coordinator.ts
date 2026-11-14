@@ -11,6 +11,8 @@ import {
   ConversationReplySchema,
   EligibilitySnapshotSchema,
   type EligibilitySnapshot,
+  ApplyCommunicationSupportSchema,
+  type SupportSelection,
   type ConversationTextResult,
   type ActivityEvent,
   type ActivitySystemInput,
@@ -47,6 +49,7 @@ import {
 import { createHash } from 'node:crypto';
 import { companionInput } from './adapters/companion-prompt';
 import { fixedInputReply, routeParticipantText } from './adapters/input-routing';
+import { permittedModelReply } from './adapters/reply-policy';
 import type { ChatAdapter, ChatMessage } from './adapters/types';
 import { SpeechTurns, type SpeechAdapters } from './speech-turns';
 import { elapsedEpochClock } from './elapsed-clock';
@@ -218,6 +221,8 @@ export class SessionCoordinator {
   private readonly speech?: SpeechTurns;
   async speakTeachingPrompt(raw: unknown, rates: number[]) {
     this.sweepTeaching();
+    if (this.configurationChanges.size)
+      return fail('REVISION_CONFLICT', 'Configuration save is pending');
     const prompt = this.session?.teaching?.prompt;
     if (!prompt) return fail('UNAVAILABLE', 'No current teaching prompt');
     return (
@@ -232,6 +237,8 @@ export class SessionCoordinator {
     this.sweepTeaching();
     if (this.session?.teaching && !this.session.teaching.entityId)
       return fail('UNAVAILABLE', 'Choose another activity or finish; no eligible teaching topic');
+    if (this.configurationChanges.size)
+      return fail('REVISION_CONFLICT', 'Configuration save is pending');
     if (this.activity && this.activity.phase !== 'ended')
       return fail('REVISION_CONFLICT', 'Leave the activity before speaking');
     if (this.pendingChat) return fail('REVISION_CONFLICT', 'A text turn is pending');
@@ -275,12 +282,100 @@ export class SessionCoordinator {
   private privacyRevision = 0;
   private policyRevision = 0;
   private approvedFacts: string[] = [];
+  private supportSelections: SupportSelection[] = [];
+  private supportReceipts = new Map<string, { fingerprint: string; generation: number }>();
+  private configurationChanges = new Set<object>();
+  holdConfiguration() {
+    const token = {};
+    this.configurationChanges.add(token);
+    return () => this.configurationChanges.delete(token);
+  }
+  beginProfileUpdate(patch: Record<string, unknown>) {
+    if (!Object.keys(patch).some((key) => key !== 'communicationSupport')) return () => {};
+    this.pauseForProfileUpdate(patch);
+    return this.holdConfiguration();
+  }
+  applyCommunicationSupport(
+    raw: unknown,
+    profile: Pick<
+      import('@lemmi/contracts').ProfileDetail,
+      'id' | 'revision' | 'communicationSupport'
+    >,
+    actorSubject: string,
+  ): Result<SessionSnapshot> {
+    const parsed = ApplyCommunicationSupportSchema.safeParse(raw);
+    if (!parsed.success || !actorSubject || actorSubject.length > 200)
+      return fail('VALIDATION_ERROR', 'Invalid communication support apply request');
+    const input = parsed.data,
+      session = this.session;
+    if (input.profileId !== this.profile.id || profile.id !== input.profileId)
+      return fail('FORBIDDEN', 'Profile is not assigned');
+    if (profile.revision !== input.expectedProfileRevision)
+      return fail('REVISION_CONFLICT', 'Reload the saved profile before applying support');
+    if (!session || session.id !== input.sessionId || session.phase === 'ended')
+      return fail('REVISION_CONFLICT', 'Use the current active session');
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify({ input, actorSubject }))
+      .digest('hex');
+    const receipt = this.supportReceipts.get(input.commandId);
+    if (receipt)
+      return receipt.fingerprint === fingerprint &&
+        session.generation === receipt.generation &&
+        session.phase === 'paused'
+        ? ok(this.snapshot()!)
+        : fail('REVISION_CONFLICT', 'Support apply receipt is stale or changed');
+    if (session.generation !== input.expectedGeneration || this.supportSelections.length >= 50)
+      return fail('REVISION_CONFLICT', 'Reload the session; support apply is stale or at capacity');
+    this.interrupt({ type: 'system.pause', reason: 'config_change' });
+    this.session = {
+      ...this.session!,
+      communicationSupport: structuredClone(profile.communicationSupport),
+      profileRevision: profile.revision,
+    };
+    if (this.context)
+      this.context = {
+        ...this.context,
+        presentationPolicy: structuredClone(profile.communicationSupport),
+      };
+    if (this.session.teaching) this.refreshTeachingPrompt();
+    this.recordSupportSelection(actorSubject);
+    this.supportReceipts.set(input.commandId, { fingerprint, generation: this.session.generation });
+    return ok(this.snapshot()!);
+  }
+  private recordSupportSelection(actorSubject: string | null = null) {
+    const session = this.session!;
+    this.supportSelections.push({
+      id: crypto.randomUUID(),
+      generation: session.generation,
+      profileRevision: session.profileRevision,
+      support: structuredClone(session.communicationSupport),
+      source: actorSubject ? 'caregiver_apply' : 'profile_default',
+      actorSubject,
+      selectedAt: new Date().toISOString(),
+    });
+  }
+  private activityContext(sessionId: string): ActivityContext {
+    const context = contextFor(sessionId);
+    return {
+      ...context,
+      eligibility: {
+        ...context.eligibility,
+        profileId: this.profile.id,
+        policyRevision: this.policyRevision,
+        ...(this.mode === 'live' ? { permittedEntityIds: [], available: false } : {}),
+      },
+      presentationPolicy: structuredClone(this.session!.communicationSupport),
+    };
+  }
   // PostgreSQL remains behind this one authority; it never restores a running session.
   pauseForProfileUpdate(patch: Record<string, unknown>) {
     if (Object.keys(patch).some((key) => key !== 'communicationSupport'))
       this.interrupt({ type: 'system.pause', reason: 'config_change' });
   }
-  acceptPersistentProfile(profile: import('@lemmi/contracts').ProfileDetail) {
+  acceptPersistentProfile(
+    profile: import('@lemmi/contracts').ProfileDetail,
+    syncPausedRevision = true,
+  ) {
     const {
       approvedFacts,
       privacyRevision: _privacy,
@@ -288,25 +383,31 @@ export class SessionCoordinator {
       ...caregiver
     } = profile;
     this.profile = structuredClone(caregiver);
-    this.teachingEligibility = null;
+    if (syncPausedRevision) this.teachingEligibility = null;
     this.privacyRevision = _privacy;
     this.policyRevision = _policy;
     this.journal.profileId = profile.id;
     this.approvedFacts = approvedFacts.map((fact) => fact.value);
-    if (this.session?.phase === 'paused')
+    if (syncPausedRevision && this.session?.phase === 'paused')
       this.session = {
         ...this.session,
         profileRevision: profile.revision,
         privacyRevision: profile.privacyRevision,
         policyRevision: profile.policyRevision,
       };
-    if (this.session?.teaching) this.refreshTeachingPrompt();
+    if (syncPausedRevision && this.session?.teaching) this.refreshTeachingPrompt();
   }
   persistenceSnapshot() {
     const session = this.snapshot();
     const events =
       this.journal.sessions.find((record) => record.sessionId === session?.id)?.events ?? [];
-    return session ? { session, events: structuredClone(events) } : null;
+    return session
+      ? {
+          session,
+          events: structuredClone(events),
+          supportSelections: structuredClone(this.supportSelections),
+        }
+      : null;
   }
   private session: SessionSnapshot | null = null;
   private activity: ActivityState | null = null;
@@ -367,6 +468,8 @@ export class SessionCoordinator {
     const session = this.session;
     if (this.mode !== 'live' && session?.conversationMode !== 'teach_lemmi')
       return fail('UNAVAILABLE', 'Live text conversation is unavailable in mock mode');
+    if (this.configurationChanges.size)
+      return fail('REVISION_CONFLICT', 'Configuration save is pending');
     if (!session || session.id !== input.sessionId) return fail('NOT_FOUND', 'Session not found');
     if (
       session.generation !== input.expectedGeneration ||
@@ -407,23 +510,27 @@ export class SessionCoordinator {
     const fixed = fixedInputReply(route, input.language);
     if (route === 'topic_refusal' && session.teaching?.entityId)
       this.teachingHidden.add(session.teaching.entityId);
-    if (
-      this.speech?.busy() &&
-      !this.speech.owns(speechOwner) &&
-      !['urgent', 'unwell', 'topic_refusal'].includes(route)
-    )
+    const interrupts = [
+      'urgent',
+      'unwell',
+      'topic_refusal',
+      'privacy_refusal',
+      'frightening',
+      'navigation',
+    ].includes(route);
+    if (this.speech?.busy() && !this.speech.owns(speechOwner) && !interrupts)
       return fail('REVISION_CONFLICT', 'Finish or interrupt the current speech turn first');
     if (fixed) {
-      if (route === 'incomplete_need' && this.pendingChat)
+      if (!interrupts && this.pendingChat)
         return fail('REVISION_CONFLICT', 'A conversation turn is pending');
       if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
       this.cancelChat(false, speechOwner);
       let replyTurnId = input.commandId;
-      if (route === 'unwell' || route === 'urgent' || route === 'topic_refusal') {
+      if (interrupts) {
         const pause = () =>
           this.interrupt({
             type: 'system.pause',
-            reason: route === 'topic_refusal' ? 'participant' : 'help',
+            reason: ['topic_refusal', 'privacy_refusal'].includes(route) ? 'participant' : 'help',
           });
         if (speechOwner) {
           const fixedTurn = this.speech?.replaceForFixedReply(speechOwner, pause);
@@ -545,7 +652,8 @@ export class SessionCoordinator {
         if (!current() || signal.aborted)
           return fail('REVISION_CONFLICT', 'Discarded an obsolete conversation result');
         this.session = { ...this.session!, phase: 'waiting', captureGrant: null };
-        if (!response.ok) result = response;
+        if (!response.ok)
+          result = fail('UNAVAILABLE', 'Conversation provider unavailable; retry explicitly');
         else if (
           !ConversationReplySchema.safeParse({
             ...response.data,
@@ -555,11 +663,8 @@ export class SessionCoordinator {
           response.data.language !== input.language
         )
           result = fail('UNAVAILABLE', 'Invalid conversation reply');
-        else if (
-          (response.data.text.match(/\?/g)?.length ?? 0) >
-          (session.communicationSupport.preset === 'quiet' ? 0 : 1)
-        )
-          result = fail('UNAVAILABLE', 'Response did not meet the configured question limit');
+        else if (!permittedModelReply(response.data.text, session.communicationSupport))
+          result = fail('UNAVAILABLE', 'Response did not meet the configured conversation policy');
         else if (
           teachingTopic &&
           !teachingReplyWithinTopic(response.data.text, teachingTopic.entityId)
@@ -656,17 +761,32 @@ export class SessionCoordinator {
     if (op === 'conversation.submit')
       return fail('UNAVAILABLE', 'Use the asynchronous conversation submission path');
     if (
+      this.configurationChanges.size &&
+      (op === 'session.start' ||
+        (op === 'session.command' &&
+          [
+            'resume',
+            'teaching.start',
+            'teaching.next',
+            'teaching.not_sure',
+            'teaching.prefer',
+            'teaching.avoid',
+          ].includes(SessionCommandSchema.safeParse(input).data?.action.type ?? '')))
+    )
+      return fail('REVISION_CONFLICT', 'Configuration save is pending; interaction stays paused');
+    if (
       this.mode === 'live' &&
       !['session.start', 'session.get', 'session.command', 'help.create'].includes(op)
     )
       return fail('UNAVAILABLE', 'Only authenticated device controls are implemented');
     // Parsed keys/values only; never accept a client-selected scope or preview profile as live.
     if ('profileId' in input && input.profileId !== this.profile.id)
-      return fail('FORBIDDEN', 'Only Alex is functional; examples are preview-only');
+      return fail('FORBIDDEN', 'Profile is not assigned to this session');
     if ('profile' in input && input.profile.id !== this.profile.id)
       return fail('FORBIDDEN', 'Profile is not assigned');
     const body = JSON.stringify(input);
-    const key = 'commandId' in input ? `${op}:${input.commandId}` : null;
+    const key =
+      'commandId' in input && op !== 'profile.applySupport' ? `${op}:${input.commandId}` : null;
     if (key) {
       const previous = this.cache.get(key);
       if (previous)
@@ -726,6 +846,15 @@ export class SessionCoordinator {
           this.refreshTeachingPrompt();
         }
         return ok(this.profile);
+      case 'profile.applySupport':
+        return this.applyCommunicationSupport(input, this.profile, 'fixture-caregiver');
+      case 'profile.support':
+        return ok({
+          profileId: this.profile.id,
+          profileRevision: this.profile.revision,
+          saved: this.profile.communicationSupport,
+          session: this.session?.phase === 'ended' ? null : this.snapshot(),
+        });
       case 'overview.load':
         return ok({
           profile: this.participant(),
@@ -745,6 +874,8 @@ export class SessionCoordinator {
         this.teachingHidden.clear();
         this.teachingPreferred.clear();
         this.teachingEligibility = null;
+        this.supportSelections = [];
+        this.supportReceipts.clear();
         this.session = SessionSnapshotSchema.parse({
           id: this.mode === 'live' ? `session-${crypto.randomUUID()}` : `session-${++this.count}`,
           profileId: this.profile.id,
@@ -763,15 +894,9 @@ export class SessionCoordinator {
           mode: this.mode,
         });
         this.activity = null;
-        this.context = contextFor(this.session.id);
-        this.context.eligibility = {
-          ...this.context.eligibility,
-          profileId: this.profile.id,
-          policyRevision: this.policyRevision,
-          ...(this.mode === 'live' ? { permittedEntityIds: [], available: false } : {}),
-        };
-        this.context.presentationPolicy = structuredClone(this.session.communicationSupport);
+        this.context = this.activityContext(this.session.id);
         this.journal.sessions.push({ sessionId: this.session.id, events: [], summary: null });
+        this.recordSupportSelection();
         return ok(this.session);
       case 'session.get':
         return this.session?.id === input.sessionId
@@ -896,7 +1021,7 @@ export class SessionCoordinator {
           return fail('UNAVAILABLE', 'Activity pending Lukas implementation');
         if (this.activity && this.activity.phase !== 'ended')
           return fail('REVISION_CONFLICT', 'Leave the current activity first');
-        this.context = contextFor(this.session.id);
+        this.context = this.activityContext(this.session.id);
         this.activity = createActivity(
           { instanceId: `activity-${++this.count}` },
           musicPack,
@@ -943,7 +1068,7 @@ export class SessionCoordinator {
         if (!this.help || ['canceled', 'resolved', 'expired'].includes(this.help.status))
           this.help = {
             id: `help-${++this.count}`,
-            profileId: DEMO_PROFILE_ID,
+            profileId: this.profile.id,
             status: 'created',
             mode: 'simulation',
             reason: 'manual',

@@ -19,7 +19,7 @@ docker compose --env-file .env -p lemmi -f db/compose.yaml ps
 docker compose -p lemmi-proxy -f deploy/compose.proxy.yaml ps
 ```
 
-Unit source templates are in `deploy/systemd`; installed copies replace `@ROOT@` with this checkout. Restarting the gateway ends sessions and invalidates issued device credentials. Re-pair explicitly afterward.
+Unit source templates are in `deploy/systemd`; installed copies replace `@ROOT@` with this checkout. Restarting the gateway ends sessions, clears pending codes and short-lived credentials, and retains explicitly persistent active keys. Persistent devices reconnect with their saved key but must explicitly Start; they never restore capture/output. Existing short-lived keys require re-pairing.
 
 ## Configure your identity provider privately
 
@@ -105,3 +105,19 @@ Current remaining limits: speech synthetic recognition quality is intermittent; 
 ## Redeployment follow-up — `04d050e`
 
 Fast-forwarded the deployment checkout from `51ede5e` to the reviewed `04d050e` security fix after isolated install/check/test/build/fixture-smoke verification. Installed the prepared production build and restarted web/gateway; private configuration and database contents were preserved. Previous source/build is retained under ignored `.data/releases`, with its path in `.data/rollback-release-path`. Public gate and live computer-device text/control checks passed; temporary device credential revoked. Earlier DNS failures are historical: the system resolver now resolves the public hostname and normal verified HTTPS unlock returns 200. See [current backend status](backend-status.md) for detailed acceptance and checks not repeated.
+
+## Main integration deployment — November 14, 2026
+
+Runtime `275de72` integrates main `24e7fe2`, the corrected speech pipeline and reviewed `002_media_collections.sql`. A private database backup plus previous source/build were retained under `.data/releases`; migration was applied without reseeding Alex, then web/gateway/private speech restarted with the verified build. Existing credentials were invalidated as designed. All services are active with no automatic restarts. Public text/chat/control acceptance and three isolated synthetic local-engine turns passed. Public speech remains disabled, with model/voice/accelerator/private configuration unchanged. See [backend status](backend-status.md) for exact scope and unrun hardware/quality checks.
+
+## Persistent keys and chat support — November 14, 2026
+
+Runtime `d067ac0` is deployed with `003_communication_support.sql` and `003_persistent_device_credentials.sql`. A private database/source/build/proxy backup is retained under `.data/releases`; its path is `.data/rollback-release-path`. New communication-support proxy paths were validated/reloaded. Same-key public authentication after a real gateway restart and complete text/control rehearsal passed; temporary persistent key revoked. The Python helper now requests persistent enrollment by default; one-hour credentials are not automatically upgraded. Keep null expiry support and private robot key storage in Emilia's firmware scope.
+
+GLM is configured with the documented `LEMMI_LLM_REASONING_EFFORT=low` and `LEMMI_LLM_MAX_TOKENS=512`; model/key unchanged. The previous mode-0600 environment is retained privately with the rollback backup. Never downgrade to pre-persistent code while persistent keys remain active: revoke through the new implementation first or use a reviewed restore/migration. See current [backend status](backend-status.md) for all observed tests and limits.
+
+## Fictional multi-profile endpoints — November 14, 2026
+
+Runtime `17a8522` deployed after 169 backend and 17 Python tests plus production fixture smokes. Database/source/build/environment/proxy backups retained under `.data/releases`; current backup path is `.data/rollback-release-path`. Existing persistent shared key/file is unchanged and public authentication passed after upgrade. Full fictional profile/enrollment routes are enabled with `LEMMI_DEMO_ENROLLMENT=1`; `/participant` is gate-protected. Migration `002_multi_profile_endpoints.sql` adds profile/device/gateway scope and `004_endpoint_revocations.sql` preserves old revoke receipts while changing their device scope. No applied migration was edited. Two public fictional rehearsal profiles/endpoints passed concurrent WSS control isolation; only those rehearsal records were cleaned up.
+
+Use `/access` then `/participant` for browser setup. For independent robot identities use the existing `bun run enroll-device PROFILE_ID PRIVATE_FILE`; each saved file is a distinct finite 30-day identity, while the earlier shared indefinite token remains valid. One profile has one active audio endpoint with explicit handoff; no automatic capture or output after reconnect. Public voice stays disabled and Teach Lemmi remains a separate unmerged integration. Backend status/API docs give exact consumer contracts and checks not yet performed.

@@ -8,7 +8,7 @@ The repository contains planning documents and a runnable local mock starter. Re
 
 ## Demo profile scope
 
-The authorized November 14 multi-profile increment supports independently created fictional participant profiles, with Alex as the initial profile. Each profile has separate approved context, assets, authorization, session state and transient conversation. Browser and robot endpoints assigned to the same profile share one session and one active audio endpoint; different profiles may run concurrently. New frontend setup selects an authorized fictional profile or creates a distinct fictional profile. Preview cards remain labeled **Example profile — preview only** and never become live records or reuse Alex’s context. Easy enrollment is explicitly enabled for fictional demo profiles only; caregiver/private-data permissions remain separate. Profile changes stop/cancel prior endpoint work, and all APIs enforce resource scope. See [multi-profile handoff](docs/handoffs/anay-multi-profile-endpoints.md) for implementation and verification limits.
+The user authorized full fictional multi-profile support on November 14. Alex remains the initial profile; additional live fictional profiles must be explicitly created/enrolled with isolated context, assets, access and sessions. Each profile has one active audio endpoint with explicit handoff. Existing example cards remain labeled **Example profile — preview only** and cannot reuse live data or enroll endpoints. No real biography/contacts are implied by demo creation. Resource authorization must enforce each profile/device assignment outside the model.
 
 ## Read the relevant specifications
 

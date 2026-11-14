@@ -31,6 +31,7 @@ beforeAll(async () => {
     );
     await tx`INSERT INTO public.lemmi_migrations (name,sha256) VALUES ('001_foundation.sql',${digest(foundation)})`;
     await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset) VALUES ('profile-alex','Alex','lemming','guided')`;
+    await tx`INSERT INTO lemmi.devices (id,profile_id,credential_id,credential_hash,credential_expires_at) VALUES ('stackchan-alex','profile-alex',${randomUUID()}::uuid,${'a'.repeat(64)},now()+interval '1 hour')`;
   });
 });
 afterAll(async () => {
@@ -73,13 +74,20 @@ dbtest(
       '001_foundation.sql',
       '002_media_collections.sql',
       '002_multi_profile_endpoints.sql',
-      '003_device_revocation_receipts.sql',
+      '003_communication_support.sql',
+      '003_persistent_device_credentials.sql',
+      '004_endpoint_revocations.sql',
     ]);
     expect(
       (await sql`SELECT sha256 FROM public.lemmi_migrations WHERE name='001_foundation.sql'`)[0]
         .sha256,
     ).toBe(before);
     expect((await sql`SELECT count(*)::int AS n FROM lemmi.media_assets`)[0].n).toBe(3);
+    expect(
+      (
+        await sql`SELECT credential_persistent,credential_expires_at IS NOT NULL AS has_expiry FROM lemmi.devices`
+      )[0],
+    ).toMatchObject({ credential_persistent: false, has_expiry: true });
     expect(
       (await sql`SELECT excerpt_saving_enabled,remembering_enabled FROM lemmi.profiles`)[0],
     ).toMatchObject({ excerpt_saving_enabled: false, remembering_enabled: false });
@@ -163,26 +171,33 @@ dbtest(
   },
 );
 
-dbtest('isolated unassigned profile fixtures cannot link another profile’s media', async () => {
-  const fixtureProfile = `profile-${randomUUID()}`;
-  await sql.begin(async (tx) => {
-    // No caregiver assignment or enrollment: this row is an isolated FK fixture only.
-    await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset)
-      VALUES (${fixtureProfile},'Fictional scope fixture','cat','quiet')`;
-    const foreign = randomUUID();
-    await tx`INSERT INTO lemmi.albums (id,profile_id,title,collection_kind)
-      VALUES (${foreign}::uuid,${fixtureProfile},'Other scope','album')`;
-    const save = tx.savepoint(async (sp) => {
-      await sp`INSERT INTO lemmi.album_photos (id,profile_id,album_id,asset_id,position)
-        VALUES (${randomUUID()}::uuid,${fixtureProfile},${foreign}::uuid,${image}::uuid,0)`;
+dbtest(
+  'isolated foreign-profile fixtures cannot link media and do not enable a second live profile',
+  async () => {
+    await sql.begin(async (tx) => {
+      // Authorization fixture only: temporarily relax and restore the one-profile CHECK.
+      await tx.unsafe('ALTER TABLE lemmi.profiles DROP CONSTRAINT profiles_id_check');
+      await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset)
+      VALUES ('scope-fixture','Fictional scope fixture','cat','quiet')`;
+      const foreign = randomUUID();
+      await tx`INSERT INTO lemmi.albums (id,profile_id,title,collection_kind)
+      VALUES (${foreign}::uuid,'scope-fixture','Other scope','album')`;
+      const save = tx.savepoint(async (sp) => {
+        await sp`INSERT INTO lemmi.album_photos (id,profile_id,album_id,asset_id,position)
+        VALUES (${randomUUID()}::uuid,'scope-fixture',${foreign}::uuid,${image}::uuid,0)`;
+      });
+      await expect(save).rejects.toThrow();
+      // Restore one-profile constraint by removing the ephemeral fixture in the same transaction.
+      await tx`DELETE FROM lemmi.profiles WHERE id='scope-fixture'`;
+      await tx.unsafe(
+        "ALTER TABLE lemmi.profiles ADD CONSTRAINT profiles_id_check CHECK (id='profile-alex')",
+      );
     });
-    await expect(save).rejects.toThrow();
-    await tx`DELETE FROM lemmi.profiles WHERE id=${fixtureProfile}`;
-  });
-  expect((await sql`SELECT id FROM lemmi.profiles`).map((r: { id: string }) => r.id)).toEqual([
-    'profile-alex',
-  ]);
-});
+    expect((await sql`SELECT id FROM lemmi.profiles`).map((r: { id: string }) => r.id)).toEqual([
+      'profile-alex',
+    ]);
+  },
+);
 
 dbtest(
   'asset/profile cleanup cascades metadata without deleting unrelated assets or enabling draft features',

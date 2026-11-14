@@ -1,10 +1,26 @@
+# Multi-profile endpoint deployment handoff
+
+**Current deployment:** backend runtime `17a8522` is live with full fictional multi-profile enrollment, cookie participant setup and independent endpoint identities. It reconciles the historical branch below with newer persistent-key/chat-support changes. Both new compatibility migrations are applied; the user's existing shared persistent key still works. The original prototype receipt migration was replaced by `004_endpoint_revocations.sql`, retaining the existing revoke history. See [backend status](../backend-status.md) and [API quickstarts](../backend_api.md#deployed-endpoints--frontend-and-robot-contracts) for observed versus pending acceptance.
+
 # Anay → Kylie / Emilia: multiple profiles and endpoints
 
-Feature branch: `anay/multi-profile-endpoints`, based on `anay/speech-pipeline` at `151ebc3`. Worktree: `/tmp/lemmi-multi-profile-endpoints`. The shared checkout, main, backend-deploy and running deployment are unchanged. This extends the user-authorized demo beyond the earlier Alex-only scope. Existing preview cards remain static and cannot become live sessions.
+Feature branch: `anay/multi-profile-endpoints`, based on `anay/speech-pipeline` at `151ebc3`. Worktree: `/tmp/lemmi-multi-profile-endpoints`. Original branch work did not modify shared deployment; the current integration is now deployed as recorded above. This extends the user-authorized demo beyond the earlier Alex-only scope. Existing preview cards remain static and cannot become live sessions.
+
+## Current integration note — November 14
+
+The user authorized full fictional multi-profile deployment and prioritized it ahead of Teach Lemmi. This handoff's original branch observations remain historical: the branch predates the persistent-key and chat/support deployments. The deployed integration reconciles those later implementations instead of replacing them; [backend status](../backend-status.md) records the actual running revision and checks.
+
+- Keep existing media/support/persistent migrations and their checksums unchanged. Add `002_multi_profile_endpoints.sql` and the reconciled `004_endpoint_revocations.sql`. Do not apply the original `003_device_revocation_receipts.sql` over the already-created production receipt table. The reconciliation must retain legacy revoke receipts and persistent credential hashes.
+- Existing null-expiry persistent keys remain supported; they are distinct from the new finite 30-day demo endpoint enrollments. `ParticipantEndpointSchema`/`ParticipantEnrollmentSchema` accept nullable expiry for compatibility, while new browser-cookie enrollments require finite expiry. Sharing the same credential creates one identity, not independently concurrent endpoint reservations.
+- Retain communication-support save/read/apply and chat hardening with per-profile membership/revision/cancellation. New demo setup authority cannot read caregiver-only profile guidance, edit biography/support, access journals/contacts or authorize cameras.
+- The source implementation must preserve the original local control/capture/output safety boundaries, explicit per-profile ownership and profile-isolated histories. Physical browser/K151 behavior remains acceptance work.
+- `codex/teach-lemmi` is reviewed separately and is not merged into this endpoint release. Its handoff names future commands/snapshot fields; clients must not send those until that integration ships.
+
+For the exact frontend client exports, paths, auth and ownership protocol, use the [backend API quickstart](../backend_api.md#deployed-endpoints--frontend-and-robot-contracts). The original commands below describe intended deployment setup; apply them only through the tested release procedure, with the actual proxy allowlist and private backup.
 
 ## Run and integrate
 
-Use pinned Bun 1.4.4, the existing frozen lockfile and existing PostgreSQL/private-media setup. Apply migrations before starting this version. Migration 002 preserves existing profiles/media, adds independent profile/device scope and a separate gateway epoch; migration 003 stores bounded revocation retry receipts containing IDs only. Do not run schema changes against a shared host before the corresponding release is ready.
+Use pinned Bun 1.4.4, the existing frozen lockfile and existing PostgreSQL/private-media setup. Apply migrations before starting this version. The reconciled `002_multi_profile_endpoints.sql` preserves existing profiles/media and adds independent profile/device scope plus a separate gateway epoch. `004_endpoint_revocations.sql` adapts the already-existing durable receipt table; existing `003_communication_support.sql` and `003_persistent_device_credentials.sql` remain in place. Do not run schema changes against a shared host before the corresponding release is ready.
 
 ```sh
 bun install --frozen-lockfile
@@ -78,7 +94,7 @@ Native WSS sends the existing outer `X-Lemmi-Access-Key` and separate `Authoriza
 
 ## Restart and limits
 
-Database-backed enrollment hashes survive normal gateway restarts until expiry/revocation. Demo enrollment lasts 30 days; the existing short-code claim credentials retain their one-hour lifetime. Restarts end unfinished sessions and clear pairing codes, dialogue, grants and output. Reconnect requires explicit session start; capture/playback never restores automatically. Without PostgreSQL, the old explicit mock/test credential path remains ephemeral and the demo selector is unavailable.
+Database-backed demo enrollment hashes survive normal gateway restarts until expiry/revocation. Demo enrollment lasts 30 days. Short-code claim defaults remain one hour, while explicitly persistent caregiver enrollment has null expiry and remains valid until revoked; it must not be shortened or invalidated by this upgrade. Restarts end unfinished sessions and clear pairing codes, dialogue, grants and output. Reconnect requires explicit session start; capture/playback never restores automatically. Without PostgreSQL, the old explicit mock/test credential path remains ephemeral and the demo selector is unavailable.
 
 Bounds: 100 profiles, 1,000 persisted endpoint records, 200 simultaneous gateway reservations, existing per-profile session/event/command limits and 10,000 durable revocation receipts. At receipt capacity, fresh credential issuance is disabled while revocation remains available. These are integration bounds, not a measured host capacity guarantee. Expired/revoked records require future lifecycle/cleanup tooling; do not repeatedly enroll instead of reusing saved assignments.
 

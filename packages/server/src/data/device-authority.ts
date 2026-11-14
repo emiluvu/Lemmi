@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import type { TransactionSQL } from 'bun';
 import { DeviceAccess, type DeviceIdentity } from '../device-access';
 import {
   fail,
@@ -18,6 +19,10 @@ export class DatabaseDeviceAuthority {
   readonly access: DeviceAccess;
   private pending = Promise.resolve();
   private revision = 0;
+  private enrollingActors = new Map<
+    string,
+    { actor: string; deviceId: string; expiresAt: number }
+  >();
   private blockedDevices = new Set<string>();
   private owners = new Map<string, Set<string>>();
   private revokedCommands = new Map<string, string | null>();
@@ -27,7 +32,7 @@ export class DatabaseDeviceAuthority {
     private now: () => number,
     private invalidated: (deviceId?: string) => void,
   ) {
-    this.access = new DeviceAccess(now, invalidated);
+    this.access = new DeviceAccess(now, invalidated, true);
   }
   async start() {
     await this.repository.restart(this.bootId);
@@ -55,29 +60,68 @@ export class DatabaseDeviceAuthority {
     );
     return result;
   }
+  private async authorized<T>(
+    actor: string,
+    profileId: string,
+    work: (tx: TransactionSQL) => Promise<T>,
+  ) {
+    return this.repository.sql.begin(async (tx) => {
+      // Match profile writers' lock order; membership and gateway ownership remain
+      // current until credential issuance/revocation commits.
+      const profile =
+        await tx`SELECT 1 FROM lemmi.profiles WHERE id=${profileId} AND deletion_state='active' FOR UPDATE`;
+      if (!profile.length) throw new DataError('FORBIDDEN', 'Profile is not assigned');
+      const epoch =
+        await tx`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${this.bootId}::uuid FOR SHARE`;
+      if (!epoch.length) throw new DataError('UNAVAILABLE', 'Gateway ownership changed');
+      const member =
+        await tx`SELECT 1 FROM lemmi.profile_access WHERE profile_id=${profileId} AND subject=${actor} AND role='caregiver' FOR SHARE`;
+      if (!member.length) throw new DataError('FORBIDDEN', 'Caregiver is not assigned');
+      return work(tx);
+    }) as Promise<T>;
+  }
   pair(actor: string, input: PairDeviceInput) {
     return this.serial(async () => {
       if (this.revokedCommands.size >= 10000)
         return fail('UNAVAILABLE', 'Device receipt capacity reached');
-      await this.repository.approvedProfile(actor, input.profileId);
-      const epoch = await this.repository
-        .sql`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${this.bootId}::uuid`;
-      if (!epoch.length) return fail('UNAVAILABLE', 'Gateway ownership changed');
-      await this.repository
-        .sql`INSERT INTO lemmi.devices (id,profile_id,boot_id) SELECT ${input.deviceId},${input.profileId},${this.bootId}::uuid WHERE (SELECT count(*) FROM lemmi.devices)<1000 ON CONFLICT DO NOTHING`;
-      const rows = await this.repository
-        .sql`SELECT profile_id,credential_id,credential_expires_at,revoked_at,endpoint FROM lemmi.devices WHERE id=${input.deviceId}`;
-      if (!rows.length || rows[0].profile_id !== input.profileId)
-        return fail('FORBIDDEN', 'Device/profile is not assigned');
-      if (
-        rows[0].credential_id &&
-        !rows[0].revoked_at &&
-        new Date(rows[0].credential_expires_at).getTime() > this.now()
-      )
-        return fail('REVISION_CONFLICT', 'Revoke the paired device before pairing again');
-      this.access.assign(input.profileId, input.deviceId, rows[0].endpoint);
-      this.owners.set(input.deviceId, new Set([actor]));
-      return this.access.pair(actor, input);
+      try {
+        return await this.authorized(actor, input.profileId, async (tx) => {
+          await tx`INSERT INTO lemmi.devices (id,profile_id,boot_id) SELECT ${input.deviceId},${input.profileId},${this.bootId}::uuid WHERE (SELECT count(*) FROM lemmi.devices)<1000 ON CONFLICT DO NOTHING`;
+          const rows =
+            await tx`SELECT profile_id,credential_id,credential_expires_at,credential_persistent,revoked_at,endpoint FROM lemmi.devices WHERE id=${input.deviceId} FOR UPDATE`;
+          if (!rows.length || rows[0].profile_id !== input.profileId)
+            return fail('FORBIDDEN', 'Device/profile is not assigned');
+          if (
+            rows[0].credential_id &&
+            !rows[0].revoked_at &&
+            (rows[0].credential_persistent ||
+              new Date(rows[0].credential_expires_at).getTime() > this.now())
+          )
+            return fail('REVISION_CONFLICT', 'Revoke the paired device before pairing again');
+          this.access.assign(input.profileId, input.deviceId, rows[0].endpoint);
+          const owners = this.owners.get(input.deviceId) ?? new Set<string>();
+          owners.add(actor);
+          this.owners.set(input.deviceId, owners);
+          const result = this.access.pair(actor, input);
+          if (result.ok) {
+            // At most one pending actor per device; expired codes cannot grow this map.
+            for (const [id, pending] of this.enrollingActors)
+              if (pending.deviceId === input.deviceId || pending.expiresAt <= this.now())
+                this.enrollingActors.delete(id);
+            this.enrollingActors.set(result.data.pairingId, {
+              actor,
+              deviceId: input.deviceId,
+              expiresAt: Date.parse(result.data.expiresAt),
+            });
+          }
+          return result;
+        });
+      } catch (error) {
+        return fail(
+          error instanceof DataError ? error.code : 'UNAVAILABLE',
+          'Device pairing scope or storage is unavailable',
+        );
+      }
     });
   }
   claim(input: ClaimDeviceInput) {
@@ -87,13 +131,17 @@ export class DatabaseDeviceAuthority {
       const result = this.access.claim(input);
       if (!result.ok) return result;
       const identity = this.access.authenticate(result.data.credential)!;
+      const actor = this.enrollingActors.get(input.pairingId)?.actor;
+      this.enrollingActors.delete(input.pairingId);
       try {
-        const rows = await this.repository
-          .sql`UPDATE lemmi.devices SET credential_id=${identity.credentialId}::uuid,credential_hash=${sha256(result.data.credential)},credential_expires_at=${new Date(identity.expiresAt)},revoked_at=NULL WHERE id=${identity.deviceId} AND profile_id=${identity.profileId} AND EXISTS (SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${this.bootId}::uuid) AND EXISTS (SELECT 1 FROM lemmi.profiles WHERE id=${identity.profileId} AND deletion_state='active') RETURNING id`;
+        if (!actor) throw new DataError('FORBIDDEN', 'Enrollment actor unavailable');
+        const rows = await this.authorized(actor, identity.profileId, async (tx) => {
+          return tx`UPDATE lemmi.devices SET credential_id=${identity.credentialId}::uuid,credential_hash=${sha256(result.data.credential)},credential_expires_at=${identity.expiresAt === null ? null : new Date(identity.expiresAt)},credential_persistent=${identity.expiresAt === null},revoked_at=NULL WHERE id=${identity.deviceId} AND profile_id=${identity.profileId} AND (credential_id IS NULL OR revoked_at IS NOT NULL OR (NOT credential_persistent AND credential_expires_at<=now())) RETURNING id`;
+        });
         if (!rows.length) throw new Error('Assignment unavailable');
         if (!this.access.current(identity)) {
           await this.repository
-            .sql`UPDATE lemmi.devices SET credential_id=NULL,credential_hash=NULL,credential_expires_at=NULL,revoked_at=now() WHERE id=${identity.deviceId} AND credential_id=${identity.credentialId}::uuid`;
+            .sql`UPDATE lemmi.devices SET credential_id=NULL,credential_hash=NULL,credential_expires_at=NULL,credential_persistent=false,revoked_at=now() WHERE id=${identity.deviceId} AND credential_id=${identity.credentialId}::uuid`;
           return fail('REVISION_CONFLICT', 'Pairing was revoked while committing');
         }
         this.blockedDevices.delete(identity.deviceId);
@@ -137,7 +185,7 @@ export class DatabaseDeviceAuthority {
             await tx`INSERT INTO lemmi.device_revocations(device_id,actor,command_id,credential_id) VALUES (${input.deviceId},${actor},${input.commandId},${credentialId}::uuid) ON CONFLICT DO NOTHING`;
             this.revokedCommands.set(key, credentialId);
           }
-          await tx`UPDATE lemmi.devices SET credential_id=NULL,credential_hash=NULL,credential_expires_at=NULL,revoked_at=now() WHERE id=${input.deviceId} AND credential_id IS NOT DISTINCT FROM ${credentialId}::uuid`;
+          await tx`UPDATE lemmi.devices SET credential_id=NULL,credential_hash=NULL,credential_expires_at=NULL,credential_persistent=false,revoked_at=now() WHERE id=${input.deviceId} AND credential_id IS NOT DISTINCT FROM ${credentialId}::uuid`;
           return result;
         });
       } catch (error) {
@@ -164,23 +212,29 @@ export class DatabaseDeviceAuthority {
     const previous = previousCredential ? await this.authenticate(previousCredential) : null;
     if (previousCredential && !previous)
       throw new DataError('FORBIDDEN', 'Previous endpoint access has ended');
-    if (previous)
-      await this.revoke(actor, { deviceId: previous.deviceId, commandId: randomUUID() });
+    if (previous) {
+      const revoked = await this.revoke(actor, {
+        deviceId: previous.deviceId,
+        commandId: randomUUID(),
+      });
+      if (!revoked.ok) throw new DataError('UNAVAILABLE', 'Previous endpoint revocation failed');
+    }
     return this.serial(async () => {
       if (this.revokedCommands.size >= 10000)
         throw new DataError('UNAVAILABLE', 'Device receipt capacity reached');
-      await this.repository.approvedProfile(actor, profileId);
       const deviceId = `${endpoint}-${randomUUID()}`;
       const credential = randomBytes(32).toString('base64url');
+      const expiresAt = this.now() + 30 * 24 * 60 * 60_000;
       const identity: DeviceIdentity = {
         deviceId,
         profileId,
         endpoint,
         credentialId: randomUUID(),
-        expiresAt: this.now() + 30 * 24 * 60 * 60_000,
+        expiresAt,
       };
-      const rows = await this.repository
-        .sql`INSERT INTO lemmi.devices (id,profile_id,endpoint,credential_id,credential_hash,credential_expires_at,boot_id) SELECT ${deviceId},${profileId},${endpoint},${identity.credentialId}::uuid,${sha256(credential)},${new Date(identity.expiresAt)},${this.bootId}::uuid WHERE EXISTS (SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${this.bootId}::uuid) AND EXISTS (SELECT 1 FROM lemmi.profiles WHERE id=${profileId} AND deletion_state='active' AND is_demo) AND (SELECT count(*) FROM lemmi.devices)<1000 RETURNING id`;
+      const rows = await this.authorized(actor, profileId, async (tx) => {
+        return tx`INSERT INTO lemmi.devices (id,profile_id,endpoint,credential_id,credential_hash,credential_expires_at,boot_id) SELECT ${deviceId},${profileId},${endpoint},${identity.credentialId}::uuid,${sha256(credential)},${new Date(expiresAt)},${this.bootId}::uuid WHERE EXISTS (SELECT 1 FROM lemmi.profiles WHERE id=${profileId} AND deletion_state='active' AND is_demo) AND (SELECT count(*) FROM lemmi.devices)<1000 RETURNING id`;
+      });
       if (!rows.length)
         throw new DataError('UNAVAILABLE', 'Demo enrollment unavailable or capacity reached');
       this.blockedDevices.delete(deviceId);
@@ -190,7 +244,7 @@ export class DatabaseDeviceAuthority {
         deviceId,
         profileId,
         credential,
-        expiresAt: new Date(identity.expiresAt).toISOString(),
+        expiresAt: new Date(expiresAt).toISOString(),
         endpoint,
       };
     });
@@ -199,7 +253,7 @@ export class DatabaseDeviceAuthority {
     if (secret.length < 40 || secret.length > 100) return null;
     const revision = this.revision;
     const rows = await this.repository
-      .sql`SELECT d.id,d.profile_id,d.endpoint,d.credential_id,d.credential_expires_at FROM lemmi.devices d JOIN lemmi.profiles p ON p.id=d.profile_id WHERE d.credential_hash=${sha256(secret)} AND EXISTS (SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${this.bootId}::uuid) AND d.credential_expires_at>now() AND d.revoked_at IS NULL AND p.deletion_state='active'`;
+      .sql`SELECT d.id,d.profile_id,d.endpoint,d.credential_id,d.credential_expires_at,d.credential_persistent FROM lemmi.devices d JOIN lemmi.profiles p ON p.id=d.profile_id WHERE d.credential_hash=${sha256(secret)} AND EXISTS (SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${this.bootId}::uuid) AND (d.credential_persistent OR d.credential_expires_at>now()) AND d.revoked_at IS NULL AND p.deletion_state='active'`;
     if (!rows.length || revision !== this.revision) return null;
     const row = rows[0];
     if (this.blockedDevices.has(row.id)) return null;
@@ -208,9 +262,9 @@ export class DatabaseDeviceAuthority {
       profileId: row.profile_id,
       endpoint: row.endpoint,
       credentialId: row.credential_id,
-      expiresAt: new Date(row.credential_expires_at).getTime(),
+      expiresAt: row.credential_persistent ? null : new Date(row.credential_expires_at).getTime(),
     };
-    if (identity.expiresAt <= this.now()) return null;
+    if (identity.expiresAt !== null && identity.expiresAt <= this.now()) return null;
     this.access.register(secret, identity);
     return identity;
   }
@@ -220,7 +274,7 @@ export class DatabaseDeviceAuthority {
     if (!epoch.length) return false;
     for (const current of this.access.identities()) {
       const rows = await this.repository
-        .sql`SELECT 1 FROM lemmi.devices d JOIN lemmi.profiles p ON p.id=d.profile_id WHERE d.id=${current.deviceId} AND d.credential_id=${current.credentialId}::uuid AND d.revoked_at IS NULL AND d.credential_expires_at>now() AND p.deletion_state='active'`;
+        .sql`SELECT 1 FROM lemmi.devices d JOIN lemmi.profiles p ON p.id=d.profile_id WHERE d.id=${current.deviceId} AND d.credential_id=${current.credentialId}::uuid AND d.revoked_at IS NULL AND (d.credential_persistent OR d.credential_expires_at>now()) AND p.deletion_state='active'`;
       if (!rows.length) {
         this.revision++;
         this.access.revoke('database', { deviceId: current.deviceId, commandId: randomUUID() });

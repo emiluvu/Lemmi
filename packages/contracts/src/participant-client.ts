@@ -14,7 +14,7 @@ export const ParticipantEndpointSchema = z.strictObject({
   deviceId: z.string().min(1).max(100),
   profileId: z.string().min(1).max(100),
   endpoint: z.enum(['browser', 'robot']),
-  expiresAt: z.string().datetime(),
+  expiresAt: z.string().datetime().nullable(),
   profile: ParticipantProfileSchema.optional(),
 });
 export const ParticipantEnrollmentSchema = ParticipantEndpointSchema.omit({ profile: true }).extend(

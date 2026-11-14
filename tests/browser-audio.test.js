@@ -205,3 +205,156 @@ test('late microphone permission cannot reopen capture after local cancellation'
     f.restore();
   }
 });
+
+test('paused fixed speech survives receipt snapshots and completes without granting capture', async () => {
+  const f = fixture();
+  try {
+    await f.audio.speak();
+    f.audio.cancelInput();
+    f.session.phase = 'paused';
+    const fixed = { ...meta, chunkCount: 8, byteLength: 882 * 8 };
+    const state = () =>
+      f.audio.receive(event('state.changed', { session: { ...f.session } }), 'browser');
+    state();
+    f.audio.receive(
+      event('response.text', {
+        turnId: 'turn',
+        text: 'Fixed application guidance',
+        language: 'en',
+        source: 'fixed',
+      }),
+      'browser',
+    );
+    f.audio.receive(event('response.start', fixed), 'browser');
+    const chunk = (index) =>
+      f.audio.receive(
+        event('audio.chunk', {
+          leaseId: 'lease',
+          streamId: 'output',
+          chunkIndex: index,
+          encoding: 'pcm_s16le',
+          data: btoa('\0'.repeat(882)),
+        }),
+        'browser',
+      );
+    for (let i = 0; i < 4; i++) chunk(i);
+    expect(f.listeners).toHaveLength(4);
+    f.listeners[0].onended();
+    expect(f.sent.at(-1)[1].status).toBe('started');
+    state();
+    expect(f.listeners[1].stopped).not.toBe(true);
+    for (let i = 1; i < 4; i++) f.listeners[i].onended();
+    state();
+    for (let i = 4; i < 8; i++) chunk(i);
+    f.audio.receive(
+      event('audio.end', { leaseId: 'lease', streamId: 'output', chunkCount: 8 }),
+      'browser',
+    );
+    for (let i = 4; i < 8; i++) f.listeners[i].onended();
+    expect(
+      f.sent.filter(([type]) => type === 'audio.receipt').map(([, payload]) => payload.status),
+    ).toEqual(['started', 'progress', 'progress', 'completed']);
+    expect(f.session.phase).toBe('paused');
+    expect(f.track.stopped).toBe(true);
+    expect(f.sent.filter(([type]) => type === 'input.speak')).toHaveLength(1);
+  } finally {
+    f.restore();
+  }
+});
+
+test('paused audio requires matching current fixed text and local cancellation retires that permission', async () => {
+  const f = fixture();
+  try {
+    await f.audio.speak();
+    f.audio.cancelInput();
+    f.session.phase = 'paused';
+    const chunk = () =>
+      f.audio.receive(
+        event('audio.chunk', {
+          leaseId: 'lease',
+          streamId: 'output',
+          chunkIndex: 0,
+          encoding: 'pcm_s16le',
+          data: btoa('\0'.repeat(882)),
+        }),
+        'browser',
+      );
+    const fixed = (overrides = {}) =>
+      event(
+        'response.text',
+        { turnId: 'turn', text: 'Guidance', language: 'en', source: 'fixed' },
+        overrides,
+      );
+    for (const text of [
+      null,
+      event('response.text', {
+        turnId: 'turn',
+        text: 'Model response',
+        language: 'en',
+        source: 'model',
+      }),
+      fixed({ generation: 0 }),
+      fixed({ turn_id: 'foreign' }),
+    ]) {
+      if (text) f.audio.receive(text, 'browser');
+      f.audio.receive(event('response.start', meta), 'browser');
+      chunk();
+      expect(f.listeners).toHaveLength(0);
+    }
+    f.audio.receive(fixed(), 'browser');
+    f.audio.receive(event('response.start', meta), 'browser');
+    chunk();
+    expect(f.listeners).toHaveLength(1);
+    f.audio.cancel();
+    expect(f.listeners[0].stopped).toBe(true);
+    f.audio.receive(event('response.start', meta), 'browser');
+    chunk();
+    expect(f.listeners).toHaveLength(1);
+  } finally {
+    f.restore();
+  }
+});
+
+test('same-lease generation or policy changes flush fixed playback and reject its old authorization', async () => {
+  for (const change of [
+    { generation: 2 },
+    { policyRevision: 1 },
+    { privacyRevision: 1 },
+    { profileRevision: 1 },
+    { activeEndpointId: 'other' },
+  ]) {
+    const f = fixture();
+    try {
+      await f.audio.speak();
+      f.audio.cancelInput();
+      f.session.phase = 'paused';
+      f.audio.receive(
+        event('response.text', {
+          turnId: 'turn',
+          text: 'Guidance',
+          language: 'en',
+          source: 'fixed',
+        }),
+        'browser',
+      );
+      f.audio.receive(event('response.start', meta), 'browser');
+      f.audio.receive(
+        event('audio.chunk', {
+          leaseId: 'lease',
+          streamId: 'output',
+          chunkIndex: 0,
+          encoding: 'pcm_s16le',
+          data: btoa('\0'.repeat(882)),
+        }),
+        'browser',
+      );
+      expect(f.listeners).toHaveLength(1);
+      Object.assign(f.session, change);
+      f.audio.receive(event('state.changed', { session: { ...f.session } }), 'browser');
+      expect(f.listeners[0].stopped).toBe(true);
+      expect(f.listeners[0].onended).toBeNull();
+    } finally {
+      f.restore();
+    }
+  }
+});
