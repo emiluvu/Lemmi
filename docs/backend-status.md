@@ -8,6 +8,8 @@ The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictio
 
 Maintain this deployment/acceptance record alongside the [backend API reference](backend_api.md) whenever backend behavior, configuration, availability or observed checks change. Do not promote unrun checks to passed or treat a new source commit as deployed.
 
+**Undeployed increment, November 14:** `anay/app-data-schema` reviews Emilia's `4e8993f` draft and promotes only corrected album/playlist metadata in migration `002_media_collections.sql`. PostgreSQL 14.24 upgrade/rollback and existing backend tests pass locally; no public API or shared/deployed database changed. Consent/journal/help/jobs/deletion/camera tables remain proposal-only. See [review, checks and next handoff](handoffs/anay-app-data-schema-review.md). This branch is separate from the speech work on `anay/speech-pipeline`; neither feature branch changes the deployed revision recorded above.
+
 ## Deployment
 
 **Separate local increment, November 14:** `anay/chat-support-hardening` adds English chat hardening and caregiver support read/save/apply with central policy, immediate cancellation, explicit continuation and private PostgreSQL configuration provenance. It is based on speech commit `151ebc3`; neither existing feature branch nor the deployed host was modified by this work. Final live text regression passed 15/15 after a Quiet prompt mismatch was found and fixed. No microphone/speaker/K151 acceptance follows. See [handoff and test scope](handoffs/anay-chat-support-hardening.md); the host observations below remain the last verified deployment record.
