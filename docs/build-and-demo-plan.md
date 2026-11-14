@@ -155,6 +155,14 @@ Emilia’s early experiment combines camera/display/touch/Wi-Fi and sequential a
 
 All results start pending. Add a reproduction note, actual configuration and observed result when checked. Unsafe or broken features are fixed/disabled with an honest fallback, not marked passed because a prompt contains a rule.
 
+### Observed backend control subset — November 13, 2026
+
+On branch `anay/device-control-foundation`, Linux workspace, Bun **1.4.4**: `bun install --frozen-lockfile`, `bun run check` (0 Svelte errors/warnings plus TypeScript), `bun run test` (**37 passed, 0 failed**), `bun run build`, `bun run format:check`, and `git diff --check` passed. The Bun lockfile/dependency versions are unchanged. The test suite includes pairing scope/single use/expiry, managed-identity verification fixtures, revocation of an active device, stale/replayed controls, capture-off unmute/resume/reconnect, watchdog, Stop/revocation at command capacity, and certificate-verified WSS through a temporary test proxy.
+
+`bun run smoke:control` passed against the production web build: actual SvelteKit resource routes → a local fixture identity provider over certificate-verified HTTPS → gateway pairing → the computer control harness over certificate-verified WSS → start/pause/resume/revoke. Missing identity, foreign Origin, preview profile and GET pairing were rejected. The fixture CA/provider/proxy/credentials are created temporarily and removed; the smoke sends no media or notifications. OpenSSL is required for its temporary certificate. `bun run smoke:web` also passed with `bun run dev`, preserving the original mock app→gateway→music path. The inspected browser build contained no server-only auth/credential symbols (`LEMMI_AUTH_CLIENT_SECRET`, `LEMMI_CONTROL_TOKEN`, `node:crypto`, `authenticateCaregiver`).
+
+These observations validate **the control subset only**. Identity-provider account/login integration, a selected public origin/certificate/proxy and demo-network access, database persistence, media, real notifications, K151 firmware/local controls and counterpart technical review remain pending. Credentials/pairings are bounded in-memory and revoked on restart. No full acceptance row below is upgraded by this result. Exact interfaces, configuration, nonsecret fixtures and Emilia/Kylie handoffs: [authenticated control foundation](handoffs/anay-control-foundation.md).
+
 | Check | Owner | Counterpart | Result |
 | --- | --- | --- | --- |
 | F15 one functional profile; example/unassigned IDs rejected by live services; explicit refusal/preference precedence; separate remembering permission | Anay | Kylie + Emilia | Pending |

@@ -7,6 +7,9 @@ import {
   type ApprovedPack,
   CheckInSnapshotSchema,
   ActivityViewSchema,
+  DeviceEventSchema,
+  ServerEventSchema,
+  SessionSnapshotSchema,
 } from './index';
 export const DEMO_PROFILE_ID = 'profile-alex';
 export const participantProfile = ParticipantProfileSchema.parse({
@@ -16,6 +19,101 @@ export const participantProfile = ParticipantProfileSchema.parse({
   revision: 0,
   communicationSupport: { preset: 'guided', configVersion: 1 },
 });
+// Fictional protocol examples only. No pairing codes, bearer tokens or media payloads.
+export const controlHelloFixture = DeviceEventSchema.parse({
+  protocol_version: 1,
+  event_id: 'fixture-hello',
+  session_id: null,
+  turn_id: null,
+  generation: 0,
+  sequence: 0,
+  type: 'device.hello',
+  payload: {
+    firmwareVersion: 'control-fixture/0.1',
+    cameraSupported: false,
+    pettingSupported: false,
+    audio: { supported: false },
+  },
+});
+export const controlSessionFixture = SessionSnapshotSchema.parse({
+  id: 'fixture-control-session',
+  profileId: DEMO_PROFILE_ID,
+  generation: 1,
+  profileRevision: 0,
+  privacyRevision: 0,
+  policyRevision: 0,
+  phase: 'paused',
+  endpoint: 'robot',
+  leaseId: 'fixture-control-lease',
+  micMuted: true,
+  captureGrant: null,
+  communicationSupport: participantProfile.communicationSupport,
+  conversationMode: 'open',
+  teaching: null,
+  mode: 'live',
+});
+export const controlEventFixtures = [
+  'heartbeat',
+  'input.start',
+  'input.pause',
+  'input.resume',
+  'input.stop',
+  'input.mute',
+  'input.help',
+].map((type, index) =>
+  DeviceEventSchema.parse({
+    protocol_version: 1,
+    event_id: `fixture-${type}`,
+    session_id: ['heartbeat', 'input.start', 'input.help'].includes(type)
+      ? null
+      : controlSessionFixture.id,
+    turn_id: null,
+    generation: ['heartbeat', 'input.start', 'input.help'].includes(type)
+      ? 0
+      : controlSessionFixture.generation,
+    sequence: index + 1,
+    type,
+    payload: type === 'input.mute' ? { muted: true } : {},
+  }),
+);
+const controlServerEnvelope = {
+  protocol_version: 1,
+  session_id: controlSessionFixture.id,
+  turn_id: null,
+  generation: controlSessionFixture.generation,
+};
+export const controlServerEventFixtures = [
+  {
+    type: 'device.ready',
+    payload: {
+      mode: 'live',
+      deviceId: 'stackchan-alex',
+      profileId: DEMO_PROFILE_ID,
+      credentialExpiresAt: '2026-11-13T20:00:00.000Z',
+      audio: false,
+      camera: false,
+      controls: ['start', 'stop', 'pause', 'resume', 'mute', 'help'],
+    },
+  },
+  { type: 'command.ack', payload: { mode: 'live', commandId: 'fixture-pause', applied: true } },
+  { type: 'state.changed', payload: { mode: 'live', session: controlSessionFixture } },
+  { type: 'heartbeat', payload: { mode: 'live' } },
+  {
+    type: 'error',
+    payload: {
+      code: 'UNAVAILABLE',
+      commandId: 'fixture-input.help',
+      message: 'Caregiver contact is not configured; no request was created or sent',
+    },
+  },
+].map((event, index) =>
+  ServerEventSchema.parse({
+    ...controlServerEnvelope,
+    event_id: `fixture-server-${index}`,
+    sequence: index,
+    ...event,
+  }),
+);
 export const caregiverProfile = CaregiverProfileSchema.parse({
   ...participantProfile,
   source: 'caregiver_provided',

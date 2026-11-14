@@ -3,3 +3,4 @@ export * from './session';
 export * from './activity';
 export * from './device';
 export * from './services';
+export * from './device-access';
