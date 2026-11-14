@@ -1,6 +1,7 @@
 # Lemmi — Caregiver-adjustable conversation support
 
-**Status:** Research-informed proposal; not implemented or clinically validated  
+**Status:** Design requirements; backend implementation on `anay/chat-support-hardening`, UI/device acceptance pending; not clinically validated
+
 **Version:** 0.1  
 **Research reviewed:** November 11, 2026  
 **Owners:** Anay (policy/schema/enforcement), Kylie (caregiver UI/preview), Lukas (activity presentation), Emilia (device/speech behavior)
@@ -66,6 +67,8 @@ Keep known short fallback/status phrases in the appropriate style. Immediate sto
 In Quiet companionship, completion of speech returns to capture-off `waiting`; never automatically open another listening turn. A participant’s explicit Speak now starts one turn and its response returns to waiting. Conversational/Guided may continue into listening after speech only under a current explicit server capture grant and valid local permissions/state. Firmware/browser clients never start capture merely because playback ended. Stop/pause/mute/camera/help override every preset; unmute alone never restores a capture grant.
 
 ## 5. Schema and runtime contract
+
+Backend implementation note (November 14): [chat/support handoff](handoffs/anay-chat-support-hardening.md) documents current caregiver read/default-save/apply APIs, central response policy, checkpointed configuration provenance and acceptance limits. The runtime `CommunicationSupport` value remains `{preset,configVersion}`. Actor/time are private configuration records, excluded from device/model snapshots; the illustrative settings shape below is not a replacement runtime schema. The effective activity presentation context follows the session preset; completed presentation behavior in all reducers still needs Lukas's review.
 
 Proposed profile settings:
 

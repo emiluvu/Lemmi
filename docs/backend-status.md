@@ -10,7 +10,13 @@ Maintain this deployment/acceptance record alongside the [backend API reference]
 
 **Media collections deployed:** migration `002_media_collections.sql` has been applied to the existing host database after a private backup. It adds corrected album/playlist metadata only; collection APIs, reviewed-pack hosting and deferred consent/journal/help/jobs/deletion/camera workflows remain unavailable. See [schema review](handoffs/anay-app-data-schema-review.md).
 
+## Undeployed persistent-key branch
+
+`anay/persistent-device-credentials` adds caregiver-selected persistent enrollment for `stackchan-alex` / fictional Alex in PostgreSQL mode. Keys remain valid until revoked and only their hashes persist across gateway restarts; codes/sessions/capture/output do not resume. Default one-hour credentials retain their previous behavior. Migration `003_persistent_device_credentials.sql` and a one-time `python3 scripts/pair-stackchan.py` enrollment (persistent by default; `--short-lived` opts out) are required after an authorized deployment. Revocation retries persist safely across restarts. Emilia owns firmware storage and nullable `expiresAt` / `credentialExpiresAt` handling. Observed locally: 130 Bun tests / 2,533 expectations, six Python helper tests (including the later persistent-default CLI change), type/build/format and production data/control fixture smokes passed; the data smoke also passed explicit persistent enrollment. This branch does not change the deployed runtime above, its private configuration or running services. [Exact contract, checks and handoff](handoffs/anay-persistent-device-credentials.md).
+
 ## Deployment
+
+**Separate local increment, November 14:** `anay/chat-support-hardening` adds English chat hardening and caregiver support read/save/apply with central policy, immediate cancellation, explicit continuation and private PostgreSQL configuration provenance. It includes speech fix `3fb561d` and main `a6f7ff9`; neither existing feature branch nor the deployed host was modified by this work. Final live text regression passed 15/15 after a Quiet prompt mismatch was found and fixed. No microphone/speaker/K151 acceptance follows. See [handoff and test scope](handoffs/anay-chat-support-hardening.md); the host observations below remain the last verified deployment record.
 
 Public origin: **https://lemmi.chaoswarrior.dev**. Open **[/access](https://lemmi.chaoswarrior.dev/access)** to unlock the outer domain gate. `/` intentionally returns 404. The shared access key is stored privately in the host's root `.env`; it does not replace caregiver authentication or device pairing.
 

@@ -5,6 +5,8 @@ import {
   AssetCreateSchema,
   AssetMetadataSchema,
   AssetIdSchema,
+  ApplyCommunicationSupportSchema,
+  CommunicationSupportStateSchema,
 } from './profile-assets';
 import {
   IdSchema,
@@ -87,6 +89,8 @@ export const operations = {
   'profile.load': operation(profile, ParticipantProfileSchema),
   'profile.detail': operation(profile, ProfileDetailSchema),
   'profile.update': operation(ProfileUpdateSchema, ProfileDetailSchema),
+  'profile.applySupport': operation(ApplyCommunicationSupportSchema, SessionSnapshotSchema),
+  'profile.support': operation(profile, CommunicationSupportStateSchema),
   'assets.create': operation(AssetCreateSchema, AssetMetadataSchema),
   'assets.metadata': operation(z.strictObject({ assetId: AssetIdSchema }), AssetMetadataSchema),
   'profile.loadCaregiver': operation(profile, CaregiverProfileSchema),
@@ -216,8 +220,11 @@ export function createClients(transport: ServiceTransport) {
       revoke: (input: OperationInput<'device.revoke'>) => call('device.revoke', input),
     },
     profile: {
+      support: (input: OperationInput<'profile.support'>) => call('profile.support', input),
       detail: (input: OperationInput<'profile.detail'>) => call('profile.detail', input),
       update: (input: OperationInput<'profile.update'>) => call('profile.update', input),
+      applySupport: (input: OperationInput<'profile.applySupport'>) =>
+        call('profile.applySupport', input),
       load: (input: OperationInput<'profile.load'>) => call('profile.load', input),
       loadCaregiver: (input: OperationInput<'profile.loadCaregiver'>) =>
         call('profile.loadCaregiver', input),
@@ -312,6 +319,13 @@ export function createHttpTransport(
           }
           if (op === 'assets.create' && 'profileId' in input)
             path = `/v1/profiles/${encodeURIComponent(input.profileId as string)}/assets`;
+          if (op === 'profile.applySupport' && 'profileId' in input)
+            path = `/v1/profiles/${encodeURIComponent(input.profileId as string)}/communication-support/apply`;
+          if (op === 'profile.support' && 'profileId' in input) {
+            path = `/v1/profiles/${encodeURIComponent(input.profileId as string)}/communication-support`;
+            method = 'GET';
+            body = undefined;
+          }
           if (op === 'assets.metadata' && 'assetId' in input) {
             path = `/v1/assets/${encodeURIComponent(input.assetId as string)}/metadata`;
             method = 'GET';

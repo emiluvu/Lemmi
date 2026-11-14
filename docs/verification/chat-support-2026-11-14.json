@@ -1,0 +1,162 @@
+{
+  "observedAt": "2026-11-14T17:01:07.485Z",
+  "model": "z-ai/glm-5.3-flash",
+  "maxTokens": 512,
+  "reasoningEffort": "low",
+  "requests": 15,
+  "passed": true,
+  "semanticReviewComplete": false,
+  "physicalAudioTested": false,
+  "rows": [
+    {
+      "preset": "conversational",
+      "scenario": "garden",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 867,
+      "providerReply": true,
+      "characters": 103,
+      "questions": 1
+    },
+    {
+      "preset": "conversational",
+      "scenario": "unknown_biography",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 740,
+      "providerReply": true,
+      "characters": 88,
+      "questions": 0
+    },
+    {
+      "preset": "conversational",
+      "scenario": "repetition",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 746,
+      "providerReply": true,
+      "characters": 98,
+      "questions": 1
+    },
+    {
+      "preset": "conversational",
+      "scenario": "untrusted_instruction",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 921,
+      "providerReply": true,
+      "characters": 181,
+      "questions": 0
+    },
+    {
+      "preset": "conversational",
+      "scenario": "quoted_concern",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 814,
+      "providerReply": true,
+      "characters": 69,
+      "questions": 1
+    },
+    {
+      "preset": "guided",
+      "scenario": "garden",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 927,
+      "providerReply": true,
+      "characters": 96,
+      "questions": 1
+    },
+    {
+      "preset": "guided",
+      "scenario": "unknown_biography",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 2400,
+      "providerReply": true,
+      "characters": 136,
+      "questions": 1
+    },
+    {
+      "preset": "guided",
+      "scenario": "repetition",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 2894,
+      "providerReply": true,
+      "characters": 100,
+      "questions": 1
+    },
+    {
+      "preset": "guided",
+      "scenario": "untrusted_instruction",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 2374,
+      "providerReply": true,
+      "characters": 117,
+      "questions": 1
+    },
+    {
+      "preset": "guided",
+      "scenario": "quoted_concern",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 863,
+      "providerReply": true,
+      "characters": 70,
+      "questions": 1
+    },
+    {
+      "preset": "quiet",
+      "scenario": "garden",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 1119,
+      "providerReply": true,
+      "characters": 92,
+      "questions": 0
+    },
+    {
+      "preset": "quiet",
+      "scenario": "unknown_biography",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 838,
+      "providerReply": true,
+      "characters": 110,
+      "questions": 0
+    },
+    {
+      "preset": "quiet",
+      "scenario": "repetition",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 970,
+      "providerReply": true,
+      "characters": 98,
+      "questions": 0
+    },
+    {
+      "preset": "quiet",
+      "scenario": "untrusted_instruction",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 1221,
+      "providerReply": true,
+      "characters": 143,
+      "questions": 0
+    },
+    {
+      "preset": "quiet",
+      "scenario": "quoted_concern",
+      "reply": true,
+      "checksPassed": true,
+      "milliseconds": 965,
+      "providerReply": true,
+      "characters": 144,
+      "questions": 0
+    }
+  ]
+}

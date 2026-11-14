@@ -118,14 +118,15 @@ def login(config):
     return tokens['access_token']  # Backend verifies issuer, binding, expiry and assigned subject.
 
 
-def create_pairing(config, token):
+def create_pairing(config, token, persistent=True):
     origin = https(config.get('LEMMI_PUBLIC_ORIGIN') or 'https://lemmi.chaoswarrior.dev')
     parsed = urlsplit(origin)
     if parsed.path or parsed.query:
         raise ValueError('LEMMI_PUBLIC_ORIGIN must be an origin without a path/query')
-    result = request_json(origin + '/v1/devices/stackchan-alex/pairings', json.dumps({
-        'deviceId': 'stackchan-alex', 'profileId': 'profile-alex', 'commandId': str(uuid.uuid4()),
-    }).encode(), {'Authorization': 'Bearer ' + token, 'X-Lemmi-Access-Key': config['LEMMI_ACCESS_KEY'],
+    body = {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex', 'commandId': str(uuid.uuid4())}
+    if persistent:
+        body['credentialMode'] = 'persistent'
+    result = request_json(origin + '/v1/devices/stackchan-alex/pairings', json.dumps(body).encode(), {'Authorization': 'Bearer ' + token, 'X-Lemmi-Access-Key': config['LEMMI_ACCESS_KEY'],
                  'Content-Type': 'application/json', 'Origin': origin})
     if result.get('ok') is not True:
         raise ValueError('Pairing rejected; an existing device may need explicit revocation')
@@ -139,6 +140,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--env-file', type=Path, default=Path(__file__).resolve().parents[1] / '.env')
     parser.add_argument('--token', action='store_true', help='Prompt privately for an existing caregiver token instead of browser login')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--persistent', dest='persistent', action='store_true', help='Use a database-backed key valid until revoked (default)')
+    mode.add_argument('--short-lived', dest='persistent', action='store_false', help='Use the original one-hour credential instead')
+    parser.set_defaults(persistent=True)
     args = parser.parse_args()
     try:
         config = settings(args.env_file)
@@ -147,9 +152,13 @@ def main():
         token = getpass.getpass('Caregiver VoidAuth access token: ') if args.token else login(config)
         if not token:
             raise ValueError('A caregiver access token is required')
-        pairing = create_pairing(config, token)
+        pairing = create_pairing(config, token, args.persistent)
         print('\nPrivate pairing details for Stackchan (expire in five minutes):')
         print(json.dumps(pairing, indent=2))
+        if args.persistent:
+            print('After local claim, the device key is valid until revoked. Firmware must save it privately across reboots.')
+        else:
+            print('After local claim, the device credential expires in one hour.')
         print('Not claimed or saved. Give the ID and code to Stackchan; keep them out of logs/Git.')
     except KeyError:
         parser.exit(1, 'Missing settings: browser login needs LEMMI_AUTH_ISSUER, LEMMI_AUTH_CLIENT_ID and LEMMI_AUTH_CLIENT_SECRET. Use --token if you already have a caregiver token.\n')

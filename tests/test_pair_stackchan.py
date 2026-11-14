@@ -10,7 +10,8 @@ import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
+from http.server import HTTPServer
 
 spec = importlib.util.spec_from_file_location('pair_stackchan', Path(__file__).resolve().parents[1] / 'scripts/pair-stackchan.py')
 helper = importlib.util.module_from_spec(spec)
@@ -40,8 +41,31 @@ class PairingHelper(unittest.TestCase):
             self.assertEqual(headers['Authorization'], 'Bearer fixture-token')
             self.assertEqual(headers['X-Lemmi-Access-Key'], 'fixture-key')
             self.assertEqual(headers['Origin'], 'https://lemmi.invalid')
+            self.assertEqual(json.loads(body)['credentialMode'], 'persistent')
             commands.append(json.loads(body)['commandId'])
         self.assertNotEqual(*commands)
+
+    def test_persistent_is_explicit_and_does_not_claim_or_save_the_key(self):
+        fixture = {'ok': True, 'data': {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex',
+                   'pairingId': 'fixture-pairing', 'code': 'fixture-code', 'expiresAt': 'fixture-time'}}
+        with patch.object(helper, 'request_json', return_value=fixture) as request:
+            helper.create_pairing(self.config, 'fixture-token', persistent=True)
+        self.assertEqual(len(request.call_args_list), 1)
+        self.assertEqual(json.loads(request.call_args.args[1])['credentialMode'], 'persistent')
+
+    def test_cli_defaults_to_persistent_and_short_lived_is_explicit(self):
+        fixture = {'ok': True, 'data': {'deviceId': 'stackchan-alex', 'profileId': 'profile-alex',
+                   'pairingId': 'fixture-pairing', 'code': 'fixture-code', 'expiresAt': 'fixture-time'}}
+        for flags, persistent in [([], True), (['--persistent'], True), (['--short-lived'], False)]:
+            with self.subTest(flags=flags), patch('sys.argv', ['pair-stackchan.py', '--token', *flags]), patch.object(helper, 'settings', return_value=self.config), patch.object(helper.getpass, 'getpass', return_value='fixture-token'), patch.object(helper, 'request_json', return_value=fixture) as request, patch('builtins.print'):
+                helper.main()
+                body = json.loads(request.call_args.args[1])
+                self.assertEqual(body.get('credentialMode') == 'persistent', persistent)
+                self.assertEqual(len(request.call_args_list), 1)
+        with patch('sys.argv', ['pair-stackchan.py', '--persistent', '--short-lived']), patch('sys.stderr'):
+            with self.assertRaises(SystemExit) as error:
+                helper.main()
+            self.assertEqual(error.exception.code, 2)
 
     def test_wrong_assignment_and_plaintext_are_rejected(self):
         with patch.object(helper, 'request_json', return_value={'ok': True, 'data': {'deviceId': 'other'}}):
@@ -65,6 +89,13 @@ class PairingHelper(unittest.TestCase):
         issuer = self.config['LEMMI_AUTH_ISSUER']
         authorization = {}
         workers, failures = [], []
+        fixture_port = {}
+
+        def fixture_server(_address, handler):
+            # Never contend with a real caregiver login on this shared machine.
+            server = HTTPServer(('127.0.0.1', 0), handler)
+            fixture_port['value'] = server.server_port
+            return server
 
         def printed(value):
             if not value.startswith(issuer):
@@ -73,12 +104,14 @@ class PairingHelper(unittest.TestCase):
 
             def callback():
                 try:
-                    base = 'http://127.0.0.1:3333/callback?'
+                    base = f"http://127.0.0.1:{fixture_port['value']}/callback?"
+                    def callback_request(fields):
+                        return Request(base + urlencode(fields), headers={'Host': '127.0.0.1:3333'})
                     with self.assertRaises(HTTPError) as error:
-                        urlopen(base + urlencode({'state': 'wrong', 'code': 'fixture-code'}), timeout=3)
+                        urlopen(callback_request({'state': 'wrong', 'code': 'fixture-code'}), timeout=3)
                     self.assertEqual(error.exception.code, 403)
                     error.exception.close()
-                    with urlopen(base + urlencode({'state': authorization['state'][0], 'code': 'fixture-code'}), timeout=3) as response:
+                    with urlopen(callback_request({'state': authorization['state'][0], 'code': 'fixture-code'}), timeout=3) as response:
                         self.assertEqual(response.status, 200)
                         self.assertEqual(response.headers['Cache-Control'], 'no-store')
                 except Exception as error:
@@ -100,7 +133,7 @@ class PairingHelper(unittest.TestCase):
             self.assertEqual(headers['Authorization'], 'Basic ' + base64.b64encode(b'fixture-client:fixture-secret').decode())
             return {'access_token': 'fixture-token', 'token_type': 'Bearer'}
 
-        with patch.object(helper, 'request_json', side_effect=provider), patch('builtins.print', side_effect=printed):
+        with patch.object(helper, 'HTTPServer', side_effect=fixture_server), patch.object(helper, 'request_json', side_effect=provider), patch('builtins.print', side_effect=printed):
             self.assertEqual(helper.login(self.config), 'fixture-token')
         for worker in workers:
             worker.join(timeout=4)

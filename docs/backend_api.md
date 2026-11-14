@@ -10,6 +10,8 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 
 ## 1. Availability and ownership
 
+**Undeployed chat/support increment:** `anay/chat-support-hardening` adds the caregiver support GET/apply routes below and English chat hardening on top of speech `151ebc3`, now including fix `3fb561d` and main `a6f7ff9`. It has not changed the deployment recorded above. See [integration/hardening handoff](handoffs/anay-chat-support-hardening.md).
+
 | Surface | Current availability | Integration consumer |
 | --- | --- | --- |
 | Local mock HTTP RPC | Implemented; loopback-only, bounded in-memory state, no actual media/contact | Kylie/Lukas development, computer smoke tests |
@@ -36,7 +38,21 @@ Public additions: caregiver GET/PATCH `/v1/profiles/:id`, POST `/v1/profiles/:id
 
 Set production `BODY_SIZE_LIMIT=29M` and upload-proxy limits; handlers still bound profile JSON to 32 KiB, device control to 4 KiB and asset JSON to 28 MiB. Supported media is plain RGB/RGBA PNG (5 MiB/4096 dimensions/8 million pixels) or metadata-free PCM16 WAV (20 MiB/5 minutes); JPEG/SVG/MP3/range support is unavailable. Upload only approved static assets, not microphone/camera/generated-speech data. Authorized byte reads return actual media; metadata excludes storage paths and private discussion context. Caregiver context-changing edits cancel/pause the current session before COMMIT; support-only saves preserve its effective preset. Approved biography facts remain caregiver-provided; remembering/excerpt enablement is rejected pending its own workflows.
 
-### Implemented profile/media HTTP routes
+### Communication support — feature branch
+
+Caregiver-only routes require the same outer private gate plus verified assigned caregiver Bearer token as profile edits. Responses use `Result<T>`, `Cache-Control: no-store`, same-origin checks and Alex scope. Device credentials grant no caregiver access.
+
+| Method/path | Client / input | Result data |
+| --- | --- | --- |
+| `GET /v1/profiles/profile-alex/communication-support` | `clients.profile.support({profileId})` | `CommunicationSupportState`: `{profileId,profileRevision,saved,session}`; active session is null after end/restart |
+| Existing `PATCH /v1/profiles/profile-alex` | `clients.profile.update` with `patch.communicationSupport: {preset,configVersion:1}` | Updated profile default; current session remains on its effective preset |
+| `POST /v1/profiles/profile-alex/communication-support/apply` | `clients.profile.applySupport({profileId,expectedProfileRevision,sessionId,expectedGeneration,commandId})` | Paused `SessionSnapshot` using the saved preset; explicit participant Resume required |
+
+Read the saved/default and active effective values from the GET; use its profile revision and session generation for apply. The apply request cannot supply a preset/actor, revive an ended session or silently resume. Retries are idempotent only while the same paused generation is current; after Resume/new generation they conflict rather than pausing again. Old capture/model/TTS/queued playback is canceled immediately, including before a slow checkpoint completes. Profile configuration operations are serialized with at most 32 pending requests; overflow fails explicitly. Failed writes keep interaction paused. Unknown profile COMMIT outcomes are reconciled through an authorized read; if reconciliation fails, continuation stays disabled until gateway restart after database recovery. These configuration changes cannot alter privacy, avatar, language/voice or help rules. Static `communicationSupportPreviews` and `resolveCommunicationSupport` are exported from `@lemmi/contracts`; samples never invoke model/audio work.
+
+Conversational/Guided/Quiet model reply bounds are 600/360/240 characters and 1/1/0 questions. Fixed safety/help wording can exceed ordinary style limits. Reviewed English sensitive/unclear routes bypass the model; other semantic grounding remains model-dependent. Failures/malformed replies remain explicit, sanitized, and are not automatically retried. The final bounded live English GLM check passed 15 turns; human semantic, German and hardware acceptance remain incomplete. Migrate `003_communication_support.sql` and update the host proxy allowlist before exposing these feature routes; full details and provenance are in the [handoff](handoffs/anay-chat-support-hardening.md).
+
+### Profile/media HTTP route inventory
 
 These routes are enabled on the current deployment and require the outer access key/cookie **and** the stated Bearer credential. Only `profile-alex` is assigned; asset IDs are UUIDs scoped and authorized by the backend. `assets`/`photos` accept validated JSON with bounded base64 data, not multipart uploads. Use the shared schemas for exact bodies.
 
@@ -192,21 +208,23 @@ The following table covers every current `operations` entry in [services.ts](../
 
 ## 5. Live enrollment, claim and revocation HTTP
 
+**Undeployed branch increment:** `anay/persistent-device-credentials` adds explicit persistent enrollment in PostgreSQL mode. Migration `003_persistent_device_credentials.sql` is required. The deployed runtime/status remains separate; see [persistent-key handoff](handoffs/anay-persistent-device-credentials.md).
+
 All are SvelteKit handlers on the configured HTTPS origin; JSON requests/responses ≤4 KiB and `Cache-Control:no-store`. Same Origin is checked when supplied; no URL query credentials. Mutations require POST; GET/link previews do not perform them. All three routes also require `X-Lemmi-Access-Key` or the signed access cookie. Include `Content-Type: application/json`; any supplied `Origin` must exactly match the configured public origin.
 
 | Method / URL | Authorization | Request body | Success `data` |
 | --- | --- | --- | --- |
-| `POST /v1/devices/stackchan-alex/pairings` | Assigned caregiver managed access token | `{deviceId:'stackchan-alex',profileId:'profile-alex',commandId}` | `{pairingId,deviceId,profileId,code,expiresAt}` |
+| `POST /v1/devices/stackchan-alex/pairings` | Assigned caregiver managed access token | `{deviceId:'stackchan-alex',profileId:'profile-alex',commandId,credentialMode?:'persistent'}` | `{pairingId,deviceId,profileId,code,expiresAt}` |
 | `POST /v1/device-pairings/claim` | Possession of pending secret pairing code, plus firmware local confirmation | `{pairingId,code,localConfirmed:true}` | `{deviceId,profileId,credential,expiresAt}` |
 | `POST /v1/devices/stackchan-alex/revoke` | Assigned caregiver managed access token | `{deviceId:'stackchan-alex',commandId}` | `{revoked:true}` |
 
 Actual route pattern is `/v1/devices/[deviceId]/[action]`, but only Alex's configured device is assigned. Route/body device IDs must match. Unknown example/unassigned profile/device IDs fail scope checks; do not add a functional second profile to get around this.
 
-The 24-character random code lasts five minutes and is single-use. Repeat pair ID/body returns the same still-pending code; after expiry/claim/revoke use a fresh command ID. Only one pending pairing/device credential is allowed; revoke before replacement. Claim returns the random device credential **once**, valid for one hour. A lost successful response cannot retrieve it again: revoke/re-pair explicitly. Claims are globally limited to 20/minute for this demo. `localConfirmed:true` is a firmware contract, not cryptographic proof of a physical button press or consent to microphone/camera access.
+The 24-character random code lasts five minutes and is single-use. Repeat pair ID/body returns the same still-pending code; after expiry/claim/revoke use a fresh command ID. Only one pending pairing/device credential is allowed; revoke before replacement. Claim returns the random device credential **once**. By default it is valid for one hour. With caregiver-selected `credentialMode:'persistent'` in the pairing request, a database-backed gateway issues a key valid until revoked and returns `expiresAt:null`. Non-database gateways reject persistent enrollment with UNAVAILABLE; claim cannot select or upgrade its mode. Existing credentials are never silently upgraded. A lost successful response cannot retrieve it again: revoke/re-pair explicitly. Claims are globally limited to 20/minute for this demo. `localConfirmed:true` is a firmware contract, not cryptographic proof of a physical button press or consent to microphone/camera access.
 
-Revocation clears pending enrollment/current credential, ends the session and closes an existing socket. Replaying an old revoke command cannot revoke a new pairing. Pairing/revoke command history is bounded to 256; new pairings fail at capacity while revocation remains available. Gateway restart clears all credentials/codes; device must not automatically capture/restart on reconnect.
+Revocation clears pending enrollment/current credential, ends the session and closes an existing socket. Replaying an old revoke command cannot revoke a new pairing. In-memory pairing/revoke command history is bounded to 256. Database revocation receipts also persist across restart (at most 256/profile), so an old revoke retry cannot revoke a replacement key after reboot. New pairings fail at receipt capacity while revocation stays available; restart does not clear durable receipts. Profile deletion cascades these receipts. A storage failure is explicit and does not claim durable revocation. Gateway restart clears pending codes and short-lived credentials, ends sessions and invalidates capture/output. It retains only explicitly persistent credential hashes and restores them under the new gateway boot owner. Device reconnect never authorizes capture, playback or session continuation. `device.ready.credentialExpiresAt` is nullable for persistent keys; all existing timestamp responses remain valid.
 
-**Database ownership fence (`04d050e`):** pairing checks that the device row belongs to the current gateway boot; a stale authority returns `UNAVAILABLE`. Claim writes only when the row still has that same boot marker and never assigns/replaces ownership itself. If persistence/ownership checks fail, no usable credential is returned; explicitly re-pair against the current gateway. Regression coverage verifies stale claim/pair rejection, preservation of the replacement marker, and successful authentication by the current authority.
+**Database ownership fence (`04d050e`):** pairing checks that the device row belongs to the current gateway boot; a stale authority returns `UNAVAILABLE`. Claim writes only when the row still has that same boot marker and never assigns/replaces ownership itself. If persistence/ownership checks fail, no usable credential is returned; explicitly re-pair against the current gateway. Regression coverage verifies stale claim/pair/revoke rejection, preservation of the replacement marker/key, and successful authentication by the current authority. Enrollment/revocation lock current profile membership and boot ownership; claim rechecks the enrolling caregiver assignment before committing.
 
 **Path difference from the draft:** technical-spec's `/v1/devices/pair` and `DELETE /v1/devices/:id/pairing` are proposed older route names, not implemented aliases. Use the three POST routes above until the shared specs/consumers are deliberately migrated.
 
@@ -214,9 +232,9 @@ Revocation clears pending enrollment/current credential, ends the session and cl
 
 From the repo root, run `python3 scripts/pair-stackchan.py` (Python 3.10+, standard library only). It reads the private root `.env` with environment-variable overrides, performs a state/PKCE VoidAuth login on `http://127.0.0.1:3333/callback`, and requests a fresh pairing using the public caregiver endpoint. Use the printed authorization URL in a browser on the helper machine, or forward its loopback port over SSH. This reuses the existing registered setup redirect URL; it does not change caregiver assignments or the database configuration.
 
-The helper prints the private `pairingId`, `code` and `expiresAt` for immediate Stackchan provisioning. It **leaves the code unclaimed**, stores no tokens/pairing files, never automatically revokes an existing device, and does not open a microphone or start a session. Keep its terminal output out of shared logs. If a pairing/device already exists, resolve it explicitly through the caregiver revocation route before generating a replacement. Missing access key is prompted privately; browser login requires issuer/client ID/secret in private configuration. `--token` privately prompts for an existing caregiver access token instead of browser login; `--env-file PATH` selects another private settings file. Basic literal/quoted dotenv values are supported, without variable expansion.
+The helper prints the private `pairingId`, `code` and `expiresAt` for immediate Stackchan provisioning. It **leaves the code unclaimed**, stores no tokens/pairing files, never automatically revokes an existing device, and does not open a microphone or start a session. Keep its terminal output out of shared logs. If a pairing/device already exists, resolve it explicitly through the caregiver revocation route before generating a replacement. Missing access key is prompted privately; browser login requires issuer/client ID/secret in private configuration. `--token` privately prompts for an existing caregiver access token instead of browser login; `--env-file PATH` selects another private settings file. The helper requests a persistent key by default; `--persistent` remains an explicit alias. Use `--short-lived` to request the original one-hour credential. These flags are mutually exclusive. The underlying API still defaults to one-hour credentials when `credentialMode` is omitted. The pairing code still expires in five minutes and still requires local confirmation. The helper does not claim the code or save the key. Emilia owns robot key storage and nullable-expiry handling. Basic literal/quoted dotenv values are supported, without variable expansion.
 
-Four local Python fixture tests cover state/PKCE, public authorization headers and fresh command IDs, assignment/TLS constraints, and unchanged configuration. Run `python3 -m unittest discover -s tests -p test_pair_stackchan.py -v`. The helper itself has not been used to create a live pairing; existing live backend acceptance is recorded separately.
+Six local Python fixture tests cover persistent-default/short-lived CLI behavior, explicit persistent enrollment, state/PKCE, public authorization headers and fresh command IDs, assignment/TLS constraints, and unchanged configuration. Run `python3 -m unittest discover -s tests -p test_pair_stackchan.py -v`. The helper itself has not been used to create a live pairing; existing live backend acceptance is recorded separately.
 
 ## 6. Firmware / authenticated WebSocket protocol
 
@@ -247,7 +265,7 @@ First message is `device.hello`, for example:
 
 An alternative audio capability shape permits `{encoding:'pcm_s16le',sampleRate:16000,channels:1,frameMs:20}`; it does **not** authorize capture/ingestion or prove actual hardware support. Server responds `device.ready`, hello `command.ack`, then `state.changed` with the current safe session/null.
 
-`device.ready.payload` is `{mode:'live',deviceId,profileId,credentialExpiresAt,audio:false,camera:false,textChat?:boolean,controls:[...]}`. `textChat`/`text` control indicates configured adapter only, not a successful provider call. Camera remains unavailable. Audio stays false unless the gateway enables speech and the client supplies the playback capability described below.
+`device.ready.payload` is `{mode:'live',deviceId,profileId,credentialExpiresAt:string|null,audio:false,camera:false,textChat?:boolean,controls:[...]}`. `textChat`/`text` control indicates configured adapter only, not a successful provider call. Camera remains unavailable. Audio stays false unless the gateway enables speech and the client supplies the playback capability described below.
 
 | Incoming type | Payload | Session/behavior |
 | --- | --- | --- |
@@ -313,7 +331,7 @@ Mic mute cancels pending input work but preserves approved output. Repeated unmu
 
 #### Fixed voice replies while paused
 
-Recognized urgent/unwell/topic-refusal phrases bypass the model and pause the session. The canceled input turn remains canceled. The coordinator synchronously creates fresh fixed-output authority with a new turn ID, a new stream and the current paused generation; the gateway publishes that paused snapshot before TTS finishes so Stop can use the current generation. Only that server-owned fixed reply may produce audio while paused. Ordinary model output never acquires this exception.
+Recognized urgent/unwell/topic-refusal phrases bypass the model and pause the session. The chat-hardening branch applies the same guarded fixed-output path to its frightening/navigation/privacy-refusal routes. The canceled input turn remains canceled. The coordinator synchronously creates fresh fixed-output authority with a new turn ID, a new stream and the current paused generation; the gateway publishes that paused snapshot before TTS finishes so Stop can use the current generation. Only that server-owned fixed reply may produce audio while paused. Ordinary model output never acquires this exception.
 
 The existing wire schemas are unchanged: `response.text` has `source:'fixed'`; its turn ID matches `response.start` and audio events. Clients bind the new output to that fixed text, current generation/lease and local permission. A paused snapshot alone never grants playback. Use the new generation/turn/stream for receipts; capture-turn IDs are obsolete. Session phase remains `paused` through synthesis, started/progress/completed receipts, failure and expiry; capture stays off. Firmware/UI must represent fixed playback independently from session phase and continue to honor local Stop/pause/watchdog before server acknowledgments.
 
