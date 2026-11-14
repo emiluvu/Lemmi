@@ -1,0 +1,9 @@
+{
+  "arduinoCli": "1.6.0",
+  "core": "m5stack:esp32@3.3.10",
+  "fqbn": "m5stack:esp32:m5stack_cores3:PSRAM=disabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M",
+  "libraries": {
+    "M5GFX": "0.3.0",
+    "M5Unified": "0.3.0"
+  }
+}

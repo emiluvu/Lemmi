@@ -1,0 +1,5 @@
+.tools/
+.arduino/
+build/
+backups/
+secrets.h
