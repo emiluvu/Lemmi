@@ -6,6 +6,10 @@ firmware helper, not a new wire protocol or session authority. It has no hardwar
 network, clock, file, logging or dynamic-allocation dependency. No live microphone
 samples were used in its tests. The uploaded 0.5 feasibility sketch is unchanged.
 
+## Selected voice and turn-ending target
+
+The user selected **1500 ms of silence after speech** following Lukas’s browser timing trials. Use this as the initial Stackchan endpointing target when Emilia integrates voice detection; retain manual turn end and local Stop/mute/cancellation. This checkout has no connected speech detector/`audio.end` firmware implementation, so this is a handoff target, not a flashed or hardware-tested change. The backend now provisions Piper `en_US-hfc_female-medium` (22,050 Hz) for both browser and robot output; the robot plays the negotiated PCM and does not choose or run a TTS model. See [speech configuration](../../../services/local-speech/README.md).
+
 ## Behavior and ownership
 
 - One 640-byte slot stores partial input or one complete frame. `append` accepts

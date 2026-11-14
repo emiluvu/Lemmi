@@ -6,7 +6,7 @@ Feature branch `anay/natural-speech-turns`, based on frontend/backend integratio
 
 After explicit Speak now and the existing server grant, the browser feeds its 16 kHz mono PCM16 frames into a local WebRTC detector (`@echogarden/fvad-wasm` 0.2.0, normal mode). Vite bundles the pinned 20,560-byte WASM as a same-origin asset. No CDN, external speech API, transcript analysis, continuous listening or extra capture authority is introduced. The BSD license accompanies the artifact at `apps/web/static/licenses/webrtc-vad.txt`.
 
-Five voiced 20 ms frames in a 200 ms window establish speech, rejecting isolated clicks while allowing short answers. Four seconds of subsequent non-speech completes the existing `audio.end` turn; any later voiced frame resets that pause. This does not establish that a thought is complete, identify a speaker or infer a condition. Background voices/music and very soft speech can produce mistakes. Rehearsal on the actual microphone/room remains necessary.
+Five voiced 20 ms frames in a 200 ms window establish speech, rejecting isolated clicks while allowing short answers. The user-selected 1.5 seconds (1500 ms) of subsequent non-speech completes the existing `audio.end` turn; any later voiced frame resets that pause. This does not establish that a thought is complete, identify a speaker or infer a condition. Background voices/music and very soft speech can produce mistakes. Rehearsal on the actual microphone/room remains necessary.
 
 Finish speaking remains available. Detector loading failure/timeout (three seconds) or a runtime detection error shows a manual-finish message. Late initialization is disposed after timeout/cancellation. Automatic ending can be disabled. No automatic next turn is added.
 
@@ -21,7 +21,7 @@ Set public values in the **web process environment** before startup. `apps/web/s
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `PUBLIC_LEMMI_AUTO_TURN_END` | `1` | `0` retains manual Finish speaking only |
-| `PUBLIC_LEMMI_END_SILENCE_MS` | `4000` | Integer 1500–8000 ms after speech; trial setting, not validated for dementia |
+| `PUBLIC_LEMMI_END_SILENCE_MS` | `1500` | Integer 1500–8000 ms after speech; trial setting, not validated for dementia |
 | `PUBLIC_LEMMI_SPEECH_DIAGNOSTICS` | `0` | Opt-in browser console timings |
 | `LEMMI_SPEECH_DIAGNOSTICS` | `0` | Opt-in gateway console timings in live speech mode |
 
@@ -31,7 +31,7 @@ Backend records contain only `stage`/`durationMs`: `stt`, `reply`, `tts`, `turn_
 
 Internal optional `SpeechAdapters.onTiming` propagates through the shared scheduler; observer exceptions are contained. No HTTP/WSS event/schema, authorization or database change. Diagnostics default off; these observers log no text, PCM, transcript, profile/session/device/turn ID, path, prompt or credential. Enabled console/host logging may retain numeric records under host policy. Buffers/classifier state are transient; cleanup is not a secure-erasure guarantee for browser/WASM/native/OS copies.
 
-The TTS engine/voice is unchanged. Next voice-quality work is listening to identical fictional phrases with alternative Piper voices/pacing, then trying another local engine if useful. This implementation improves turn timing; it does not establish improved voice timbre or clinical suitability.
+The user selected `en_US-hfc_female-medium` after voice research; the pinned manifest, example and newly generated service configs now select that Piper voice. It is generated once on the backend for either active browser or Stackchan output; there is no separate robot voice model. Existing private configs are preserved and require an explicit `LEMMI_SPEECH_VOICE_EN` change/restart to adopt it (see the local speech guide). The voice is 22,050 Hz like the previous LJ Speech voice. Its model card links a CC BY-NC-SA 4.0 dataset; retain attribution/source records and review permissions before commercial use. The selected 1500 ms pause follows the user’s report of Lukas’s browser trials, not independently observed clinical/robot validation. Firmware endpointing is still pending; use the same target there when integrated.
 
 ## Verification and handoff
 
@@ -41,4 +41,7 @@ Headless Chromium 141 loaded real Vite-served JS/WASM and exercised BrowserAudio
 
 Final pinned-Bun regression: **189 passed, 33 database checks skipped, 0 failed / 4,090 expectations** with the caregiver PKCE case excluded. The full attempt encountered its existing fixed-port dependency (127.0.0.1:3333 is occupied by an SSH tunnel); the tunnel was untouched. Database checks were not enabled for this speech-only change. Frozen install, type/Svelte check and production build passed. See the build plan for exact scope and retries.
 
-Before merge: Kylie reviews actual listening/fallback/paused UX; Anay reviews timing/configuration/cancellation; Emilia reviews firmware and actual robot limits. Trial pauses with fictional voluntary team speech on the intended microphone. Do not infer support presets, preferences, diagnosis or ability from pauses. No deployment or merge is performed here.
+Before merge: Kylie reviews actual listening/fallback/paused UX; Anay reviews timing/configuration/cancellation; Emilia reviews firmware and actual robot limits. Trial pauses with fictional voluntary team speech on the intended microphone. Do not infer support presets, preferences, diagnosis or ability from pauses. The user requested pushing this feature branch after checks; no deployment or merge is performed here.
+
+
+Selected-default follow-up: real HFC wrapper synthetic TTS→STT passed (209/623 ms in one run, mono 22,050 Hz); Chromium/Web Audio with HFC and the 1500 ms default passed with 193 matching frames, one silence-triggered end, closed track and no errors/external requests. Seven Python speech boundary tests passed; Bun regression remains 189 passed / 33 database skips / one PKCE test excluded for its occupied port. No hardware or subjective naturalness result follows from those synthetic observations.

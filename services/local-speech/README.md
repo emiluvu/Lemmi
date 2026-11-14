@@ -2,7 +2,7 @@
 
 This private engine wrapper runs alongside Lemmi. It has no participant session, profile, journal or contact authority. The existing Bun coordinator owns conversation. STT/TTS adapters call the wrapper over authenticated loopback HTTP; the robot must never connect to it directly.
 
-Implemented engines: **faster-whisper 1.2.1** with multilingual Whisper `base` (CPU/int8 initially) and **Piper 1.8.0** with the English `en_US-ljspeech-medium` voice (CPU). English synthesis/transcription has been checked with a synthetic phrase on Framework WSL Ubuntu 22.04.5/Python 3.10.12. Human microphone quality, German voice quality, hardware transport and NVIDIA/Mac performance remain unverified.
+Implemented engines: **faster-whisper 1.2.1** with multilingual Whisper `base` (CPU/int8 initially) and **Piper 1.8.0** with the English `en_US-hfc_female-medium` voice (CPU), selected by the user for both browser and Stackchan backend-generated output. The prior voice was `en_US-ljspeech-medium`; the engine and 22,050 Hz format are unchanged. English synthesis/transcription has been checked with a synthetic phrase on Framework WSL Ubuntu 22.04.5/Python 3.10.12. Human microphone quality, German voice quality, hardware transport and NVIDIA/Mac performance remain unverified.
 
 ## Setup on another Ubuntu machine
 
@@ -22,7 +22,7 @@ uv pip sync --python services/local-speech/.venv/bin/python --require-hashes ser
 python3 services/local-speech/prepare_models.py --configure
 ```
 
-Model provisioning explicitly downloads roughly 201 MiB of weights plus support files into ignored `.models/`. Exact revisions/sizes and weight hashes live in `assets.json`; a local hash inventory is generated. Inference never downloads models. Model weights/support files are assets, not recordings. Review their source/permissions before redistribution. The provisioner creates `services/local-speech/.env` with mode 0600, local paths and a random independent token, only if absent. It preserves existing settings and does not print the token. Never commit `.env`, `.models`, `.venv` or raw audio.
+Model provisioning explicitly downloads roughly 201 MiB (base STT plus HFC voice) of weights plus support files into ignored `.models/`. Exact revisions/sizes and weight hashes live in `assets.json`; a local hash inventory is generated. Inference never downloads models. Model weights/support files are assets, not recordings. Review their source/permissions before redistribution. The provisioner creates `services/local-speech/.env` with mode 0600, local paths and a random independent token, only if absent. It preserves existing settings and does not print the token. Never commit `.env`, `.models`, `.venv` or raw audio.
 
 This workspace already has the virtual environment, models and private service `.env`; rerun provisioning only when needed. Requirements are separate from `bun.lock`; no npm/yarn lockfile or Bun dependency change is needed. Direct Python pins are in `requirements.in`; `requirements.lock` includes hashes/transitive pins for Python 3.10.
 
@@ -65,6 +65,8 @@ Two layers of selection keep session code independent of engines:
 | `LEMMI_SPEECH_VOICE_EN` | Local English ONNX file; adjacent `.json` must identify English/eSpeak phonemization |
 | `LEMMI_SPEECH_VOICE_DE` | Optional German ONNX file/config; absent means German synthesis unavailable, never English substitution |
 
+To adopt HFC on an existing install, run the provisioner above, then change **only** `LEMMI_SPEECH_VOICE_EN` in the existing private speech environment to the absolute `.models/tts/en_US-hfc_female-medium.onnx` path and restart the speech wrapper between sessions. The adjacent `.onnx.json` must be kept beside it. The provisioner preserves existing private configuration and tokens; `--configure` does not overwrite an old voice setting. Browser and Stackchan receive the same selected backend voice; no model is installed on the ESP32. No shared deployment is changed by checking out this branch.
+
 Change settings and restart the wrapper/caller between sessions. There is no automatic mid-turn engine switch. Only the two named engines are implemented; the common server-only `SttAdapter`, `TtsAdapter`, `ChatAdapter` interfaces in `packages/server/src/adapters/types.ts` allow another implementation later. Separate endpoints can be used for separate local wrappers with the same wire API. Keep identical scope/cancellation/retention rules when adding a cloud engine; do not silently forward failed local speech to it.
 
 ### Host matrix
@@ -101,7 +103,7 @@ Audio/text move through bounded request buffers, a private process pipe, NumPy a
 
 ## Sources and permission notes
 
-`assets.json` identifies exact pinned repositories/revisions, weight hashes and the English voice's source/model card. The pinned voice card identifies the LJ Speech dataset as public domain and links training details. Piper is GPL-3.0; faster-whisper/Whisper have their own model/engine terms. Retain the source/license records and review packaging before redistribution. Downloaded weights are ignored, not committed. German voice source/license/quality review is a separate follow-up.
+`assets.json` identifies exact pinned repositories/revisions, weight hashes and the English voice's source/model card. The pinned [HFC female model card](https://huggingface.co/rhasspy/piper-voices/blob/6b9cfaacb4fb2e02a9621227e3c1a48bec9710c3/en/en_US/hfc_female/medium/MODEL_CARD) links the Hi-Fi-Captain dataset under **CC BY-NC-SA 4.0** and names its hifi_tts_92 fine-tuning provenance. This is the selected noncommercial demo voice; preserve attribution/share-alike/source records and review permissions before any commercial deployment or redistribution. It is not the previous public-domain LJ Speech dataset. Piper reads the voice config’s recommended inference values (`noise_scale=0.5`, `noise_w=0.333`, `length_scale=1.0`); no custom speed/noise override is added. Piper is GPL-3.0; faster-whisper/Whisper have their own model/engine terms. Retain the source/license records and review packaging before redistribution. Downloaded weights are ignored, not committed. German voice source/license/quality review is a separate follow-up.
 
 Primary engine references: [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [Piper Python API](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md). The service uses NumPy input to STT and Piper's in-memory `synthesize` chunks rather than file-oriented recording examples. It does not implement camera/vision, voice cloning, online speech or a second conversation backend.
 

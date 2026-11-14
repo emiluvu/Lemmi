@@ -1,5 +1,6 @@
 # Lemmi backend status
 
+**Selected speech defaults (undeployed):** browser post-speech silence is now **1500 ms**, following the user’s report of Lukas’s trials. New speech provisioning/configuration selects **`en_US-hfc_female-medium`**, shared by browser/Stackchan output (22,050 Hz). Existing private configs remain preserved and require the explicit voice-path/restart step in the [local guide](../services/local-speech/README.md). Firmware detection remains a 1500 ms integration target; no deployed config or firmware was changed.
 **Undeployed speech candidate — `anay/natural-speech-turns`:** optional content-free stage/receipt timings (`LEMMI_SPEECH_DIAGNOSTICS=1`) through the existing coordinator/scheduler, with browser turn ending on integration base `a7d5528`. No API/schema/database/voice/firmware replacement. The deployed revision below is unchanged. [Behavior, configuration and observed limits](handoffs/natural-speech-turns.md); final checks are in the build plan.
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.

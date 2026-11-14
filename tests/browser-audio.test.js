@@ -178,10 +178,10 @@ test('automatic turn ending tolerates thinking pauses and resumed speech, then s
     expect(f.track.enabled).toBe(false);
     f.grant();
     f.frames(true, 15);
-    f.frames(false, 180); // 3.6 seconds is still a thinking pause.
+    f.frames(false, 60); // 1.2 seconds stays below the selected 1.5-second threshold.
     expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(0);
     f.frames(true, 10);
-    f.frames(false, 199);
+    f.frames(false, 74);
     expect(f.track.stopped).toBe(false);
     f.frames(false, 1);
     expect(f.track.stopped).toBe(true);

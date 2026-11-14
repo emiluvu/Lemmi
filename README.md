@@ -1,6 +1,6 @@
 # Lemmi
 
-Undeployed speech candidate: [automatic browser turn ending and timing diagnostics](docs/handoffs/natural-speech-turns.md). Listening can finish after four seconds of detected non-speech; manual Finish speaking remains. Initial silence pauses without model submission. TTS voice, whole-turn STT, capture bounds and firmware are unchanged; physical microphone/voice-quality review remains pending.
+Undeployed speech candidate: [automatic browser turn ending and timing diagnostics](docs/handoffs/natural-speech-turns.md). Listening can finish after 1.5 seconds of detected non-speech; manual Finish speaking remains. Initial silence pauses without model submission. The selected backend voice is `en_US-hfc_female-medium` for browser and Stackchan output; whole-turn STT, capture bounds and firmware are unchanged; physical microphone/voice-quality review remains pending.
 
 Local UI/browser integration preparation: [combined frontend/backend handoff](docs/handoffs/frontend-backend-integration.md) — includes the copied uncommitted UI, Teach Lemmi/Alex content, browser client wiring, observed checks and remaining deployment gates.
 

@@ -1,6 +1,6 @@
 # Lemmi — Integration contracts and handoffs
 
-**Undeployed browser speech candidate:** [natural speech turns](handoffs/natural-speech-turns.md) adds local WebRTC detection using existing granted PCM/`audio.end`/`input.pause`. No wire/schema change. Optional internal `SpeechAdapters.onTiming` propagates through the scheduler. Public web settings control automatic/manual ending and content-free durations. Firmware silence detection remains pending. Initial silence uses paused + explicit Resume; whole-turn STT and capture bounds remain.
+**Undeployed browser speech candidate:** [natural speech turns](handoffs/natural-speech-turns.md) adds local WebRTC detection using existing granted PCM/`audio.end`/`input.pause`. No wire/schema change. Optional internal `SpeechAdapters.onTiming` propagates through the scheduler. Public web settings control automatic/manual ending and content-free durations. The user-selected browser default is 1500 ms after speech; firmware silence detection remains pending with the same initial target. Backend provisioning now selects `en_US-hfc_female-medium` (22,050 Hz) for either output endpoint. Initial silence uses paused + explicit Resume; whole-turn STT and capture bounds remain.
 
 **Status:** Starter baseline implemented; full v1/provider/hardware contract freeze pending
 **Version:** 0.1  
