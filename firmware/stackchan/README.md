@@ -1,5 +1,7 @@
 # Emilia’s Stackchan firmware
 
+Switching accounts or resuming? Read [Emilia’s restart handoff](../../docs/handoffs/emilia-resume.md).
+
 The `emilia/firmware-foundation` branch contains an initial standalone display/touch test. It is not a connected Lemmi client. It has now been uploaded and hash-verified on the connected device after a complete verified private backup. Serial output confirms the foundation firmware boots and reports a 320×240 display, including after a separate controlled reboot. Emilia confirms the visible screen and Stop → Unmute → Ready behavior; readability at intended distance, controls under load and audio/camera/network failure checks remain pending; see `hardware-checks.md`. The pinned setup and compile scripts passed on the development Mac; the explicit target build reports 549,947 bytes of program storage and 26,036 bytes of static globals. These are compiler figures, not measured runtime memory or control latency.
 
 ## First test
