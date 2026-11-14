@@ -51,6 +51,8 @@ The live computer rehearsal created its pairing through the private authenticate
 
 ## Remaining limits and next handoff
 
+**Undeployed feature branch:** `anay/speech-pipeline` adds backend microphone grants, PCM ingestion, STT→chat→TTS and bounded output/receipt execution. See [feature protocol/handoff](handoffs/anay-speech-pipeline.md). Those local synthetic checks do not change the running deployment status below.
+
 1. **Host DNS:** the lab system resolver still fails to resolve the new public hostname, including after cache flush. Public DNS-over-HTTPS resolves it. Public checks used the published Cloudflare edge address while preserving Host, TLS SNI and certificate validation. Normal hostname-only clients on this machine require this DNS issue to clear or a separately reviewed resolver fix. Global network settings were not changed.
 2. **Speech:** synthetic English recognition was intermittent. Engines are running privately, but integrated device/browser capture, STT-to-chat, speech/music playback and receipts are incomplete. No robot voice-readiness claim follows from engine startup.
 3. **Product work:** production browser OIDC sign-in/participant text transport, full journal/summary, notification/outbox, preferences/deletion workflows, completed activities, camera and physical K151 acceptance remain pending as described in the [API inventory](backend_api.md) and team plan.

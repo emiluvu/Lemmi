@@ -230,6 +230,29 @@ Resolved-tree observations, Bun **1.4.4**, native PostgreSQL **14.24**: **91 Bun
 
 Keep timing targets from the technical spec; do not silently shorten the listening pause to improve a latency number. Local inference/GPU advantages and the 2–3-second post-explicit-turn target are unverified until measured. Manual help bypasses the LLM and game engine. An app fallback cannot fix an unreachable shared server.
 
+### Observed speech pipeline feature — November 14, 2026
+
+Branch `anay/speech-pipeline`, isolated worktree based on main `be1e096` after backend deployment PR #2. The old shared checkout, main, backend-deploy and deployed services were left unchanged. Backend voice grants/PCM/end → local STT → existing chat/OpenRouter → local TTS → bounded output and receipt execution are opt-in. This remains bounded **whole-turn recognition**, not the incremental STT/silence-end target; physical K151/browser capture and playback are not accepted.
+
+Final checks: pinned Bun **1.4.4**, frozen-lockfile dependencies unchanged; **109 tests passed / 2,107 expectations** across 15 files against a dedicated private PostgreSQL **14.24** test cluster. TypeScript/Svelte (zero errors/warnings), seven Python boundary tests, production build, formatting and diff whitespace checks passed. Production control/fixture-chat HTTPS/WSS and real isolated PostgreSQL/profile/media smoke tests passed independently. One concurrent smoke attempt returned a different preview-denial status and was not counted passed; its independent rerun passed. No production data or credentials were used by fixture checks. Inspected client bundles contained none of the inspected server secret/adapter symbols; all 36 typed operations remain documented.
+
+A real, certificate-verified **20-turn repeated synthetic English voice endurance** run passed with local Whisper base/Piper and actual OpenRouter `z-ai/glm-5.3-flash`, plus one initial real text turn (21 model requests). It checked bounded credit, capture-off completion, three pause/resume cycles and final Stop. Playback receipts were simulated consumed chunks; the same synthesized waveform was repeated, so this is neither a varied human-conversation study nor a word-error/semantic-safety score. No raw audio/transcripts/reasoning were saved or logged. Total run 204,693 ms included synthetic capture pacing and simulated playback. Warm stage times:
+
+| Stage | Median | p95 | Range |
+| --- | --- | --- | --- |
+| STT | 421.5 ms | 449 ms | 393–457 ms |
+| LLM | 879.5 ms | 1,023 ms | 655–1,151 ms |
+| TTS | 184.5 ms | 279 ms | 143–503 ms |
+| Whole harness voice turn, including input/playback pacing | 10,142.5 ms | 11,803 ms | 8,436–13,530 ms |
+
+Numeric per-turn evidence is in [speech-pipeline-2026-11-14.json](verification/speech-pipeline-2026-11-14.json). The selected GLM model's mandatory default reasoning exhausted the old 160-token allowance on earlier runs; explicit supported low effort/512 tokens completed the final run. Reasoning is excluded; truncation remains an explicit failure, not a retry or partial reply. Neither server nor private root settings were changed by that command-only override. Cold-start/GPU/VM/Mac/venue/human/semantic-quality acceptance remains pending.
+
+Earlier long runs exposed a local wall-clock correction: a capture rate window reported **−418 ms wall time versus 1,257 ms monotonic**, and playback saw **740 ms wall versus 2,402 ms monotonic**. Gateway rate windows/watchdogs and speech elapsed deadlines now use monotonic time; credential/provider expiry remains UTC. A regression covers backward/forward wall-clock corrections. No system clock/resolver settings were changed. Legacy unnegotiated-audio compatibility, repeated-unmute capture invalidation, stale results/receipts, fixed help/refusal, bounded buffers, output metadata and mic-mute versus approved playback have automated checks. The simulated player also now handles end arriving after its last consumed frame.
+
+English keyword quality is still imperfect: an initial base probe passed 8/10; a later same-waveform base/small five-phrase comparison passed 20/20, while repeated difficult-phrase comparisons passed base 3/6 versus small 5/6. Padding or larger beam size did not reliably eliminate errors. The optional pinned multilingual small model is explicit (no default change/fallback) and slower (~1.2–1.6 s in these synthetic checks). Keep human microphone/semantic/German review open rather than claiming quality solved. The private services are replaceable independently; one earlier real voice turn used the small STT endpoint with the separate base-service Piper endpoint.
+
+The Python wrapper now tries graceful idle-worker shutdown before bounded terminate/kill; the final real engine shutdown exited **0 without the earlier semaphore warning**. This task's speech listener and PostgreSQL cluster were stopped. Models/private env/virtualenv/database/media are ignored. [Protocol/configuration and morning Emilia/Kylie handoff](handoffs/anay-speech-pipeline.md) lists remaining native-rate, framing, local controls, permissions/autoplay and receipt checks; substantive counterpart review is still required before merge/deployment.
+
 ## 8. Demo script and fallback
 
 Five-minute draft; adapt to actual event allowance. Grandma may choose one short segment after private rehearsal; teammates demonstrate the remaining features/failure scenarios. No audience member should see private contact details or secrets.

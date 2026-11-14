@@ -104,3 +104,13 @@ Audio/text move through bounded request buffers, a private process pipe, NumPy a
 `assets.json` identifies exact pinned repositories/revisions, weight hashes and the English voice's source/model card. The pinned voice card identifies the LJ Speech dataset as public domain and links training details. Piper is GPL-3.0; faster-whisper/Whisper have their own model/engine terms. Retain the source/license records and review packaging before redistribution. Downloaded weights are ignored, not committed. German voice source/license/quality review is a separate follow-up.
 
 Primary engine references: [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [Piper Python API](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md). The service uses NumPy input to STT and Piper's in-memory `synthesize` chunks rather than file-oriented recording examples. It does not implement camera/vision, voice cloning, online speech or a second conversation backend.
+
+## Optional speech pipeline and English quality probes
+
+The [speech pipeline handoff](../../docs/handoffs/anay-speech-pipeline.md) connects these private adapters to the existing authenticated gateway on `anay/speech-pipeline`. It is opt-in, not deployed by this branch, and accepts explicit bounded whole turns rather than incremental recognition. Physical microphone/speaker/browser checks remain pending.
+
+`python3 services/local-speech/prepare_models.py --stt-profile small` explicitly provisions pinned multilingual small (~461 MiB weights) in `.models/stt-small` without changing an existing `.env`. Select that absolute path privately and restart to compare; base remains the default and no fallback occurs. Both profiles use the same locked CPU runtime. Small is slower and has not eliminated every synthetic keyword error.
+
+Use `bun --env-file=services/local-speech/.env scripts/speech-quality.ts` for five fixed English keyword probes with/without 250 ms padding. `--fixture garden --repeat 3` repeats the difficult phrase; optional private `LEMMI_COMPARISON_STT_URL` compares exactly the same waveforms against another endpoint. Only numeric results are printed, never audio/transcripts. A failing exit is expected quality evidence when a keyword is wrong; do not convert it to success. Model/voice stochastic variation, human quality and hardware performance need separate evaluation.
+
+The wrapper tries a one-second graceful idle-worker shutdown before terminate/kill escalation, so Python/native finalizers can release resources. In-flight cancellation remains bounded and hard-stops the worker. Ignored model/dependency caches persist; no audio/transcript files are created.

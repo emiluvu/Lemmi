@@ -172,6 +172,10 @@ Activity journal events: `activity_started`, `activity_ended`, `track_selected`,
 
 ## 5. Audio and device seam: Emilia ↔ Anay
 
+**Feature branch increment:** `anay/speech-pipeline` implements the backend voice seam; [exact protocol and handoff](handoffs/anay-speech-pipeline.md) and [API reference](backend_api.md#opt-in-voice-turns-and-playback) cover configuration, capabilities, current capture grant, indexed PCM/end, bounded output and consumed-playback receipts. Shared `speech*Fixture` exports contain fictional IDs/generated silence. Legacy hello remains audio-disabled without negotiated playback. Actual K151/browser integration and counterpart review are pending.
+
+The current engine accepts a bounded complete utterance after explicit `audio.end`; the technical-spec incremental-recognition target and silence-end detection are **not yet implemented**. One current explicit turn is limited to 20 seconds/640,000 input bytes; four output frames may be ahead of consumed receipts. All presets return capture-off waiting after completion. The computer player's receipts are simulated, not hardware proof.
+
 The robot's WebSocket connects to Anay's realtime gateway, not to a second app-owned backend. The SvelteKit app subscribes to the same session and can use the browser endpoint as fallback. Firmware never knows LLM keys, caregiver destinations, database credentials, or private guidance.
 
 Begin with the technical specification's protocol v1 and negotiate actual firmware-supported audio capabilities. Share a sample `device.hello`, control event, audio chunk, and server state response before writing both ends. Agree frame format, sample rate, channel count, endianness, queue limits, heartbeat, and TLS/pairing. The initial PCM proposal must be benchmarked; changes require both Emilia and Anay to update fixtures.

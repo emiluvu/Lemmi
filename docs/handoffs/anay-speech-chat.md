@@ -4,6 +4,8 @@ This increment adds **optional authenticated text chat** through the existing se
 
 Use the [local speech guide](../../services/local-speech/README.md) for Ubuntu setup/configuration/privacy/format details and [control handoff](anay-control-foundation.md) for authenticated pairing/WSS. The earlier control-only handoff describes the preceding baseline; this file adds `input.text`/`response.text` without granting microphone capture. Activity A01–A04 compatibility remains intact; no new game rules or session store were added.
 
+**Later feature increment:** [speech pipeline handoff](anay-speech-pipeline.md) supersedes the media-unavailable statements below on `anay/speech-pipeline` only. It adds opt-in bounded voice turns with real synthetic provider checks; hardware/browser/German acceptance remains pending and deployment is unchanged.
+
 ## What is runnable
 
 | Path | Implementation / limit |
