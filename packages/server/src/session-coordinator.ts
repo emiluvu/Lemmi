@@ -151,7 +151,8 @@ export class SessionCoordinator {
         generation: this.session.generation + 1,
         conversationMode: 'open',
         teaching: null,
-        phase: 'ready',
+        // Leaving teaching must not release a participant/help/configuration pause.
+        phase: this.session.phase === 'paused' ? 'paused' : 'ready',
         captureGrant: null,
       };
   }

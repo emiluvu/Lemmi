@@ -212,6 +212,47 @@ test('15 minutes counts active waiting/turn time, excludes pauses and requires f
   expect(c.snapshot()?.captureGrant).toBeNull();
 });
 
+test('finishing teaching preserves pauses until an explicit resume, including configuration saves', async () => {
+  for (const reason of ['participant', 'disconnect', 'support', 'configuration'] as const) {
+    const { c, received } = setup();
+    control(c, 'teaching.start');
+    let release = () => {};
+    if (reason === 'participant') control(c, 'pause');
+    else if (reason === 'disconnect') c.disconnect();
+    else if (reason === 'configuration') release = c.beginProfileUpdate({ interests: [] });
+    else {
+      const s = c.snapshot()!;
+      expect(
+        c.applyCommunicationSupport(
+          {
+            profileId: s.profileId,
+            sessionId: s.id,
+            expectedGeneration: s.generation,
+            expectedProfileRevision: 0,
+            commandId: crypto.randomUUID(),
+          },
+          caregiverProfile,
+          'fixture-caregiver',
+        ).ok,
+      ).toBe(true);
+    }
+    expect(c.snapshot()?.phase).toBe('paused');
+    expect(control(c, 'teaching.finish').ok).toBe(true);
+    expect(c.snapshot()?.conversationMode).toBe('open');
+    expect(c.snapshot()?.teaching).toBeNull();
+    expect(c.snapshot()?.phase).toBe('paused');
+    expect(c.snapshot()?.captureGrant).toBeNull();
+    expect(control(c, 'teaching.start').ok).toBe(false);
+    expect((await say(c, 'Do not send this while paused')).ok).toBe(false);
+    expect(received).toEqual([]);
+    if (reason === 'configuration') expect(control(c, 'resume').ok).toBe(false);
+    release();
+    expect(control(c, 'resume').ok).toBe(true);
+    expect(c.snapshot()?.phase).toBe('ready');
+    expect(c.snapshot()?.captureGrant).toBeNull();
+  }
+});
+
 test('topic changes do not reset the active limit; unavailable content does not accrue time', () => {
   const { c, advance } = setup();
   control(c, 'teaching.start');
