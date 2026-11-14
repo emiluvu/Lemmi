@@ -2,11 +2,11 @@
 
 This is the current implementation reference for **Kylie's frontend, Emilia's firmware, Lukas's activities and Anay's speech/services**. Update it whenever a backend-facing route, schema, event, authorization rule, configuration key or availability changes. Runtime schemas/source remain authoritative; a proposed interface is not permission to invent a parallel backend.
 
-**Feature-branch scope:** `anay/speech-pipeline` adds opt-in voice transport described below. These additions have not been deployed; [deployed host status](backend-status.md) remains separate.
+**Runtime scope:** the speech pipeline and fixed concern-response correction are deployed in `275de72`, integrating main `24e7fe2`. The host’s public speech opt-in remains disabled; implementation/fixture readiness does not authorize microphone capture or prove hardware acceptance. See [backend status](backend-status.md).
 
 **Scope:** one functional fictional profile, `profile-alex`, and one assigned live device, `stackchan-alex`. Preview cards are presentation-only. API examples below use fictional IDs/placeholders and contain no usable credentials. All paths are relative to their stated origin; do not substitute a robot's `127.0.0.1` for the backend host.
 
-**Deployed baseline:** `04d050e` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
+**Deployed runtime baseline:** `275de72` on `https://lemmi.chaoswarrior.dev`. Host observations, verification scope and remaining limitations are maintained in [backend status](backend-status.md); service commands and private setup are in [host setup](host-setup.md). API implementation and deployment acceptance are tracked separately.
 
 ## 1. Availability and ownership
 
@@ -14,8 +14,8 @@ This is the current implementation reference for **Kylie's frontend, Emilia's fi
 | --- | --- | --- |
 | Local mock HTTP RPC | Implemented; loopback-only, bounded in-memory state, no actual media/contact | Kylie/Lukas development, computer smoke tests |
 | Scoped device pairing/claim/revoke HTTP | Implemented; real VoidAuth setup/introspection and public claim verified on deployed host. Public caregiver-bearer pairing/revoke requests have not been exercised in the live rehearsal | Kylie caregiver setup; Emilia provisioning |
-| Authenticated device WSS | Controls/text plus opt-in capture/audio output on this feature branch; physical K151 integration pending | Emilia; computer control harness |
-| OpenRouter chat | Deployed text greeting/public WSS passed; feature branch also passed a real isolated 20-turn synthetic voice rehearsal. Broader conversational/human quality remains unverified | Anay server only |
+| Authenticated device WSS | Controls/text plus opt-in capture/audio output implemented in deployed code; public speech opt-in disabled and physical K151 integration pending | Emilia; computer control harness |
+| OpenRouter chat | Deployed text greeting/public WSS passed; the original feature branch also passed a real isolated 20-turn synthetic voice rehearsal (not repeated as deployment acceptance). Broader conversational/human quality remains unverified | Anay server only |
 | Local STT/TTS | Private wrapper/adapters implemented; English CPU synthetic checks including a repeated voice run passed locally, but host/human quality remains imperfect | Anay server only |
 | Robot/browser microphone → STT → chat → TTS → playback | Backend capture/STT/chat/TTS/PCM output implemented opt-in and tested with synthetic input/simulated receipts; actual hardware/browser flow pending | Anay + Emilia + Kylie |
 | Photos/guessing/matching | State/pack/action/view/context/event contracts and fixtures exist; three reducers/catalog hosting remain unavailable | Lukas logic; Kylie rendering; Anay host |
@@ -28,7 +28,7 @@ Anay edits canonical backend/contracts. Kylie renders safe projections and submi
 
 ### A18/A19 profile/private-media increment
 
-**Undeployed schema review (`anay/app-data-schema`, merged into `main` at `a6f7ff9`):** migration `002_media_collections.sql` adds album/playlist metadata with stable membership IDs and scoped image/music references. No HTTP, client, protocol or authorization surface changes; collection CRUD and reviewed-pack hosting remain A05. Journal/consent/contact/jobs/deletion/camera portions of Emilia's full draft remain inactive. See [review and verification](handoffs/anay-app-data-schema-review.md) and [database setup](../db/README.md). The deployed availability table above is unchanged.
+**Deployed media schema:** migration `002_media_collections.sql` is applied on the host. It adds stable, scoped album/photo and playlist/track metadata only. No new HTTP/client/catalog authorization surface is enabled; collection CRUD and reviewed-pack hosting remain A05. Journal/consent/contact/jobs/deletion/camera portions of the full draft remain inactive proposals. See [review](handoffs/anay-app-data-schema-review.md), [database setup](../db/README.md) and [deployment acceptance](backend-status.md).
 
 [Database/profile/assets handoff](handoffs/anay-database-profile-assets.md) and [database setup](../db/README.md) define the current exact fields, permissions, format limits and restart behavior. PostgreSQL is opt-in via private `LEMMI_DATABASE_URL`/`LEMMI_PRIVATE_MEDIA_DIR` plus the configured caregiver subject. `bun run db:migrate` / `db:bootstrap` prepare only fictional Alex. One gateway owns the database; boot checks reject stale writes. Credential hashes and bounded session/factual-event checkpoints are persisted; restart deliberately revokes pairing credentials and ends old sessions. Full contact/policy/journal/deletion workflows remain pending despite schema foundations.
 
