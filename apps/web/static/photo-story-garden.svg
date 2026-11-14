@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Fictional illustration of roses in a garden">
+<rect width="960" height="540" fill="#e5f0ef"/><circle cx="790" cy="100" r="56" fill="#f1d295"/>
+<path d="M0 300Q240 200 480 300T960 280V540H0" fill="#a7c7a0"/>
+<path d="M410 540Q600 380 560 280" fill="none" stroke="#ded0af" stroke-width="105"/>
+<g stroke="#50765a" stroke-width="10" fill="#74996a"><path d="M140 470V245M260 455V210M720 460V250M840 470V310"/><ellipse cx="120" cy="360" rx="38" ry="15"/><ellipse cx="280" cy="330" rx="38" ry="15"/><ellipse cx="700" cy="370" rx="38" ry="15"/></g>
+<g fill="#c47789"><circle cx="140" cy="245" r="48"/><circle cx="260" cy="210" r="53"/><circle cx="720" cy="250" r="48"/><circle cx="840" cy="310" r="42"/></g>
+<g fill="#ebbec2"><circle cx="140" cy="245" r="23"/><circle cx="260" cy="210" r="26"/><circle cx="720" cy="250" r="23"/><circle cx="840" cy="310" r="20"/></g>
+</svg>

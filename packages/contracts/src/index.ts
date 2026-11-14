@@ -6,5 +6,6 @@ export * from './device';
 export * from './services';
 export * from './device-access';
 export * from './conversation';
+export * from './photo-story';
 
 export * from './profile-assets';

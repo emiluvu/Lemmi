@@ -8,6 +8,8 @@
     "packages/*"
   ],
   "scripts": {
+    "photo-story": "bun scripts/photo-story.ts",
+    "smoke:photo-story": "bun --env-file=services/local-speech/.env scripts/smoke-photo-story.ts",
     "dev": "bun scripts/dev.ts",
     "dev:web": "bun run --filter @lemmi/web dev",
     "dev:gateway": "bun --watch apps/realtime/src/index.ts",

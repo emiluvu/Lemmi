@@ -3,14 +3,48 @@ import {
   assertMockMode,
   localMockRequestAllowed,
   MOCK_TOKEN,
+  SessionCoordinator,
+  localSpeechConfig,
+  createLocalSpeechAdapters,
+  createReviewedPhotoAdapter,
 } from '@lemmi/server';
+import { photoStoryDemoPack } from '@lemmi/activities';
 import { DeviceEventSchema, ServerEventSchema, fail, type ServerEvent } from '@lemmi/contracts';
 import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
 function startMockGateway() {
   assertMockMode();
-  const coordinator = new MockCoordinator();
+  const photoDemo = process.env.LEMMI_PHOTO_STORY_DEMO === '1';
+  const chatMode = process.env.LEMMI_PHOTO_STORY_CHAT ?? 'reviewed_demo';
+  if (photoDemo && !['reviewed_demo', 'openrouter'].includes(chatMode))
+    throw new Error('Invalid Photo Story chat selection');
+  const llm = openRouterConfig();
+  const speech = localSpeechConfig();
+  if (photoDemo && !speech.ok) throw new Error('Invalid local speech configuration');
+  const coordinator =
+    photoDemo && speech.ok
+      ? new SessionCoordinator(
+          'live',
+          chatMode === 'reviewed_demo'
+            ? createReviewedPhotoAdapter()
+            : llm.ok
+              ? createOpenRouterAdapter(llm.data)
+              : undefined,
+          {
+            pack: photoStoryDemoPack,
+            speech: createLocalSpeechAdapters(speech.data),
+            chatMode:
+              chatMode === 'reviewed_demo'
+                ? 'reviewed_demo'
+                : llm.ok
+                  ? 'openrouter'
+                  : 'unavailable',
+            sttEnabled: speech.data.sttBackend !== 'disabled',
+            ttsEnabled: speech.data.ttsBackend !== 'disabled',
+          },
+        )
+      : new MockCoordinator();
   type SocketData = { lastSequence: number; outSequence: number; lastSeen: number; hello: boolean };
   const sockets = new Set<Bun.ServerWebSocket<SocketData>>();
   function emit(ws: Bun.ServerWebSocket<SocketData>, type: ServerEvent['type'], payload: unknown) {
@@ -42,7 +76,7 @@ function startMockGateway() {
   const server = Bun.serve<SocketData>({
     hostname: '127.0.0.1',
     port,
-    maxRequestBodySize: 32768,
+    maxRequestBodySize: photoDemo ? 900000 : 32768,
     async fetch(request, server) {
       const url = new URL(request.url);
       const peer = server.requestIP(request)?.address ?? null;
@@ -63,7 +97,12 @@ function startMockGateway() {
           : new Response('Upgrade failed', { status: 400 });
       }
       if (url.pathname === '/health')
-        return Response.json({ mode: 'mock', speech: false, camera: false, notifications: false });
+        return Response.json({
+          mode: photoDemo ? 'photo-story-demo' : 'mock',
+          speech: coordinator.photoStoryStatus(),
+          camera: false,
+          notifications: false,
+        });
       if (request.method !== 'POST' || !url.pathname.startsWith('/internal/mock/'))
         return new Response('Not found', { status: 404 });
       let body: unknown;
@@ -73,7 +112,12 @@ function startMockGateway() {
         return Response.json(fail('VALIDATION_ERROR', 'Invalid JSON'), { status: 400 });
       }
       const operation = url.pathname.slice('/internal/mock/'.length);
-      const result = coordinator.handle(operation, body);
+      const result =
+        operation === 'photoStory.status'
+          ? { ok: true as const, data: coordinator.photoStoryStatus() }
+          : operation === 'photoStory.turn' && photoDemo
+            ? await coordinator.photoStory(body)
+            : coordinator.handle(operation, body);
       broadcast();
       return Response.json(result, {
         headers: { 'Cache-Control': 'no-store' },
@@ -189,7 +233,11 @@ function startMockGateway() {
   }
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  console.info(`Lemmi MOCK gateway: http://127.0.0.1:${server.port} (no live services)`);
+  console.info(
+    photoDemo
+      ? `Lemmi fictional PHOTO STORY demo: http://127.0.0.1:${server.port}; local speech adapters; ${chatMode}; loopback only`
+      : `Lemmi MOCK gateway: http://127.0.0.1:${server.port} (no live services)`,
+  );
 }
 if (process.env.LEMMI_MODE === 'live') {
   const llm = openRouterConfig();

@@ -1,5 +1,10 @@
 # Lemmi — team start guide
 
+**Photo Story branch update:** `codex/photo-story-voice` adds an opt-in fictional
+browser voice rehearsal using the existing local speech adapters and coordinator.
+Run `bun run photo-story`; see [setup and observed checks](photo-story.md). Normal
+`bun run dev` remains mock-only. This local demo is not the remote/robot deployment.
+
 Shared mock starter, November 13, 2026. This is the baseline for parallel development, not the completed product or a production deployment.
 
 ## Clone and run

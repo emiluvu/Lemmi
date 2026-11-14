@@ -10,7 +10,7 @@ for (const [key, value] of Object.entries(process.env)) {
     env[key] = value;
 }
 const child = Bun.spawn(
-  ['services/local-speech/.venv/bin/python', 'services/local-speech/server.py'],
+  [process.platform === 'win32' ? 'services/local-speech/.venv/Scripts/python.exe' : 'services/local-speech/.venv/bin/python', 'services/local-speech/server.py'],
   { env, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
 );
 const stop = () => child.kill('SIGINT');

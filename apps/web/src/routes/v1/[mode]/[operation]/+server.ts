@@ -13,10 +13,11 @@ export const POST: RequestHandler = async ({ request, params, getClientAddress }
   if (!Object.hasOwn(operations, params.operation))
     return Response.json(fail('NOT_FOUND', 'Unknown operation'), { status: 404 });
   const length = Number(request.headers.get('content-length') ?? 0);
-  if (length > 32768)
+  const maxBytes = params.operation === 'photoStory.turn' && process.env.LEMMI_PHOTO_STORY_DEMO === '1' ? 900000 : 32768;
+  if (length > maxBytes)
     return Response.json(fail('VALIDATION_ERROR', 'Body too large'), { status: 413 });
   const text = await request.text();
-  if (new TextEncoder().encode(text).length > 32768)
+  if (new TextEncoder().encode(text).length > maxBytes)
     return Response.json(fail('VALIDATION_ERROR', 'Body too large'), { status: 413 });
   try {
     const response = await fetch(
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async ({ request, params, getClientAddress }
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${MOCK_TOKEN()}` },
         body: text,
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(params.operation === 'photoStory.turn' ? 65000 : 3000),
       },
     );
     return new Response(await response.text(), {

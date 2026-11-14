@@ -1,5 +1,13 @@
 # Local speech — Ubuntu CPU baseline
 
+**Photo Story Windows update (November 14):** the same pinned dependency lock and
+model provisioner now run in an isolated Python 3.10.19 Windows environment. The
+Bun launcher selects `.venv/Scripts/python.exe` there. The real Photo Story
+synthetic voice-flow smoke passed, but the original short-phrase smoke failed its
+exact word assertion on this machine; human speech/voice quality remain pending.
+See [Photo Story setup and observations](../../docs/photo-story.md). This does not
+establish Unix private-storage permissions or hardware readiness on Windows.
+
 This private engine wrapper runs alongside Lemmi. It has no participant session, profile, journal or contact authority. The existing Bun coordinator owns conversation. STT/TTS adapters call the wrapper over authenticated loopback HTTP; the robot must never connect to it directly.
 
 Implemented engines: **faster-whisper 1.2.1** with multilingual Whisper `base` (CPU/int8 initially) and **Piper 1.8.0** with the English `en_US-ljspeech-medium` voice (CPU). English synthesis/transcription has been checked with a synthetic phrase on Framework WSL Ubuntu 22.04.5/Python 3.10.12. Human microphone quality, German voice quality, hardware transport and NVIDIA/Mac performance remain unverified.

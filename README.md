@@ -105,6 +105,13 @@ The rough business idea is a subscription service plus optional robot sales, ret
 
 ## Getting started
 
+**Photo Story local voice demo:** run `bun run photo-story`, then open
+http://127.0.0.1:5173/participant/photo-story. It uses the existing session authority,
+local Whisper/Piper adapters, fictional Alex and bundled generic illustrations.
+The default reviewed-response mode needs no LLM key; OpenRouter is an explicit
+selection. Image pixels are not analyzed. See [Photo Story setup and checks](docs/photo-story.md)
+for local speech provisioning, limitations and the exact Windows observations.
+
 The selected stack direction is SvelteKit/Svelte with TypeScript, Bun for tooling/runtime, SvelteKit backend HTTP routes, a native Bun realtime gateway, and a Bun background worker. Caregiver tools and participant views are separate areas of the same app; caregivers sign in, while participants use a paired/setup device without a login screen.
 
 The backend, PostgreSQL, and local speech-to-text/text-to-speech models will run on a team-managed server: a lab desktop, one of our laptops, or a teammate's homelab. The lab desktop is the first candidate to evaluate because the team reports Ethernet and a GPU; actual speed and demo-network reachability still need testing. The LLM remains an external API. Local hosting does not make the complete system offline.

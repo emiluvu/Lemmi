@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import {
+  PhotoStoryCommandSchema,
+  PhotoStoryResultSchema,
+  PhotoStoryStatusSchema,
+} from './photo-story';
+import {
   ProfileDetailSchema,
   ProfileUpdateSchema,
   AssetCreateSchema,
@@ -81,6 +86,8 @@ const operation = <I extends z.ZodType, O extends z.ZodType>(input: I, output: O
   output,
 });
 export const operations = {
+  'photoStory.turn': operation(PhotoStoryCommandSchema, PhotoStoryResultSchema),
+  'photoStory.status': operation(none, PhotoStoryStatusSchema),
   'device.pair': operation(PairDeviceInputSchema, PairDeviceResultSchema),
   'device.claim': operation(ClaimDeviceInputSchema, ClaimDeviceResultSchema),
   'device.revoke': operation(RevokeDeviceInputSchema, RevokeDeviceResultSchema),
@@ -210,6 +217,10 @@ export function createClients(transport: ServiceTransport) {
     listener: (value: Result<OperationOutput<K>>) => void,
   ) => subscribeOperation(transport, op, input, listener);
   return {
+    photoStory: {
+      turn: (input: OperationInput<'photoStory.turn'>) => call('photoStory.turn', input),
+      status: () => call('photoStory.status', {}),
+    },
     device: {
       pair: (input: OperationInput<'device.pair'>) => call('device.pair', input),
       claim: (input: OperationInput<'device.claim'>) => call('device.claim', input),
@@ -325,7 +336,7 @@ export function createHttpTransport(
           method,
           headers: { 'Content-Type': 'application/json' },
           body: body === undefined ? undefined : JSON.stringify(body),
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(op === 'photoStory.turn' ? 65000 : 5000),
         });
         const result: unknown = await response.json();
         const parsed = z

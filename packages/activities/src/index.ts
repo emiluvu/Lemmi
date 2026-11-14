@@ -17,7 +17,11 @@ import {
   type ActivitySystemInput,
   type ActivityView,
 } from '@lemmi/contracts';
-// Starter music transitions only. Lukas owns completion/content; no I/O or authorization here.
+import { createReviewed, reduceReviewed, projectReviewed, systemReviewed } from './reviewed';
+export { preparePhotoStoryTurn, PHOTO_STORY_INSTRUCTIONS } from './photo-story';
+export type { PhotoStoryInput, PhotoStoryPreparation, PhotoStoryFact } from './photo-story';
+export { photoStoryDemoPack } from './photo-story-content';
+// Pure activity transitions; content execution and session authority belong to the host.
 function tracks(pack: ApprovedPack, ctx: ActivityContext) {
   if (pack.activityId !== 'music_playlist' || !ctx.eligibility.available) return [];
   return pack.tracks.filter((t) =>
@@ -42,27 +46,11 @@ export function createActivity(
   StartActivityInputSchema.parse(input);
   ApprovedPackSchema.parse(pack);
   ActivityContextSchema.parse(ctx);
+  if (pack.activityId === 'photo_album' || pack.activityId === 'twenty_questions')
+    return createReviewed(input.instanceId, pack, ctx);
   // Shape-only unavailable stubs. Lukas supplies these activities' actual rules.
   const base = { instanceId: input.instanceId, revision: 0, phase: 'unavailable' as const };
   switch (pack.activityId) {
-    case 'twenty_questions':
-      return ActivityStateSchema.parse({
-        ...base,
-        activityId: pack.activityId,
-        roundId: null,
-        questionId: null,
-        guessCandidateId: null,
-        roundPhase: 'ready',
-        questionsAsked: 0,
-      });
-    case 'photo_album':
-      return ActivityStateSchema.parse({
-        ...base,
-        activityId: pack.activityId,
-        currentPhotoId: null,
-        position: null,
-        viewingMode: 'just_look',
-      });
     case 'object_matching':
       return ActivityStateSchema.parse({
         ...base,
@@ -92,6 +80,11 @@ export function reduceActivity(
 ): ActivityTransition {
   checked(state, pack, ctx);
   ActivityActionSchema.parse(action);
+  if (
+    (state.activityId === 'photo_album' || state.activityId === 'twenty_questions') &&
+    (pack.activityId === 'photo_album' || pack.activityId === 'twenty_questions')
+  )
+    return reduceReviewed(state, action, pack, ctx);
   if (
     state.activityId !== 'music_playlist' ||
     state.phase === 'ended' ||
@@ -151,6 +144,11 @@ export function applyActivitySystemInput(
 ): ActivityTransition {
   checked(state, pack, ctx);
   ActivitySystemInputSchema.parse(input);
+  if (
+    (state.activityId === 'photo_album' || state.activityId === 'twenty_questions') &&
+    (pack.activityId === 'photo_album' || pack.activityId === 'twenty_questions')
+  )
+    return systemReviewed(state, input, pack, ctx);
   if (state.activityId !== 'music_playlist' || state.phase === 'ended')
     return ActivityTransitionSchema.parse({ nextState: state, events: [], effects: [] });
   const next = { ...state, revision: state.revision + 1 };
@@ -165,7 +163,13 @@ export function applyActivitySystemInput(
       break;
     case 'system.resume':
       if (state.phase !== 'paused') throw new Error('Not paused');
-      next.phase = tracks(pack, ctx).length ? 'ready' : 'unavailable';
+      {
+        const eligible = tracks(pack, ctx);
+        const retained = eligible.find((track) => track.id === state.currentTrackId) ?? eligible[0];
+        next.currentTrackId = retained?.id ?? null;
+        next.playback = 'stopped';
+        next.phase = retained ? 'ready' : 'unavailable';
+      }
       events.push({ type: 'activity_resumed' });
       break;
     case 'system.end':
@@ -176,10 +180,20 @@ export function applyActivitySystemInput(
       break;
     case 'system.eligibility_changed':
       events.push({ type: 'eligibility_changed', policyRevision: ctx.eligibility.policyRevision });
-      if (!tracks(pack, ctx).some((t) => t.id === state.currentTrackId)) {
+      {
+        const eligible = tracks(pack, ctx);
+        const firstEligibleTrack = eligible[0];
+        const currentIsEligible = eligible.some((t) => t.id === state.currentTrackId);
+        if (currentIsEligible) break;
         next.currentTrackId = null;
         next.playback = 'stopped';
-        next.phase = state.phase === 'paused' ? 'paused' : 'unavailable';
+        // A pause must retain its safe empty position. Resume later chooses a
+        // current eligible track explicitly; it never replays an old effect.
+        if (state.phase === 'paused') next.phase = 'paused';
+        else if (firstEligibleTrack) {
+          next.currentTrackId = firstEligibleTrack.id;
+          next.phase = 'ready';
+        } else next.phase = 'unavailable';
         effects.push({ type: 'stop_media' });
       }
       break;
@@ -214,6 +228,11 @@ export function projectActivity(
   ctx: ActivityContext,
 ): ActivityView {
   checked(state, pack, ctx);
+  if (
+    (state.activityId === 'photo_album' || state.activityId === 'twenty_questions') &&
+    (pack.activityId === 'photo_album' || pack.activityId === 'twenty_questions')
+  )
+    return projectReviewed(state, pack, ctx);
   if (state.activityId !== 'music_playlist')
     throw new Error('Activity projection pending Lukas implementation');
   const eligible = tracks(pack, ctx);

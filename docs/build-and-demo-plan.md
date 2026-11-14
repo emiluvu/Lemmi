@@ -88,6 +88,91 @@ Review split: Anay reviews authorization/data/notification work; Emilia reviews 
 
 ## 5. Individual Codex briefs
 
+### Photo Story voice branch — November 14, 2026
+
+Fresh `codex/photo-story-voice` based on main `be1e096`. Carries forward pure
+photo/guessing logic and adds opt-in loopback Photo Story hosting to the existing
+SessionCoordinator, typed media operations/client, existing STT/TTS and OpenRouter
+adapter integration, bundled fictional illustrations and browser AudioWorklet/PCM
+capture/playback. The default explicitly selected reviewed demo responder requires
+no external model. No failed model/service request is silently replaced with demo
+success. Caption-only; no image analysis. No transcript/audio persistence added.
+
+Observed on Windows with Bun 1.4.4 / isolated Python 3.10.19: the pinned hash-locked
+speech environment and verified model weights were provisioned; the existing
+Whisper/Piper wrapper started. `bun run smoke:photo-story` passed the actual
+SvelteKit → existing coordinator → TTS → synthetic STT → follow-up/Repeat path,
+without transcript logs or saved audio. Browser opening/typed Roses follow-up,
+Just look and navigation were exercised. Type/Svelte checks and production build
+passed. Ten new voice/coordinator checks cover grants, duplicates, empty speech,
+service failure, Next/Stop/mute cancellation, PCM bounds and persistence exclusion.
+
+Full Bun suite: 106 passed, 12 database cases skipped without a test database,
+one existing private-media Unix-mode assertion failed on Windows (0666 vs 0600).
+Do not weaken that private-storage check or claim database security verified here.
+The original short-phrase `speech-smoke.ts` also failed its exact garden-word
+recognition assertion; synthetic recognition returned near matches. The new voice
+smoke establishes functioning adapters/flow, not recognition quality. Human mic,
+voice quality, real OpenRouter model/key, remote auth/production media, hardware,
+full keyboard/accessibility and counterpart acceptance remain unverified.
+See [Photo Story guide](photo-story.md). The older notes below describe prior
+branches/preparation snapshots, not the current runnable voice status.
+
+### Lukas Photo Story preparation — November 13, 2026
+
+Extended the existing photo reducer to accept caption-only Talk and added pure
+scoped photo/profile/turn preparation. Reused shared profile/session/activity
+schemas, factual events and existing `offer_photo_conversation` requests. No server,
+shared protocol, speech, model adapter, UI or persistence implementation was added.
+See [Photo Story handoff](handoffs/lukas-photo-story.md) for exact dependency names.
+
+Observed with Bun 1.4.4 on Windows: all 70 tests passed (9 new Photo Story tests);
+the fictional Alex preparation rehearsal ran successfully, changed-file formatting
+and `git diff --check` passed. Svelte checks reported zero errors/warnings;
+TypeScript and production build passed. No live provider/model, actual image, mic/STT/TTS playback,
+browser flow, service outage or hardware run was exercised. Full Photo Story
+acceptance is blocked on A05 hosting/effect execution, approved real media,
+connected speech and shared repeat/continuation/browser controls. Image analysis
+was not performed: inspected OpenRouter integration on `backend-deploy` is
+text-only and this checkout has no model/key configuration. No utterances were
+persisted; all rehearsal/test data was fictional.
+
+### Lukas activity branch verification — November 13, 2026
+
+Merged main through `53c7a5f`, preserving the Python terminal prototype. Added pure
+photo and reviewed-tree guessing transitions through the existing activity exports;
+see [historical reducer handoff](https://github.com/emiluvu/Lemmi/blob/codex/activity-eligibility-resume/docs/handoffs/lukas-reviewed-activities.md) for behavior, remaining
+matching contract questions and A05 hosting needs. Placeholder fixture assets are
+not live media or content approval. No shared schemas/backend/UI were changed.
+
+Observed on Windows with Bun 1.4.4: locked dependency install, 61 tests,
+`bun run check` (zero Svelte errors/warnings and TypeScript errors), and
+`bun run build` passed. Python 3.13.2's 10 terminal experiment tests also passed.
+`bun run format:check` reports 54 existing files outside this increment's formatted
+TypeScript files; broad formatting was left untouched. Windows CRLF checkout is
+present. Web smoke, browser review and real media/hardware checks were not run for
+this increment. Matching, approved media and integrated activity acceptance remain
+pending; no M2 completion is claimed.
+
+### Lukas terminal experiment — observed November 13, 2026
+
+User-requested Python hidden-subject 20 Questions prototype lives in
+`packages/activities/prototypes/twenty_questions/`; its README provides run and
+simulation commands. This experiment uses the explicitly requested assumed-No
+timeouts, rather than the integrated participant activity's patient-paced rules.
+It does not establish completion of the shared `twenty_questions` reducer or M2.
+No LLM, audio, policy persistence, app/backend or robot integration is present.
+The deterministic catalog is bounded and cannot identify arbitrary subjects.
+
+Observed on Windows with the official portable Python 3.13.2 runtime: 10 unittest
+checks passed, including complete-round pipe input, actual pipe deadlines,
+20-question/no-repeat bounds, invalid answers, replay, and timeout/reset behavior.
+Run: `.\\.tools\\python-3.13.2\\python.exe -m unittest discover -s packages/activities/prototypes/twenty_questions -v`.
+Interactive Windows console typing/editing and POSIX terminal checks remain pending;
+no hardware or integrated activity acceptance is implied. Next handoff: Lukas
+rehearses terminal gameplay; Anay/Kylie review shared guessing contracts before
+any app integration.
+
 These prompts are implementation entry points after the relevant foundation exists. Keep them in the same repository/spec context, inspect current files, and do not recreate the project if another teammate already scaffolded it. Each person can use small follow-up tasks within their slice.
 
 ### Anay — backend, speech, database and integration

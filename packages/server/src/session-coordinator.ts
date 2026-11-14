@@ -9,6 +9,9 @@ import {
   validateActivityCommandContext,
   ConversationTextCommandSchema,
   ConversationReplySchema,
+  PhotoStoryCommandSchema,
+  type PhotoStoryResult,
+  type ApprovedPack,
   type ConversationTextResult,
   type ActivityEvent,
   type ActivitySystemInput,
@@ -35,17 +38,199 @@ import {
   reduceActivity,
   projectActivity,
   applyActivitySystemInput,
+  preparePhotoStoryTurn,
 } from '@lemmi/activities';
 import { createHash } from 'node:crypto';
 import { companionInput } from './adapters/companion-prompt';
 import { fixedInputReply, routeParticipantText } from './adapters/input-routing';
-import type { ChatAdapter, ChatMessage } from './adapters/types';
+import type { ChatAdapter, ChatMessage, SttAdapter, TtsAdapter } from './adapters/types';
 // One in-memory authority. Live mode currently exposes controls only, with no media/retention.
 export class SessionCoordinator {
   constructor(
     private readonly mode: 'mock' | 'live' = 'mock',
     private readonly chatAdapter?: ChatAdapter,
+    private readonly photoOptions?: {
+      pack: ApprovedPack;
+      speech: { stt: SttAdapter; tts: TtsAdapter };
+      chatMode: 'reviewed_demo' | 'openrouter' | 'unavailable';
+      sttEnabled: boolean;
+      ttsEnabled: boolean;
+    },
   ) {}
+  private activityPack: ApprovedPack = musicPack;
+  private pendingMedia: { kind: 'stt' | 'tts'; controller: AbortController } | null = null;
+  private captureDeadline = 0;
+  private mediaIds = new Set<string>();
+  photoStoryStatus() {
+    return {
+      session: this.photoOptions ? this.snapshot() : null,
+      activity:
+        this.photoOptions && this.activity && this.context
+          ? projectActivity(this.activity, this.activityPack, this.context)
+          : null,
+      enabled: !!this.photoOptions,
+      chat: this.photoOptions?.chatMode ?? 'unavailable',
+      stt: this.photoOptions?.sttEnabled ?? false,
+      tts: this.photoOptions?.ttsEnabled ?? false,
+      analysis: 'caption_only' as const,
+    };
+  }
+  private cancelPhotoMedia() {
+    this.pendingMedia?.controller.abort();
+    this.pendingMedia = null;
+    this.captureDeadline = 0;
+  }
+  async photoStory(raw: unknown): Promise<Result<PhotoStoryResult>> {
+    const parsed = PhotoStoryCommandSchema.safeParse(raw);
+    if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid Photo Story command');
+    const command = parsed.data;
+    const session = this.session;
+    const activity = this.activity;
+    if (
+      !this.photoOptions ||
+      !session ||
+      !activity ||
+      activity.activityId !== 'photo_album' ||
+      command.sessionId !== session.id ||
+      command.instanceId !== activity.instanceId
+    )
+      return fail('NOT_FOUND', 'Photo Story session not found');
+    if (
+      command.expectedGeneration !== session.generation ||
+      command.expectedRevision !== activity.revision ||
+      ['paused', 'ended'].includes(session.phase) ||
+      activity.phase !== 'active' ||
+      activity.viewingMode !== 'talk'
+    )
+      return fail('REVISION_CONFLICT', 'Reload current Photo Story state');
+    if (this.mediaIds.has(command.commandId))
+      return fail('REVISION_CONFLICT', 'Photo Story command already consumed');
+    if (this.mediaIds.size >= 512) return fail('UNAVAILABLE', 'Start a fresh demo session');
+    if (this.pendingMedia || this.pendingChat)
+      return fail('REVISION_CONFLICT', 'A turn is already pending');
+    this.mediaIds.add(command.commandId);
+    const input = command.input;
+    const empty = (notice: string | null = null): Result<PhotoStoryResult> =>
+      ok({ session: this.snapshot()!, reply: null, audio: null, notice });
+    if (input.type === 'playback_end') {
+      if (!this.isCurrentTextReply(input.turnId) || session.phase !== 'speaking')
+        return fail('REVISION_CONFLICT', 'Playback is no longer current');
+      this.session = { ...session, phase: 'waiting', captureGrant: null };
+      return empty();
+    }
+    if (input.type === 'repeat' || input.type === 'synthesize') {
+      const receipt = this.lastChat?.result;
+      if (
+        !receipt?.ok ||
+        receipt.data.kind !== 'reply' ||
+        (input.type === 'synthesize' && receipt.data.reply.turnId !== input.turnId) ||
+        !['ready', 'waiting'].includes(session.phase)
+      )
+        return fail('REVISION_CONFLICT', 'No current reply to repeat');
+      const reply = receipt.data.reply;
+      const pending = { kind: 'tts' as const, controller: new AbortController() };
+      this.pendingMedia = pending;
+      this.session = { ...session, phase: 'speaking', captureGrant: null };
+      try {
+        const audio = await this.photoOptions.speech.tts.synthesize(
+          { text: reply.text, language: reply.language },
+          pending.controller.signal,
+        );
+        if (
+          this.pendingMedia !== pending ||
+          !this.isCurrentTextReply(reply.turnId) ||
+          pending.controller.signal.aborted
+        )
+          return fail('REVISION_CONFLICT', 'Discarded obsolete speech');
+        if (!audio.ok) {
+          this.session = { ...this.session!, phase: 'waiting' };
+          return audio;
+        }
+        return ok({
+          session: this.snapshot()!,
+          reply,
+          notice: null,
+          audio: {
+            pcmBase64: Buffer.from(audio.data.pcm).toString('base64'),
+            sampleRate: audio.data.sampleRate,
+            encoding: 'pcm_s16le',
+            channels: 1,
+            turnId: reply.turnId,
+          },
+        });
+      } catch {
+        if (this.pendingMedia === pending) this.session = { ...this.session!, phase: 'waiting' };
+        return fail('UNAVAILABLE', 'Speech synthesis unavailable');
+      } finally {
+        if (this.pendingMedia === pending) this.pendingMedia = null;
+      }
+    }
+    let text: string;
+    if (input.type === 'audio') {
+      const grant = session.captureGrant;
+      if (
+        session.phase !== 'listening' ||
+        session.micMuted ||
+        !grant ||
+        grant.turnId !== input.captureTurnId ||
+        Date.now() > this.captureDeadline
+      )
+        return fail('REVISION_CONFLICT', 'Current listening grant required');
+      const bytes = Buffer.from(input.pcmBase64, 'base64');
+      if (
+        !bytes.length ||
+        bytes.length > 640000 ||
+        bytes.length % 2 ||
+        bytes.toString('base64') !== input.pcmBase64
+      )
+        return fail('VALIDATION_ERROR', 'Expected bounded 16 kHz PCM');
+      const pending = { kind: 'stt' as const, controller: new AbortController() };
+      this.pendingMedia = pending;
+      this.session = { ...session, phase: 'processing', captureGrant: null };
+      try {
+        const transcript = await this.photoOptions.speech.stt.transcribe(
+          { pcm: bytes, language: 'en' },
+          pending.controller.signal,
+        );
+        if (
+          this.pendingMedia !== pending ||
+          pending.controller.signal.aborted ||
+          this.session.generation !== session.generation
+        )
+          return fail('REVISION_CONFLICT', 'Discarded obsolete recognition');
+        this.session = { ...this.session, phase: 'waiting', captureGrant: null };
+        if (!transcript.ok) return transcript;
+        text = transcript.data.text.trim();
+        if (!text) return empty('I did not catch that. You can try again, type, or just look.');
+      } catch {
+        if (this.pendingMedia === pending)
+          this.session = { ...this.session!, phase: 'waiting', captureGrant: null };
+        return fail('UNAVAILABLE', 'Speech recognition unavailable');
+      } finally {
+        bytes.fill(0);
+        if (this.pendingMedia === pending) this.pendingMedia = null;
+      }
+    } else {
+      if (!['ready', 'waiting'].includes(session.phase))
+        return fail('REVISION_CONFLICT', 'Finish listening or playback first');
+      text = input.type === 'opening' ? 'Begin the approved Photo Story conversation.' : input.text;
+    }
+    const result = await this.submitText({
+      commandId: `photo-${command.commandId}`,
+      sessionId: session.id,
+      expectedGeneration: session.generation,
+      text,
+      language: 'en',
+    });
+    return result.ok
+      ? ok({
+          session: result.data.session,
+          reply: result.data.kind === 'reply' ? result.data.reply : null,
+          audio: null,
+          notice: null,
+        })
+      : result;
+  }
   private dialogue: ChatMessage[] = [];
   private chatIds = new Map<string, string>();
   private lastChat: { commandId: string; result: Result<ConversationTextResult> } | null = null;
@@ -87,6 +272,14 @@ export class SessionCoordinator {
   private cache = new Map<string, { body: string; result: Result<unknown> }>();
   private count = 0;
   snapshot() {
+    if (
+      this.session?.phase === 'listening' &&
+      this.captureDeadline &&
+      Date.now() > this.captureDeadline
+    ) {
+      this.captureDeadline = 0;
+      this.session = { ...this.session, phase: 'waiting', captureGrant: null };
+    }
     return this.session ? structuredClone(this.session) : null;
   }
   isCurrentTextReply(turnId: string): boolean {
@@ -99,6 +292,7 @@ export class SessionCoordinator {
     );
   }
   private cancelChat() {
+    if (this.pendingMedia?.kind === 'stt') this.cancelPhotoMedia();
     this.pendingChat?.controller.abort();
     this.pendingChat = null;
     this.dialogue = [];
@@ -173,7 +367,13 @@ export class SessionCoordinator {
     if (
       this.pendingChat ||
       !['ready', 'waiting'].includes(session.phase) ||
-      (this.activity && this.activity.phase !== 'ended')
+      (this.activity &&
+        this.activity.phase !== 'ended' &&
+        !(
+          this.photoOptions &&
+          this.activity.activityId === 'photo_album' &&
+          this.activity.viewingMode === 'talk'
+        ))
     )
       return fail('REVISION_CONFLICT', 'Finish or interrupt the current turn/activity first');
     if (this.chatIds.size >= 256)
@@ -188,9 +388,32 @@ export class SessionCoordinator {
       preset: session.communicationSupport.preset,
       preferredName: this.profile.preferredName,
       history: this.dialogue,
-      approvedFacts: this.approvedFacts,
+      approvedFacts:
+        this.photoOptions && this.activity?.activityId === 'photo_album' ? [] : this.approvedFacts,
     });
     if (!prepared.ok) return prepared;
+    if (this.photoOptions && this.activity?.activityId === 'photo_album' && this.context) {
+      const photo = preparePhotoStoryTurn({
+        profile: this.participant(),
+        session,
+        state: this.activity,
+        pack: this.activityPack,
+        context: this.context,
+        photoAvailable: true,
+        approvedFacts: [],
+        turn: { kind: 'answer', text: input.text },
+      });
+      if (!photo.ok) return photo;
+      if (photo.data.kind !== 'conversation_context')
+        return fail('UNAVAILABLE', 'Photo context unavailable');
+      prepared.data.system +=
+        '\n' +
+        photo.data.instructions +
+        '\nApproved photo data: ' +
+        JSON.stringify(photo.data.context);
+      if (prepared.data.system.length > 5000)
+        return fail('UNAVAILABLE', 'Approved context exceeds model limits');
+    }
     this.session = { ...session, phase: 'processing', captureGrant: null };
     const pending = {
       commandId: input.commandId,
@@ -291,13 +514,14 @@ export class SessionCoordinator {
   private system(input: Parameters<typeof applyActivitySystemInput>[1]) {
     if (this.activity && this.context) {
       const transition = ActivityTransitionSchema.parse(
-        applyActivitySystemInput(this.activity, input, musicPack, this.context),
+        applyActivitySystemInput(this.activity, input, this.activityPack, this.context),
       );
       this.activity = transition.nextState;
       for (const event of transition.events) this.event(event);
     }
   }
   private interrupt(input: Extract<ActivitySystemInput, { type: 'system.pause' | 'system.end' }>) {
+    this.cancelPhotoMedia();
     this.cancelChat();
     if (!this.session || this.session.phase === 'ended') return;
     this.session = {
@@ -323,7 +547,21 @@ export class SessionCoordinator {
     const input = parsed.data;
     if (
       this.mode === 'live' &&
-      !['session.start', 'session.get', 'session.command', 'help.create'].includes(op)
+      ![
+        'session.start',
+        'session.get',
+        'session.command',
+        'help.create',
+        ...(this.photoOptions
+          ? [
+              'profile.load',
+              'activities.list',
+              'activities.start',
+              'activities.view',
+              'activities.submit',
+            ]
+          : []),
+      ].includes(op)
     )
       return fail('UNAVAILABLE', 'Only authenticated device controls are implemented');
     // Parsed keys/values only; never accept a client-selected scope or preview profile as live.
@@ -402,6 +640,8 @@ export class SessionCoordinator {
           return fail('UNAVAILABLE', 'Mock session capacity reached; restart gateway');
         this.cancelChat();
         this.chatIds.clear();
+        this.mediaIds.clear();
+        this.cancelPhotoMedia();
         this.session = SessionSnapshotSchema.parse({
           id: this.mode === 'live' ? `session-${crypto.randomUUID()}` : `session-${++this.count}`,
           profileId: DEMO_PROFILE_ID,
@@ -456,7 +696,10 @@ export class SessionCoordinator {
             break;
           case 'mute':
             if (action.muted) {
-              const pending = this.pendingChat !== null;
+              const pending =
+                this.pendingChat !== null ||
+                this.pendingMedia?.kind === 'stt' ||
+                this.session.phase === 'listening';
               this.cancelChat();
               if (pending) this.session = { ...this.session, phase: 'waiting' };
             }
@@ -474,14 +717,57 @@ export class SessionCoordinator {
               leaseId: `lease-${++this.count}`,
             };
             break;
+          case 'speak':
+            if (
+              !this.photoOptions ||
+              this.activity?.activityId !== 'photo_album' ||
+              this.activity.viewingMode !== 'talk' ||
+              this.activity.phase !== 'active' ||
+              this.session.micMuted ||
+              !['ready', 'waiting'].includes(this.session.phase) ||
+              this.pendingChat ||
+              this.pendingMedia
+            )
+              return fail('UNAVAILABLE', 'Explicit unmuted Photo Story listening is unavailable');
+            this.session = {
+              ...this.session,
+              phase: 'listening',
+              captureGrant: {
+                turnId: input.commandId,
+                generation: this.session.generation,
+                leaseId: this.session.leaseId,
+              },
+            };
+            this.captureDeadline = Date.now() + 25000;
+            break;
+          case 'turn_end':
+            if (
+              !this.photoOptions ||
+              !['listening', 'processing', 'speaking'].includes(this.session.phase)
+            )
+              return fail('REVISION_CONFLICT', 'No media turn to cancel');
+            this.cancelPhotoMedia();
+            this.cancelChat();
+            this.session = { ...this.session, phase: 'waiting', captureGrant: null };
+            break;
           default:
             return fail('UNAVAILABLE', 'Speech/teaching is not implemented; capture stays off');
         }
         return ok(this.session);
       }
       case 'activities.list':
-        return ok(
-          ['music_playlist', 'twenty_questions', 'photo_album', 'object_matching'].map(
+        return ok([
+          ...(this.photoOptions
+            ? [
+                {
+                  activityId: 'photo_album',
+                  packId: this.photoOptions.pack.id,
+                  packVersion: 1,
+                  implemented: true,
+                },
+              ]
+            : []),
+          ...['music_playlist', 'twenty_questions', 'photo_album', 'object_matching'].map(
             (activityId) => ({
               activityId,
               packId: activityId === 'music_playlist' ? 'music-demo' : `pending-${activityId}`,
@@ -489,24 +775,32 @@ export class SessionCoordinator {
               implemented: activityId === 'music_playlist',
             }),
           ),
-        );
+        ]);
       case 'activities.start':
         if (!this.session || this.session.id !== input.sessionId)
           return fail('NOT_FOUND', 'Session not found');
         if (this.session.phase === 'paused' || this.session.phase === 'ended')
           return fail('REVISION_CONFLICT', 'Session must be ready');
-        if (input.activityId !== 'music_playlist' || input.packId !== musicPack.id)
-          return fail('UNAVAILABLE', 'Activity pending Lukas implementation');
+        const selectedPack =
+          input.activityId === 'photo_album' && this.photoOptions?.pack.id === input.packId
+            ? this.photoOptions!.pack
+            : input.activityId === 'music_playlist' && input.packId === musicPack.id
+              ? musicPack
+              : null;
+        if (!selectedPack) return fail('UNAVAILABLE', 'Activity pending Lukas implementation');
         if (this.activity && this.activity.phase !== 'ended')
           return fail('REVISION_CONFLICT', 'Leave the current activity first');
         this.context = contextFor(this.session.id);
+        this.context.presentationPolicy = this.session.communicationSupport;
+        this.context.eligibility.policyRevision = this.session.policyRevision;
+        this.activityPack = selectedPack;
         this.activity = createActivity(
           { instanceId: `activity-${++this.count}` },
-          musicPack,
+          this.activityPack,
           this.context,
         );
         this.event({ type: 'activity_started' });
-        return ok(projectActivity(this.activity, musicPack, this.context));
+        return ok(projectActivity(this.activity, this.activityPack, this.context));
       case 'activities.view':
       case 'activities.submit':
         if (
@@ -524,14 +818,19 @@ export class SessionCoordinator {
             return fail('REVISION_CONFLICT', 'Session cannot advance');
           const validated = validateActivityCommandContext(input, this.activity, this.context);
           if (!validated.ok) return validated;
+          if (this.photoOptions && this.activity.activityId === 'photo_album') {
+            this.cancelPhotoMedia();
+            this.cancelChat();
+            this.session = { ...this.session, phase: 'ready', captureGrant: null };
+          }
           const transition = ActivityTransitionSchema.parse(
-            reduceActivity(this.activity, validated.data.action, musicPack, this.context),
+            reduceActivity(this.activity, validated.data.action, this.activityPack, this.context),
           );
           this.activity = transition.nextState;
           for (const event of transition.events) this.event(event);
           // Deliberately DO NOT execute effects: no approved music bytes or live endpoint yet.
         }
-        return ok(projectActivity(this.activity, musicPack, this.context));
+        return ok(projectActivity(this.activity, this.activityPack, this.context));
       case 'help.create':
         if (this.mode === 'live') {
           this.interrupt({ type: 'system.pause', reason: 'help' });

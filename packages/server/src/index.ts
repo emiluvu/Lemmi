@@ -9,6 +9,7 @@ export * from './device-http';
 export * from './private-access';
 export * from './adapters/openrouter';
 export * from './adapters/local-speech';
+export * from './adapters/reviewed-photo';
 export type * from './adapters/types';
 
 export * from './data/database';

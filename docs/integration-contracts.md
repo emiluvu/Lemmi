@@ -1,5 +1,13 @@
 # Lemmi — Integration contracts and handoffs
 
+**Photo Story branch seam:** `codex/photo-story-voice` adds `PhotoStoryCommandSchema`,
+`PhotoStoryResultSchema`, `PhotoStoryStatusSchema`, `clients.photoStory.turn/status`
+and `SessionCoordinator.photoStory` for explicitly enabled loopback fictional media
+rehearsal. Existing photo reducer/ActivityView and session Speak/mute/Pause/Stop
+remain authoritative. The new path reuses ChatAdapter/SttAdapter/TtsAdapter; it
+does not create another store or change the production device protocol. Anay/Kylie
+review is pending before integrated merge. See [Photo Story guide](photo-story.md).
+
 **Status:** Starter baseline implemented; full v1/provider/hardware contract freeze pending
 **Version:** 0.1  
 **Owners:** Anay (server/contracts), Emilia (device contract), Lukas (activity contract), Kylie (views/assets)
