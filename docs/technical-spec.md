@@ -4,7 +4,7 @@
 **Version:** 0.4  
 **Scope:** Hackathon prototype; fictional participant data and opted-in team notification recipients
 
-This document proposes implementation contracts for the [product](product-spec.md), [experience](experience-spec.md), and [safety and privacy](safety-and-privacy.md) specifications. No application or firmware has been implemented yet. Technology selections and numeric limits below are proposed defaults; provider selection and hardware feasibility remain open. Safety and privacy rules apply across every interface.
+This document proposes implementation contracts for the [product](product-spec.md), [experience](experience-spec.md), and [safety and privacy](safety-and-privacy.md) specifications. A local mock application foundation exists; its actual files/status and commands are in [team-start.md](team-start.md). No firmware or live service integration is implemented. Technology selections and numeric limits below are proposed defaults; provider selection and hardware feasibility remain open. Safety and privacy rules apply across every interface.
 
 ## 1. Architecture and deployment
 
@@ -153,7 +153,7 @@ Add private approved music assets and album membership/captions to local media m
 5. For an ordinary turn, assemble application policy, minimum relevant caregiver-provided fields, activity context, and a bounded recent conversation window.
 6. Request structured output: `text` and an optional allowlisted proposal such as `offer_photo_album`, `offer_music`, or `offer_twenty_questions`. Treat it as untrusted. Validate schema/action, reject unsupported factual assertions where detectable, and apply the safety specification's reviewed response handling. A prompt or validator does not guarantee safety.
 7. Send checked text to the local TTS adapter, display matching text in the app, and stream audio to the current endpoint. No unchecked text/audio is played. If streaming model output is used later, validate complete segments before speech generation.
-8. After speech, transition into the next listening turn only if the same session generation, device lease, permissions, and local state still permit it.
+8. After speech, Quiet returns to capture-off waiting. Conversational/Guided may transition into the next listening turn only with a fresh explicit server capture grant and the same valid session generation, device lease, permissions and local state. Playback completion alone never authorizes capture; unmute requires a fresh explicit speaking action.
 
 Initial context default: at most six recent participant/Lemmi exchanges and a selected profile excerpt, bounded by the chosen model's input limit. Do not persist full conversation or create hidden transcript memory. F15 adds explicitly permitted structured preferences/item policy under the personalization spec; it is not a transcript store. Start a new session without a prior raw transcript, loading only permitted profile-specific policy. Journal events and reviewed facts remain separate.
 
@@ -163,7 +163,7 @@ States: `ready`, `listening`, `processing`, `speaking`, `waiting`, `paused`, `un
 
 Each turn carries `session_id`, `turn_id`, `generation`, `profile_revision`, `privacy_revision`, and `audio_lease_id`. Pause, stop, profile/privacy changes, endpoint handoff, and disconnect invalidate outstanding turns. Abort provider work where supported, and independently discard stale results before playback or persistence even if provider cancellation fails.
 
-Local stop/mute flushes playback/capture buffers immediately and invalidates local playback permission before reporting to the backend. Stale server messages cannot re-enable capture. On reconnect reconcile into `paused` or `ended`, never replay old audio. Resume returns to ready and needs an explicit speaking action as described in the experience specification.
+Local Stop flushes playback/capture buffers and invalidates playback permission immediately before reporting to the backend. Mic mute stops capture/transmission, flushes unsent capture and cancels the affected input turn and its pending response; it does not stop unrelated approved speech/music or affect camera state. Unmute never opens capture. Use separate input-turn/output validity and the complete control table in integration-contracts section 5. Stale server messages cannot re-enable capture. On reconnect reconcile into `paused` or `ended`, never replay old audio. Resume returns to ready and needs an explicit speaking action as described in the experience specification.
 
 Contact jobs already created survive conversation stop. Canceling further notification attempts is a separate request action. Ending conversation clears transient dialogue; any already-permitted excerpt writes must have completed before ending or be discarded. End-of-session summary jobs use retained sources only.
 
@@ -247,6 +247,10 @@ All routes are under `/v1`. Browser caregiver mutations require authenticated, a
 
 Use `Idempotency-Key` for creating sessions/help requests and other retryable mutations, scoped to identity and operation. Reusing a key with a different body returns a conflict. Duplicate help taps return the same still-active manual request for that profile; after closure a new explicit request gets a new ID. Known unavailable database/notification service produces a truthful unavailable response, never “sent.”
 
+### Single functional profile and dashboard examples
+
+The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile. Serve example cards as explicit presentation fixtures, separate from live profile records. UI routing and server checks must prevent preview IDs from reaching live mutations. Test forged/unassigned IDs with isolated fixtures, without adding production multi-profile workflows.
+
 ## 7. Data model
 
 Use UUID identifiers, UTC server timestamps, foreign keys, explicit source labels, and authorization ownership. Display times in the viewer's selected timezone. One caregiver account can own the demo profile; verified backup recipients get request-scoped acknowledgment permission, not automatic access to the full journal.
@@ -327,7 +331,7 @@ Proposed server configuration categories: local PostgreSQL connection and persis
 
 ## 11. Repository layout and integration sequence
 
-Proposed future layout; these directories are not created by this specification:
+The workspace follows this layout. Existing directories may contain only starter code or an ownership README; `db/migrations/` and production services are still pending. Inspect the actual tree and [starter inventory](team-start.md) before extending it:
 
 ```text
 apps/web/                 SvelteKit: pages, protected caregiver routes, /v1 HTTP API

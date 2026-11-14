@@ -1,0 +1,36 @@
+{
+  "name": "lemmi",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.4",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "dev:web": "bun run --filter @lemmi/web dev",
+    "dev:gateway": "bun --watch apps/realtime/src/index.ts",
+    "fake-device": "bun scripts/fake-device.ts",
+    "worker": "bun apps/worker/src/index.ts",
+    "check": "bun run --filter @lemmi/web check && bun --bun tsc --noEmit -p tsconfig.json",
+    "test": "bun test tests",
+    "build": "bun run --filter @lemmi/web build",
+    "start:web": "bun apps/web/build/index.js",
+    "start:gateway": "bun apps/realtime/src/index.ts",
+    "format": "bun --bun prettier --write apps packages scripts tests package.json tsconfig.json",
+    "format:check": "bun --bun prettier --check apps packages scripts tests package.json tsconfig.json",
+    "smoke:web": "bun scripts/smoke-web.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "typescript": "6.0.3",
+    "prettier": "3.6.2",
+    "prettier-plugin-svelte": "3.4.0"
+  },
+  "dependencies": {
+    "@lemmi/contracts": "workspace:*",
+    "@lemmi/server": "workspace:*",
+    "@lemmi/activities": "workspace:*"
+  }
+}

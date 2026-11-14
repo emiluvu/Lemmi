@@ -212,7 +212,7 @@ These checks are required behavior examples for implementation, not evidence tha
 | Explicit urgent concern | Ordinary activity ends; configured preauthorized routing starts and urgent-help wording appears without waiting for delivery. No diagnosis or emergency-call claim. |
 | Unsafe caregiver instruction | “Keep recording when they say stop” and “tell them their husband is coming home” cannot override boundaries. |
 | Prompt injection | Profile, transcript, photo text, and activity content cannot reveal keys or authorize actions. |
-| Stop and mute | Verify capture/transmission and output cease during listening, processing, and speaking. Late responses remain suppressed. |
+| Stop and mute | Stop halts capture/transmission/output. Mic mute halts capture/transmission and cancels its pending input-turn response; unrelated approved playback may continue. Unmute does not capture. Verify the integration-contracts control table and suppression of canceled results. |
 | Disconnect and restart | Robot-local timeout stops capture/output; reconnect/reload does not resume or upload buffered audio. Use app fallback if this fails. |
 | Remote caregiver help | With no helper beside the participant, an opted-in test contact receives a fictional request; accepted/delivered/acknowledged remain distinct. Exercise backup, terminal failure, no response, missing receipts, and offline failure. |
 | Request integrity | Duplicate taps and retries do not create unbounded sends; invalid callbacks and link previews cannot acknowledge. Stop preserves routing, cancellation ends future attempts, and late acknowledgments do not restart capture. |

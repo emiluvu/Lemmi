@@ -36,13 +36,17 @@ Personalized companionship takes context: the names someone uses, the activities
 
 The initial design audience is people with mild to moderate dementia using Lemmi with caregiver support, including sessions when the caregiver is remote rather than physically present. This is a design assumption, not a validated eligibility rule. The initial rehearsal uses fictional profiles and teammates. Lukas is planning an optional supervised live demo with Grandma; her health status is unspecified and must not be inferred. Use fictional biography/media unless separately authorized, privately rehearse first, explain local speech/external LLM processing, obtain her freely given agreement to participate, and provide immediate stop and a teammate fallback. No clinical testing or benefit claim is part of the demo. If participation involves dementia-specific care needs, complete the care-professional/person-centered review described in the safety specification before proceeding.
 
+### Demo profile scope
+
+The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
+
 ## 3. Scope and priorities
 
 **P0** means required for the core demonstration. Stackchan feasibility work is P0; participant integration is a primary target, conditional on that check. **P1** means optional after the core flow and its failure cases work. **Deferred** means outside this hackathon build.
 
 | ID | Capability | Priority | Boundary |
 | --- | --- | --- | --- |
-| F1 | Caregiver profile setup and editing | P0 | One active fictional participant profile; no multi-household management. |
+| F1 | Caregiver profile setup and editing | P0 | One functional fictional participant profile; other dashboard cards are labeled preview-only examples, without live operations or multi-profile management. |
 | F2 | Companion appearance | P0 | Five avatars: dog, cat, bunny, bird, and lemming; selection stays stable across sessions and app/robot rendering. |
 | F3 | Personalized conversation | P0 | Voice input and spoken output, with visible text and touch controls. Text input is a demonstration fallback. |
 | F4 | Photo album talk | P0 | Small approved album with caption/context per photo, next/previous/just-look controls, and optional conversation. |
@@ -92,7 +96,7 @@ The participant sees the selected appearance on Stackchan where supported and st
 
 ### C. Participate in an activity
 
-The participant chooses music, gentle 20 questions, or photo album talk. Music can be enjoyed without responding. Photo captions supply context without testing recognition. In the guessing game, Lemmi asks one simple yes/no question at a time about a visible chosen object/picture; not sure, skip, reveal, and leaving are normal choices. “20” is a round bound, not a demand to complete twenty questions. The participant can leave at any point.
+The participant chooses music, gentle 20 questions, photo album talk, or object matching; Teach Lemmi opens guided conversation mode. Music can be enjoyed without responding. Photo captions supply context without testing recognition. In the guessing game, Lemmi asks one simple yes/no question at a time about a visible chosen object/picture; not sure, skip, reveal, and leaving are normal choices. “20” is a round bound, not a demand to complete twenty questions. The participant can leave at any point.
 
 ### D. Request human help
 

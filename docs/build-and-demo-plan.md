@@ -1,11 +1,21 @@
 # Lemmi — Build and demo plan
 
-**Status:** Rough named-team plan; implementation and checks pending  
+**Status:** Shared mock starter implemented; named feature work and live/hardware acceptance pending
 **Version:** 0.6  
 **Updated:** November 13, 2026  
 **Scope:** Hackathon prototype; optional supervised live demo with Grandma
 
-This plan supersedes the earlier CS 1/CS 2/Engineer 3/Engineer 4 split. It implements the [product](product-spec.md), [experience](experience-spec.md), [safety/privacy](safety-and-privacy.md), [technical](technical-spec.md), and [integration contracts](integration-contracts.md). Event hours and team availability are unknown: replace relative blocks with actual times at kickoff. Nothing below is a claim that software, infrastructure, or safeguards already exist.
+This plan supersedes the earlier CS 1/CS 2/Engineer 3/Engineer 4 split. It implements the [product](product-spec.md), [experience](experience-spec.md), [safety/privacy](safety-and-privacy.md), [technical](technical-spec.md), and [integration contracts](integration-contracts.md). Event hours and team availability are unknown: replace relative blocks with actual times at kickoff. Only the starter evidence explicitly recorded below is implemented/checked. The remaining plan does not establish live infrastructure or product safeguards.
+
+## Demo profile scope
+
+The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
+
+## Starter handoff — November 13, 2026
+
+The initial workspace is implemented; each teammate can clone and run it now using [team-start.md](team-start.md). Do not wait for Anay to recreate the starter. Runtime schemas/client seams, bounded in-memory mock authority, local gateway/fake-device path and a music transition example exist. Type/Svelte checks and the Bun production build have passed. Contract/coordinator/HTTP/WebSocket tests cover the starter subset; see the guide and test files for scope. Full M0 counterpart agreement and M1/M2 live/hardware checks remain pending. No acceptance row below is upgraded to full completion by a mock result.
+
+Start separate feature branches from the shared starter commit. Anay owns subsequent root/tooling/contracts changes; others work in their named slices and request exact missing exports. The initial UI is a disposable development shell for Kylie to evolve; the music example is Lukas’s starting point, not a completed playlist/content implementation.
 
 ## 1. Named ownership and boundaries
 
@@ -28,18 +38,27 @@ First complete slice: fictional profile → robot connection and one voice turn 
 
 Reserve the final quarter of available time for integration/fixes/rehearsal/submission. First integration happens well before this block. A thin milestone is not proof that every P0 criterion is complete.
 
+### Milestones and capacity check
+
+- **M0 — Shared foundation:** running scaffold, schemas/mock clients, one music view, fake device and proposed protocol fixtures. This unblocks parallel work; it is not a completed product.
+- **M1 — First integrated slice:** Alex → real voice turn → music play/pause → factual journal event → real opted-in caregiver request and acknowledgment, with local Stop and browser fallback. This proves integration, not full P0 completion.
+- **M2 — Committed completion:** all four activities, communication presets, preference policy, teaching, approved scene packs, caregiver overview, F13 then F14, and the required access/privacy/failure checks. Do not relabel uncompleted criteria as passed because M1 works.
+- **M3 — Freeze and rehearsal:** final quarter of available time, two full rehearsals, recovery/submission notes and explicit live/mock/unmet status.
+
+At kickoff Lukas records actual event hours and each person’s availability; each owner estimates their next slices and dependencies. Reassess after M0, M1 and hardware/notification gates. If the committed target cannot fit, record the unmet items and a proposed scope change for the team/user; do not silently drop features or spend the freeze on new architecture. No duration in this plan guarantees feasibility.
+
 | Block / gate | Anay | Emilia | Kylie | Lukas | Exit evidence |
 | --- | --- | --- | --- | --- | --- |
 | Kickoff, first 45–60 min | Scaffold minimal workspace/contracts/mocks and choose local host candidate | Inspect firmware/toolchain, report audio/control/display capabilities | Agree routes/tokens and mascot export constraints | Confirm activity IDs/actions, demo availability and private rehearsal plan | Everyone runs one starter path; v1 schemas/sample messages agreed; missing choices recorded |
 | Foundation, next work block | Fake device, minimal gateway/API, local STT/TTS readiness, PostgreSQL, early notification test | One official hardware example, local mute/stop, WSS hello, bounded audio | Layout and one music view from a mock; static mascot state sheet | Pure music state/actions/events and a tiny approved playlist | No separate projects; mocked UI uses the same contracts as live services; host/network blocker known |
 | Camera gate — before F14 polish; beside audio/music slice | Validated check-in schemas/mocks, authorized request/end, relay, session pause and expiry | Official camera + input/display test, local Allow/decline/Stop/deadline, bounded real frames | Permission settings, request/viewer and participant notices from mocks then live | External pause/resume fixtures for all activities; consenting teammate demo scene | Authorized viewer sees fresh real frames; unauthorized/no Allow/stale/reconnect paths fail closed; no frame storage; all results recorded |
-| Preference foundation — before matching integration | F15 memory permission, canonical IDs/policy/client/mocks, storage/forget and cancellation | Consume profile/policy revisions; no firmware memory store | Interests & boundaries/feedback UI from mocks | Reviewed matching pack, pure reducer, first/later uncertainty fixtures | Two fictional profiles isolated; explicit refusal enforced; excerpt-off structured memory and session-only mode distinguished |
+| Preference foundation — before matching integration | F15 memory permission, canonical IDs/policy/client/mocks, storage/forget and cancellation | Consume profile/policy revisions; no firmware memory store | Interests & boundaries/feedback UI from mocks | Reviewed matching pack, pure reducer, first/later uncertainty fixtures | One functional profile; preview IDs cannot access live operations; explicit refusal enforced; excerpt-off structured memory and session-only mode distinguished |
 | First vertical slice | Wire session/speech, activity host, journal write, help worker | Real audio round trip, playback receipt, stop/watchdog | Show real state/events/contact status; browser fallback starts | Exercise music transitions through same reducer; inspect events | A teammate completes the first slice; distinguish live/mock and actual failures |
 | Feature completion — F14 follows passed camera gate | Health schema/ingestion after F13; implement local data/privacy, secure caregiver/profile/media/contact/journal endpoints, external LLM/summary integration | Mascot conversion, stable controls/handoff; local petting, restrained motion/LED cues and measured telemetry after F13 | All participant/caregiver screens and four ActivityView renderers | Photo album then bounded guessing tree, then matching through shared eligibility; content/retired/missing-asset cases | All four activity logic/UI paths integrated; no hidden success fallbacks |
 | Reliability and rehearsal | Real send/ack/failure/backup, deletion races, host restart/laptop fallback | Disconnect/reboot/late audio/mute while speaking or music | Keyboard/zoom/error states; source labels; private/public views | Run full script, Grandma's private optional rehearsal, teammate fallback | Required checks observed, not merely specified; clear go/no-go for public participation |
 | Final-quarter freeze | Fix critical issues, document actual run commands/versions and submission | Freeze tested firmware and provide recovery steps | Freeze assets/layout and projection plan | Lead two complete rehearsals and submission checklist | No new architecture/features; repeatable honest demo and fallback |
 
-Anay has the broadest foundational workload. Unblock the others with thin contracts and mocks first; do not finish every service before sharing a starter. Kylie and Lukas integrate a mocked activity together while Emilia uses a fake gateway. Anay can stub model/summary output explicitly for scaffolding, but must prove real voice/contact before those are presented as working.
+Anay has the broadest foundational workload. His first handoff is the runnable starter, shared validation/error envelopes, mock-client seams and one end-to-end fixture, before completing all backend services. Emilia supplies device/control/camera fixture examples, Lukas supplies activity/context/system-input/receipt and eligibility examples, and Kylie supplies required view/error/preview states. Anay owns canonical schema edits; counterparts review and exercise their fixtures. Record missing exports and the responsible owner. Unblock the others with thin contracts and mocks first; do not finish every service before sharing a starter. Kylie and Lukas integrate a mocked activity together while Emilia uses a fake gateway. Anay can stub model/summary output explicitly for scaffolding, but must prove real voice/contact before those are presented as working.
 
 ## 3. Freeze the handoffs before parallel implementation
 
@@ -128,20 +147,24 @@ The user intends a supervised live demo with Grandma. Her health status is unspe
 - Rehearse privately only after core stop/privacy/data-flow checks pass. If she declines, becomes uncomfortable, is unavailable, or the system is unreliable, use a teammate without explanation about her health or abilities. No feature/demo success criterion requires her participation.
 - End the session explicitly, inspect permitted storage, remove any accidentally entered private information, and do not claim clinical benefit from positive feedback.
 
+### Combined hardware feasibility handoff
+
+Emilia’s early experiment combines camera/display/touch/Wi-Fi and sequential audio→camera→audio operation on the chosen firmware, preserving local controls under load. Share measured format, memory/frame limits and Stop latency with Anay/Kylie before media-contract freeze or full art exports. Failed camera remains disabled and an unmet F13 criterion; browser conversation does not satisfy it.
+
 ## 7. Acceptance tracker
 
 All results start pending. Add a reproduction note, actual configuration and observed result when checked. Unsafe or broken features are fixed/disabled with an honest fallback, not marked passed because a prompt contains a rule.
 
 | Check | Owner | Counterpart | Result |
 | --- | --- | --- | --- |
-| F15 two profiles isolated; explicit refusal/preference precedence; excerpts off versus separate remembering permission | Anay | Kylie + Emilia | Pending |
+| F15 one functional profile; example/unassigned IDs rejected by live services; explicit refusal/preference precedence; separate remembering permission | Anay | Kylie + Emilia | Pending |
 | F16 first/later uncertainty, deduplication, cross-activity alias/distractor exclusion, no deliberate retests | Lukas + Anay | Kylie | Pending |
 | F15/F16 failed save, session-only mode, stale queued prompts and forget/revocation/deletion races | Anay | Emilia + Lukas | Pending |
 | F16 matching UI/device or app handoff, all-ineligible exit, no ability/miss labels | Kylie + Lukas | Emilia | Pending |
 | F17 supplied topic/object teaching, change/not-sure/finish, eligibility and stale response cancellation, no grading | Anay + Lukas | Kylie + Emilia | Pending |
 | Approved scene exploration, source-linked Overview highlights, no-summary/partial/error/privacy cases | Kylie | Anay + Lukas | Pending |
 | Concern phrase fixtures: explicit help, incomplete need, nonspecific unwell, urgent detail, quoted/unclear speech | Anay | Emilia + Kylie | Pending |
-| Shared starter, schemas/mocks, routes, fake device, one contract fixture | Anay | All | Pending |
+| Shared starter, schemas/mocks, routes, fake device; system-input/context/signal/control and Quiet capture fixtures | Anay | All | Pending |
 | F13 real camera request/local Allow/fresh viewer/local Stop/expiry; secure gate before F14 | Emilia | Anay + Kylie | Pending |
 | F13 unauthorized/duplicate viewer/late frame/revocation/disconnect/restart fail closed; no retained images | Anay + Emilia | Kylie | Pending |
 | F13 all activities/audio pause; explicit resume, no stale talk/music; separate camera consent | Lukas | Anay + Kylie | Pending |
@@ -156,7 +179,7 @@ All results start pending. Add a reproduction note, actual configuration and obs
 | Forged callback/access rejected; no acknowledgment on GET/link preview | Anay | Kylie | Pending |
 | No raw mic/generated speech logs; excerpt-off summary; revocation/deletion races | Anay | Emilia + Kylie | Pending |
 | Actual demo-network host access, warm/cold speech benchmark, laptop fallback | Anay | Emilia | Pending |
-| Keyboard/zoom/contrast/readability; robot export size/capture indicator | Kylie | Emilia | Pending |
+| Keyboard/zoom/contrast/readability; preview-only cards cannot perform live actions; robot export size/capture indicator | Kylie | Emilia | Pending |
 | Team rehearsal twice, Grandma readiness or teammate substitution | Lukas | All | Pending |
 
 Keep timing targets from the technical spec; do not silently shorten the listening pause to improve a latency number. Local inference/GPU advantages and the 2–3-second post-explicit-turn target are unverified until measured. Manual help bypasses the LLM and game engine. An app fallback cannot fix an unreachable shared server.
@@ -170,10 +193,12 @@ Five-minute draft; adapt to actual event allowance. Grandma may choose one short
 | 0:00–0:30 | Lukas introduces scope and fictional data | Companion/activities/caregiver continuity; no diagnosis or emergency guarantee |
 | 0:30–1:00 | Anay shows profile and server/speech readiness through Kylie's UI | Local STT/TTS/PostgreSQL, external LLM, verified test contact; no private server console |
 | 1:00–2:00 | Emilia starts Stackchan and one conversation; shows mute/stop | Same backend session; actual capture indication; explicit restart |
-| 2:00–3:15 | Kylie shows activity UI; Lukas explains logic; Grandma optionally chooses a brief segment | Music pause/next, album just-look/talk, one gentle yes/no turn; larger-screen/audio handoff when needed |
+| 2:00–3:15 | Kylie shows activity UI; Lukas explains logic; Grandma optionally chooses a brief segment | Brief tour of all four activities plus teaching entry; demonstrate selected live transitions and explicit larger-screen/audio handoff as needed |
 | 3:15–4:00 | Request help; opted-in teammate acknowledges remotely | Sending/delivery/ack truthful; no claim of arrival; async delays shown honestly |
 | 4:00–4:40 | Anay/Kylie show journal | Typed sources and events, no cognition metrics; no-summary state acceptable if generation failed |
 | 4:40–5:00 | Lukas shows app fallback and rough business direction | Subscription + optional robot sales as future hypothesis; partner packs later; implemented limits named |
+
+The timed stage tour is a subset of acceptance rehearsal, not proof of full completion. Show matching and Teach Lemmi through brief transitions where time permits; cover memory/forget, all activity paths and failure checks in the recorded acceptance tracker before calling M2 complete. Re-time the script against actual event allowance instead of assuming all requirements fit five minutes.
 
 Include a short teammate camera request → local Allow → fresh viewer → Stop demonstration before petting, by shortening other segments or extending only if the event permits. F14 can show one local top-strip reaction and measured device status after camera. No private scene or unpermitted bystanders should be projected. Grandma may decline this segment separately; use a teammate.
 
@@ -200,7 +225,7 @@ A possible later marketplace connects reviewed activity/content companies throug
 | Decision | Owner | State |
 | --- | --- | --- |
 | Event timetable, freeze/submission and demo lead | Lukas + team | Pending |
-| Exact package versions, start commands, runtime contracts/mocks | Anay with all | Pending; no scaffold yet |
+| Exact package versions, start commands, runtime contracts/mocks | Anay with all | Initial scaffold available; pinned Bun 1.4.4, SvelteKit 3.2.0; see team-start.md. Full v1 counterpart freeze pending. |
 | Camera encoding/byte limits, control responsiveness, local Allow/Stop mapping, deadlines and real network streaming | Emilia + Anay + Kylie | Pending hardware experiment; before F14 polish |
 | Firmware route, local input mapping, audio/mascot constraints | Emilia with Anay/Kylie | Pending |
 | Local host, speech engines/voice, external LLM, auth/notification service | Anay | Pending testing |
@@ -221,7 +246,7 @@ The [robot capability spec](robot-capabilities-spec.md) supplements every brief 
 
 F15/F16 are committed additions in [personalization-and-matching-spec.md](personalization-and-matching-spec.md). Four activities are now required; the old sorting design stays superseded. Freeze the memory/eligibility contracts before matching integration, develop matching against typed mocks beside the existing paths, and preserve the camera-before-petting gate. Do not squeeze new scope into the final freeze: re-estimate actual availability at kickoff and report incomplete criteria honestly.
 
-Add a fictional two-session demonstration: a preferred topic is retained with permission, an unwanted topic is avoided, and seeded/labeled prior uncertainty plus a new teammate Not sure retires a canonical object everywhere. Clearly label seeded policy; do not pretend two live sessions occurred. Show Forget and another profile's isolation. This is policy behavior, not proof of memory improvement. Grandma is never asked to produce uncertainty or distress to demonstrate it.
+Add a fictional two-session demonstration: a preferred topic is retained with permission, an unwanted topic is avoided, and seeded/labeled prior uncertainty plus a new teammate Not sure retires a canonical object everywhere. Clearly label seeded policy; do not pretend two live sessions occurred. Show Forget on Alex and labeled preview-only dashboard cards; verify example/unassigned IDs cannot access Alex’s live services using isolated authorization fixtures. Do not present a second functional profile. This is policy behavior, not proof of memory improvement. Grandma is never asked to produce uncertainty or distress to demonstrate it.
 
 ## 15. Confirmed whiteboard work and handoffs
 

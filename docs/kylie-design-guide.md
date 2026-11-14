@@ -7,6 +7,8 @@
 
 This guide turns the [experience specification](experience-spec.md) into pages and design tasks. Read it alongside [integration contracts](integration-contracts.md) and Kylie's brief in the [build plan](build-and-demo-plan.md). Routes below are proposed UI paths, not existing pages. Confirm them with Anay during scaffolding and keep the guide updated if they change. `/v1` remains Anay's backend boundary.
 
+**Starter note:** Shared code now exists; see [team-start.md](team-start.md) for exports and current limitations. Reuse the starter. Requirements in this document remain unverified unless explicitly recorded as observed; typed snapshots do not establish working product/hardware behavior.
+
 ## 1. What Kylie is designing
 
 Lemmi has three interfaces, sharing one visual language and session:
@@ -88,6 +90,10 @@ Use a separate protected caregiver layout with a small navigation set. Forms and
 | `/caregiver/settings` — Device, preferences and data | Tabs/sections: pair/unpair/device state and measured telemetry freshness, separate camera permission/viewer setup, selected appearance, volume/pace/reduced motion/text size, excerpt permission, deletion/reset with specific confirmation | Pairing expired/disconnected/unsupported, destructive action pending/failed/completed. No public SSH/VNC, secret values, provider keys or global server admin controls. |
 
 First-use setup can link through Profile → Approved content → Contacts → Device settings and back to Overview; it does not require a second onboarding application. Provider-hosted auth pages may supply the sign-in step. All private fields remain caregiver-only even when the participant screen is open on another device.
+
+### Dashboard example profiles
+
+The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile. Keep the functional profile visually identifiable. Preview cards have no live status badges or enabled help/camera/session controls. Provide no live profile-switch flow.
 
 ## 5. Shared panels and state variants — not extra pages
 

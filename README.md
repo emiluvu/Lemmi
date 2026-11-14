@@ -10,9 +10,13 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
-**Planning stage.** This repository contains this README, a draft [product specification](docs/product-spec.md), a draft [experience specification](docs/experience-spec.md), a draft [safety and privacy specification](docs/safety-and-privacy.md), a draft [technical specification](docs/technical-spec.md), and a [build and demo plan](docs/build-and-demo-plan.md). The scope below is a proposed starting point for the hackathon; implementation, technology choices, and the remaining specifications are still to be decided.
+**Shared mock starter implemented; product features remain in development.** The repository now includes a pinned Bun/SvelteKit workspace, runtime-validated contracts, typed HTTP/fixture clients, a loopback mock session gateway, participant/caregiver development shells, a small pure music example and a fake-device connector. See [Team start guide](docs/team-start.md) for clone/run commands, implemented seams, limitations and each person’s first task. No firmware, real audio/media, caregiver authentication, database, external AI, real notifications or camera streaming is implemented. The broader specifications remain the target, not a claim of completed P0 behavior.
 
 Lemmi is an experimental prototype. It has not been clinically evaluated and does not diagnose, treat, assess cognitive decline, or replace caregivers or medical professionals. Use fictional profiles and team rehearsal. Lukas is also planning an optional supervised live demo with Grandma after private rehearsal and her agreement; her health status is unspecified, and a teammate fallback is always available. Testing with people living with dementia requires further care-professional review and participant involvement in the design.
+
+## Demo profile scope
+
+The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
 
 ## Who we are designing for
 
@@ -77,7 +81,7 @@ The demo should show that a participant can take part comfortably, stop easily, 
 | Anay | Backend API/realtime server, local speech, external LLM integration, local database, auth/contact/journal and deployment. |
 | Emilia | Stackchan audio/local controls/mascot/WSS; camera check-ins first, then top-strip petting, restrained reactions/motion, status cues and device health. Anay supplies access/relay; Kylie supplies viewer/art; Lukas integrates activity pausing. |
 | Kylie | Art, UI design and all frontend, including views on top of Lukas's activity logic and caregiver screens. |
-| Lukas | Music/20-questions/photo activity implementations and approved content; demo planning with Grandma and teammate fallback. |
+| Lukas | Music/20-questions/photo/matching logic, teaching prompts and approved content; demo planning with Grandma and teammate fallback. |
 
 The rough business idea is a subscription service plus optional robot sales, retaining app-only use. A later reviewed marketplace may involve suitable activity/content partners. Pricing, customers and partners are unvalidated; billing, public plugins and marketplace integrations are outside the hackathon build.
 
@@ -89,9 +93,31 @@ The backend, PostgreSQL, and local speech-to-text/text-to-speech models will run
 
 For the live demo, test from the actual venue network, prepare a laptop fallback, and keep the server powered and awake. Authorized SSH/VNC can administer the server; participants and caregivers use the robot/app. Hosting and speech processing are not performed on the ESP32.
 
-There is no runnable application yet. Installation commands, environment variables, supported hardware, and local development instructions will be added after the stack and integrations are selected.
+The shared starter is ready to clone. Install [Bun 1.4.4](https://bun.sh/docs/installation) (the version in `.bun-version`), then:
 
-Before implementation, agree on the demo scope, safety behavior, and shared data and interface contracts using the documents below.
+```sh
+git clone https://github.com/emiluvu/Lemmi.git
+cd Lemmi
+bun install --frozen-lockfile
+bun run dev
+```
+
+Open **http://127.0.0.1:5173/**. The same command starts the mock gateway at `127.0.0.1:3001`. No API keys, database or `.env` file are needed for this local starter. Each teammate runs their own local copy. Keep it loopback-only; these caregiver pages are mock UI, not authenticated live services.
+
+If Bun is not installed but Node/npm is available, use `npx --yes bun@1.4.4 install --frozen-lockfile` and `npx --yes bun@1.4.4 run dev`. This downloads Bun to npm’s cache without a global installation. Do not run `npm install` or generate a second lockfile.
+
+In a second terminal:
+
+```sh
+bun run check
+bun run test
+bun run build
+bun run fake-device
+```
+
+`fake-device` needs the running gateway and opens no mic/camera. Disconnecting it pauses the shared mock session. `check`, `test` and `build` run independently of the dev server. See the [team start guide](docs/team-start.md) before beginning a feature; use your named brief and preserve the existing scaffold.
+
+Before extending a shared interface, agree the change with its owner and update schemas, fixtures, tests and consumers together. The starter is a baseline for parallel work, not a full v1 protocol freeze.
 
 ## Planned documentation
 

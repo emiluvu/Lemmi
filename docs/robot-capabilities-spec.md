@@ -4,6 +4,8 @@
 **Updated:** November 12, 2026  
 **Owners:** Emilia (firmware), Anay (server/access/contracts), Kylie (UI/art), Lukas (activity integration/demo)
 
+**Starter note:** Shared code now exists; see [team-start.md](team-start.md) for exports and current limitations. Reuse the starter. Requirements in this document remain unverified unless explicitly recorded as observed; typed snapshots do not establish working product/hardware behavior.
+
 ## 1. Scope and priority
 
 Implement these additions in this order, using the existing backend and session authority:
@@ -19,7 +21,7 @@ This spec supersedes earlier statements excluding camera from the initial build.
 
 The [manufacturer's K151 documentation](https://docs.m5stack.com/en/StackChan) describes a factory Monitoring Camera feature in Avatar mode. It does not establish that this works alongside the AI Agent mode or in our custom firmware. Build Lemmi's controlled camera path; do not depend on a separate factory mobile app or expose a raw camera address.
 
-Emilia first tests the [official camera example](https://docs.m5stack.com/en/arduino/stackchan/camera), then the display, touchscreen/stop input, Wi-Fi and camera together. Record the exact board/firmware/library versions, initialization order, image encoding, memory use, frame size, latency, power and control responsiveness. The example's camera/I²C initialization must be checked against touch and other peripherals. Camera availability alone is not proof of integration.
+Emilia first tests the [official camera example](https://docs.m5stack.com/en/arduino/stackchan/camera), then the display, touchscreen/stop input, Wi-Fi and camera together. Also exercise the audio path on the same firmware in sequence: voice → coordinated audio shutdown → camera → local Stop → explicit return to audio. Audio and camera need not run simultaneously. Verify bounded memory, peripheral initialization/resource reuse, TLS/network load, and worst-case Stop responsiveness while frames render/transmit. Report usable capabilities before Kylie exports the full avatar set or Anay freezes media formats. Record the exact board/firmware/library versions, initialization order, image encoding, memory use, frame size, latency, power and control responsiveness. The example's camera/I²C initialization must be checked against touch and other peripherals. Camera availability alone is not proof of integration.
 
 Start with a proposed **320 × 240, 1–3 frames/second** stream of independent frames; select encoding and hard byte limits from measured hardware results before freezing the contract. These are experiment targets, not performance claims. Prefer fewer fresh frames over queued old frames. If the camera cannot coexist reliably with essential local controls, keep check-ins disabled and record the unmet F13 criterion; an app-only conversation fallback does not satisfy camera acceptance.
 

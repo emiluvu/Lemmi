@@ -1,10 +1,16 @@
 # Lemmi — Integration contracts and handoffs
 
-**Status:** Draft implementation contract, pending kickoff confirmation  
+**Status:** Starter baseline implemented; full v1/provider/hardware contract freeze pending
 **Version:** 0.1  
 **Owners:** Anay (server/contracts), Emilia (device contract), Lukas (activity contract), Kylie (views/assets)
 
-This is the small shared implementation reference for all four Codex workstreams. Read it with the [technical specification](technical-spec.md) and [build plan](build-and-demo-plan.md). The interfaces below are proposed, not existing exports. At kickoff, Anay scaffolds them with runtime validation and mocks, then the team freezes version 1. Change the contract and consumers together; do not invent a second protocol or backend when an interface is missing.
+This is the small shared implementation reference for all four Codex workstreams. Read it with the [technical specification](technical-spec.md) and [build plan](build-and-demo-plan.md). The initial exports now exist in `packages/contracts/`, alongside a minimal pure music example and single mock coordinator. See [team-start.md](team-start.md) for the exact implemented subset. The prose below includes required future extensions: not every field/event/adapter is implemented. Anay maintains the baseline; freeze the complete version 1 only after counterpart and hardware checks. Change the contract and consumers together; do not invent a second protocol or backend when an interface is missing.
+
+## Implemented transport baseline
+
+`ServiceClients`, `createClients`, `createHttpTransport` and `createFixtureTransport` are exported from `@lemmi/contracts`. The local mock path uses POST `/v1/mock/<operation>` through SvelteKit to the loopback gateway’s internal adapter. These are development RPC endpoints, not replacements for the specified production resource routes. `/v1/live/<operation>` explicitly returns UNAVAILABLE; it never falls back to mocks. Browser subscriptions currently poll the same authority once per second and return an unsubscribe function; a production event stream remains Anay’s task.
+
+`DeviceEventSchema` and `ServerEventSchema` cover the initial fake-device hello/heartbeat/control/snapshot path. The fake client uses local `ws://` and a development-only token, not production pairing or TLS. Camera frame/health/control shapes and UI snapshots are preliminary schemas; media ingestion, camera authorization/streaming, teaching execution and learned-preference policy remain unavailable. Treat numeric media limits as proposed targets until measured. The web app uses SvelteKit 3: `vite.config.ts`, `#lib/*` imports and `$app/tsconfig`, not a new `svelte.config.js` or older aliases.
 
 ## 1. One system, four ownership areas
 
@@ -13,7 +19,7 @@ This is the small shared implementation reference for all four Codex workstreams
 | Anay | `apps/web/src/routes/v1/`, `apps/web/src/lib/server/`, `apps/realtime/`, `apps/worker/`, `packages/server/`, `db/`, root tooling | Emilia's device events; Lukas's pure activity module | HTTP/WSS, session coordination, local STT/TTS, external LLM, auth/data/contact/journal services, typed mocks |
 | Emilia | `firmware/stackchan/`, device test fixtures, robot asset conversion | Versioned device protocol; Kylie's mascot exports | Robot audio transport, capture indicator, local mute/unmute/stop, reconnect/watchdog behavior, compatible mascot rendering |
 | Kylie | `apps/web/src/lib/features/`, page/layout components outside `/v1`, shared UI/assets | ActivityView and journal/profile/help clients | Participant and caregiver UI, art/tokens, browser audio client, accessible controls and all loading/error states |
-| Lukas | `packages/activities/`, reviewed activity content, demo materials in the build plan | Shared activity schemas; approved asset metadata | Music/guessing/photo logic, tests, public view projection, factual event outputs, supervised live-demo plan |
+| Lukas | `packages/activities/`, reviewed activity content, demo materials in the build plan | Shared activity schemas; approved asset metadata | Music/guessing/photo/matching logic, teaching prompts, tests, public view projection, factual event outputs, supervised live-demo plan |
 
 Anay owns package setup, migrations and server authorization. Kylie owns app navigation/design/shared UI. Emilia and Anay jointly agree wire-level device changes. Lukas and Kylie jointly agree activity presentation fields. A shared file has one editing owner at a time; request the needed change by exact type/export name. These boundaries do not block routine edits already assigned by the user.
 
@@ -83,7 +89,7 @@ Anay hosts the authoritative activity state alongside the session coordinator. S
 
 Kylie renders only `ActivityView` and submits its typed actions. Do not copy game rules into Svelte components. UI may hold pending/loading presentation state; backend snapshots remain authoritative. Fake clients must call the same pure module/fixtures where useful, not independently reimplement the games.
 
-Effect types are an allowlist, initially `speak_approved_text`, `play_approved_track`, `stop_media`, `offer_photo_conversation`, and `request_listening`. Effects are proposals, not permission: Anay checks current session generation, privacy revision, asset access, and endpoint lease before execution. An LLM cannot invent effect types, asset URLs, contact destinations, or motor commands.
+Effect types are an allowlist, initially `speak_approved_text`, `play_approved_track`, `stop_media`, `offer_photo_conversation`, and `request_listening`. F15/F16 extend this allowlist with `preference.signal` and `item.uncertain`, carrying only canonical IDs and supported presentation evidence, never raw utterances. Effects are proposals, not permission: Anay checks current session generation, privacy revision, asset access, and endpoint lease before execution. An LLM cannot invent effect types, asset URLs, contact destinations, or motor commands.
 
 `photo.talk` requests Anay's existing conversation path with the approved current photo context. Guessing uses a small reviewed question tree/candidate set first; free-form LLM game generation is deferred. No private biography is needed for guessing. Only approved playlist IDs/files can be played; the model cannot choose an arbitrary external stream.
 
@@ -94,17 +100,43 @@ Implement runtime-validated discriminated activity states and views rather than 
 Proposed pure interfaces:
 
 ```ts
-createActivity(input: StartActivityInput, content: ApprovedPack): ActivityState;
+interface ActivityContext {
+  eligibility: EligibilitySnapshot; // current server-filtered content/entity IDs
+  presentationPolicy: ActivityPresentationPolicy; // bounded effective support config
+}
+
+type ActivitySystemInput =
+  | { type: 'system.pause'; reason: 'participant' | 'camera' | 'help' | 'disconnect' | 'handoff' | 'config_change' }
+  | { type: 'system.resume' }
+  | { type: 'system.end'; reason: 'stop' | 'session_end' | 'revoked' }
+  | { type: 'system.eligibility_changed' }
+  | { type: 'system.playback_receipt'; receipt: ValidatedPlaybackReceipt };
+
+createActivity(input: StartActivityInput, content: ApprovedPack,
+               context: ActivityContext): ActivityState;
 reduceActivity(state: ActivityState, action: ActivityAction,
-               content: ApprovedPack): ActivityTransition;
-projectActivity(state: ActivityState, content: ApprovedPack): ActivityView;
+               content: ApprovedPack, context: ActivityContext): ActivityTransition;
+applyActivitySystemInput(state: ActivityState, input: ActivitySystemInput,
+                         content: ApprovedPack, context: ActivityContext): ActivityTransition;
+projectActivity(state: ActivityState, content: ApprovedPack,
+                context: ActivityContext): ActivityView;
 ```
+
+These function exports now exist in `packages/activities/` for the starter music example. The other three reducers remain unimplemented, with unavailable view fixtures; their placeholder states and pack schemas must be extended with Lukas before those games can run. Anay and Lukas freeze the discriminated context, presentation policy, receipt and transition schemas together. `ValidatedPlaybackReceipt` binds instance, effect/stream ID, current generation/lease, sequence and actual endpoint playback state; only Anay accepts and normalizes endpoint receipts before reducer dispatch. Clients cannot submit `ActivitySystemInput` through activity-action routes. Anay maps authorized session/device events to system inputs and serializes them with participant actions. Lukas owns their pure state transitions; session authority remains Anay’s.
+
+Pause preserves position and produces no new playback/listening/progression; Anay cancels pending effects before dispatching it. Resume requires an explicit participant command, returns the activity to ready at its retained position and never replays old effects. End is terminal. While paused, reject ordinary progression actions; eligibility updates may safely remove excluded content without speech/progression. If the current item becomes ineligible, clear it and return a safe empty/ready view, retaining paused status until explicit Resume. Generation/lease/revision checks reject delayed receipts, which cannot reactivate a paused/ended activity. Any required clock/random input is explicit and deterministic.
+
+Context is required for creation, transitions and projections, including matching, so excluded targets, alternatives and prompts cannot leak through a view-only path. Refresh it on policy changes before more actions/output. An unavailable required eligibility snapshot is an explicit unavailable state, never an unrestricted fallback. Presentation IDs/revisions come from the coordinator and accompany matching views/evidence. The existing `ActivityAction` remains participant-only; stop/help/mute never become game actions.
 
 `ActivityTransition` returns `nextState`, `events`, and `effects`, each validated against shared schemas. Instance/session/revision/command IDs come from the coordinator; reducers cannot mint authorization or declare playback succeeded. `ApprovedPack` is a discriminated pack: music tracks, album entries with caption/context, a bounded guessing tree/candidate set, or matching samples/choices with canonical entity tags. Resolve media bytes through the server asset adapter, not inside the reducer. Do not import server-only pack metadata into a participant bundle if it contains private captions/guidance.
 
 Serialize per-instance actions. A first valid command increments revision once; a retry with the same ID returns its prior result, not a second transition. An old revision returns `REVISION_CONFLICT` with the current safe snapshot. Each effect has a stable ID associated with that committed transition, and the executor deduplicates it before playing audio. After pause/stop/handoff, invalidate the generation/lease before processing more effects. A client animation or network retry cannot count as an additional question, advance two photos, or play the same track twice.
 
 Shared fixture set: music ready/playing/paused/failed; guessing yes/no/not-sure/skip/reveal/round end; album next/previous/just-look/talk/missing caption/image; duplicate action, stale revision, session stop during pending effect. Lukas owns pure transition checks; Anay owns orchestration/retry/privacy checks; Kylie and Emilia exercise the same fixtures in their clients.
+
+### Required seam checks
+
+Exercise all four activities with participant actions interleaved with system pause/resume/end, policy updates and validated playback receipts. Reject client-forged system inputs, duplicate/stale receipts and actions after end; resume must not replay effects. Verify filtering of matching targets/distractors and photo/guessing/music prompts in every projection, plus both preference-signal effects and save failures. Use the same fixtures in Anay’s host and Kylie/Emilia clients. Check mic mute during pending recognition/generation separately from unrelated approved playback; Quiet completion and unmute remain capture-off.
 
 ## 4. HTTP and event seam
 
@@ -128,9 +160,24 @@ Begin with the technical specification's protocol v1 and negotiate actual firmwa
 
 Local mute immediately stops capture/transmission. Unmute clears the mute setting but does not itself start recording; capture additionally requires an explicit/current valid listening state. Local stop clears capture/playback queues. Network acknowledgments never override a local stopped/muted condition. Show actual capture state on the robot. Disconnect/reboot begins muted or capture-off, with explicit restart; no audio backlog uploads.
 
-One endpoint owns output at a time, whether it is speech or music. Pause/stop/help/mute and handoff rules must be tested against pending music and speech jobs. During music playback, microphone capture is off. To talk, explicitly stop/pause music first. No simultaneous microphone capture, music, and TTS in the first build. Muting the microphone alone does not mute music; label controls separately. Session pause/stop/help silence music as well as speech. Preserve the track/position where supported and resume only explicitly.
+One endpoint owns output at a time, whether it is speech or music. Apply the shared control-semantics table below to pending music and speech jobs; microphone mute cancels its input turn but does not globally invalidate unrelated output. During music playback, microphone capture is off. To talk, explicitly stop/pause music first. No simultaneous microphone capture, music, and TTS in the first build. Muting the microphone alone does not mute music; label controls separately. Session pause/stop/help silence music as well as speech. Preserve the track/position where supported and resume only explicitly.
 
 If robot music playback is not feasible, use an explicit companion-screen audio handoff and indicate the active speaker. Do not play the same track on both. Browser autoplay restrictions must be handled by user-initiated playback and a visible recovery state.
+
+### Shared control semantics
+
+This table governs firmware, browser and server behavior. Local capture/output restrictions apply before network acknowledgment; stale commands cannot undo them. Cancellation of capture invalidates the affected input turn/results; it need not invalidate unrelated music output. Use separate input-turn and output validity rather than treating every mute as a global playback cancellation.
+
+| Control | Capture and pending input | Speech/music output | Camera and activity | Next step |
+| --- | --- | --- | --- | --- |
+| Mic mute | Immediately stop capture/transmission, discard unsent capture and cancel its pending turn/results | Existing approved speech/music may finish or continue; mute does not itself stop output | No camera consent/state change; does not advance or pause the activity | Remain capture-off |
+| Mic unmute | Clear mute setting only; never open capture | No output restart | No camera/activity change | A fresh explicit Speak now or valid explicit start is required |
+| Pause | Stop capture and cancel pending turns | Stop/flush speech/music and invalidate queued effects | Pause activity at its position; does not authorize or end an already active camera check-in | Explicit Resume returns to ready; capture/playback requires a fresh action |
+| Global Stop | Stop/flush capture and cancel all pending turns | Stop/flush speech/music and queued motion | End camera locally and end session/activity | New explicit session start only; initiated help requests remain independent |
+| Stop camera | Keep capture off | Keep speech/music off | End camera locally, clear frames, leave activity paused | Explicit Resume, then a fresh speak/play action |
+| Get help | Stop capture and cancel pending turns | Stop/flush ordinary speech/music; only current fixed help-status output may run afterward | End camera locally and pause activity; initiate fixed contact routing | No automatic resume; request cancellation is separate |
+
+Disconnect/watchdog stops capture, output, camera and motion locally, invalidates stale work, and requires explicit continuation after reconciliation. Mic mute must not be used as a substitute for Pause/Stop or advertised as camera-off. If a capture turn caused pending model/TTS work, muting cancels that work; unrelated already-approved playback is governed by its own output token. Tests must distinguish these cases.
 
 ## 6. Asset handoff: Kylie → Emilia/Lukas/Anay
 
@@ -144,7 +191,7 @@ Create an asset manifest with ID/version, purpose, dimensions, encoding, file si
 
 ## 7. Contract freeze, integration, and done
 
-Before feature parallel work, Anay creates validated shared types, a minimal running app/gateway, clients/mocks, and a contract fixture. Emilia and Lukas verify their seams; Kylie runs one screen against each mock. Missing scaffolding is a foundation task owned by Anay, not a reason for three independent projects.
+The starter now supplies initial validated shared types, a running local app/gateway, clients/fixtures, subscriptions by non-overlapping polling, and a contract fixture. Reuse it; Anay completes the missing schemas/live adapters rather than starting another scaffold. Emilia and Lukas verify their seams; Kylie runs one screen against each mock. Missing scaffolding is a foundation task owned by Anay, not a reason for three independent projects.
 
 First integration proves: app starts session → robot receives state → microphone turn reaches local speech/backend → response plays → music starts/stops through shared lease → activity event appears in journal → help bypasses the LLM. Then add photo and guessing through the same interfaces, not new paths.
 
@@ -156,13 +203,15 @@ Open selections: exact firmware/engine/voice, accessible device controls, approv
 
 Use the caregiver-configured `CommunicationSupport` enum/schema and session-snapshot/application rules in [communication-support-spec.md](communication-support-spec.md). Anay owns schema/authorization/config resolution; Kylie owns the single selector/preview component in caregiver profile; Lukas consumes a bounded presentation policy; Emilia follows effective session speech/control settings. Add three same-topic preview fixtures, conflict/unauthorized/save-failure cases and apply-now stale-output checks before connecting all clients. No second local slider store, diagnosis field or automatic staging is introduced.
 
+In Quiet companionship, completion of speech returns to capture-off `waiting`; never automatically open another listening turn. A participant’s explicit Speak now starts one turn and its response returns to waiting. Conversational/Guided may continue into listening after speech only under a current explicit server capture grant and valid local permissions/state. Firmware/browser clients never start capture merely because playback ended. Stop/pause/mute/camera/help override every preset; unmute alone never restores a capture grant.
+
 ## 9. Camera-first device extension — Anay ↔ Emilia ↔ Kylie ↔ Lukas
 
 Adopt the shared schemas/state machine, `/v1` check-in routes and event names in [robot-capabilities-spec.md](robot-capabilities-spec.md) before freezing protocol v1. **F13 precedes F14**. Anay supplies `CheckInClient` (request, status/subscribe, end), mock/real implementations, authorization, relay and coordinated session pause. Emilia supplies hello capabilities, local consent nonce/Allow/decline, capture/stop/deadline enforcement and real frames. Kylie renders the same snapshots in caregiver viewer and participant panels. Camera state is independent of audio mute and ActivityView; no duplicate frontend authority.
 
 Add fixtures for default disabled, unauthorized, awaiting Allow, declined, start timeout, active/fresh, stale, expiry, local Stop/help, revoked access, duplicate viewer, server/device reconnect and late start/frame. No mock fixture contains real photos. Media remains a separate bounded authenticated channel on the existing gateway; only access metadata is durable.
 
-Lukas supplies externally imposed pause/resume transitions for all activities; Anay invalidates pending effects and freezes progression during the check-in. Ending video does not auto-resume. Kylie renders paused state without advancing a question/track/photo. After F13 gates, Emilia adds local `pet_ack` rendering and validated `device.health` telemetry; Kylie supplies overlays and health views, Anay validates fields, Lukas confirms no pet changes activity state. Keep shared generation/revision conventions and update consumers/fixtures together.
+Lukas supplies `applyActivitySystemInput` pause/resume/end/eligibility/validated-receipt transitions for all activities; Anay invalidates pending effects and freezes progression during the check-in. Ending video does not auto-resume. Kylie renders paused state without advancing a question/track/photo. After F13 gates, Emilia adds local `pet_ack` rendering and validated `device.health` telemetry; Kylie supplies overlays and health views, Anay validates fields, Lukas confirms no pet changes activity state. Keep shared generation/revision conventions and update consumers/fixtures together.
 
 ## 10. Preference memory and matching extension (F15/F16)
 
@@ -170,7 +219,7 @@ Lukas supplies externally imposed pause/resume transitions for all activities; A
 
 Anay supplies one Preferences client, runtime schemas and mocks before consumers; Lukas receives eligible reviewed content and returns pure matching transitions plus allowlisted signal proposals; Kylie renders matching and Interests & boundaries; Emilia cancels obsolete narration/views after a policy/profile revision. Only the server commits retirement/preferences. Positive pattern markers and uncertainty markers are bounded and idempotent, never append-only performance histories. Canonical retirement filters all activity/proactive topic selection, not just matching.
 
-Freeze fixtures for two separate profiles, preferred versus avoid precedence, explicit refusal, first/later uncertainty, duplicate signal, retired alias/distractor, all-ineligible content, remembered/session-only modes, failed save, stale eligibility, explicit undo, forget/revocation/deletion while output is pending, and camera pause/resume. No raw utterances in durable fixtures/events. Journal summary sources remain unchanged; memory is a separately permitted category.
+Freeze fixtures for Alex’s functional profile and rejected example/unassigned IDs, preferred versus avoid precedence, explicit refusal, first/later uncertainty, duplicate signal, retired alias/distractor, all-ineligible content, remembered/session-only modes, failed save, stale eligibility, explicit undo, forget/revocation/deletion while output is pending, and camera pause/resume. No raw utterances in durable fixtures/events. Journal summary sources remain unchanged; memory is a separately permitted category.
 
 ## 11. Confirmed whiteboard extension: teaching, scene packs and overview
 

@@ -5,6 +5,8 @@
 **Research reviewed:** November 11, 2026  
 **Owners:** Anay (policy/schema/enforcement), Kylie (caregiver UI/preview), Lukas (activity presentation), Emilia (device/speech behavior)
 
+**Starter note:** Shared code now exists; see [team-start.md](team-start.md) for exports and current limitations. Reuse the starter. Requirements in this document remain unverified unless explicitly recorded as observed; typed snapshots do not establish working product/hardware behavior.
+
 ## 1. Recommendation and evidence boundary
 
 Implement the requested sliding control as **Conversation support**, with three named positions, rather than a numerical “dementia severity” score. This selects how Lemmi communicates, not a diagnosis, disease stage, capacity assessment, or automatic judgment of ability. The supported initial audience remains unchanged; selecting a quieter preset does not establish suitability for unsupervised use or later-stage dementia.
@@ -61,6 +63,8 @@ Use the selected local TTS voice, with any manual pace adjustment bounded to tes
 
 Keep known short fallback/status phrases in the appropriate style. Immediate stop/help/error instructions may exceed a normal brevity target when needed for accurate meaning; a Quiet setting must not suppress important status or send failures. Warm local model behavior and cancellation still require actual hardware tests.
 
+In Quiet companionship, completion of speech returns to capture-off `waiting`; never automatically open another listening turn. A participant’s explicit Speak now starts one turn and its response returns to waiting. Conversational/Guided may continue into listening after speech only under a current explicit server capture grant and valid local permissions/state. Firmware/browser clients never start capture merely because playback ended. Stop/pause/mute/camera/help override every preset; unmute alone never restores a capture grant.
+
 ## 5. Schema and runtime contract
 
 Proposed profile settings:
@@ -104,6 +108,8 @@ Kylie adds a **Conversation support** section to `/caregiver/profile` (same comp
 - Music listening and photo just-look work without answers; guessing always allows not-sure/skip/reveal/exit.
 - Journal displays a caregiver configuration choice and relevant session context, not a diagnostic trend.
 - Test speech/language/sensory preferences independently; a higher support position does not expand clinical eligibility.
+
+- Quiet speech completion stays capture-off until explicit Speak now; muted/unmuted and stale playback-completion events cannot reopen capture. Conversational/Guided clients also require a current server capture grant.
 
 Rehearsal feedback and care-professional/lived-experience review should refine the presets. No source reviewed here establishes that these exact three modes improve outcomes or are suitable for every person living with dementia.
 

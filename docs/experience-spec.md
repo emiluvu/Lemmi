@@ -42,7 +42,7 @@ Before transferring an activity to a larger screen, Lemmi explains the change, f
 | Caregiver | Profile editor → preview | Save profile, approve photo context, choose communication preferences. |
 | Participant | Home → appearance chooser | Keep or explicitly change the companion appearance. |
 | Participant | Home → conversation | Start talking, pause, stop, or ask for help. |
-| Participant | Home → activity chooser → music, gentle 20 questions, or photo album talk | Choose, participate, request a hint, or leave. |
+| Participant | Home → activity chooser → music, gentle 20 questions, photo album talk, or matching; Teach Lemmi → conversation mode | Choose, participate, request a hint, or leave. |
 | Participant | Paused / help panel / session ended | Resume explicitly, stop, or return home. |
 | Caregiver | Journal list → session detail | Review events, edit a summary, add an observation. |
 | Caregiver | Contact settings and request inbox | Verify contacts, configure escalation, inspect request status, and acknowledge requests. |
@@ -51,6 +51,10 @@ Before transferring an activity to a larger screen, Lemmi explains the change, f
 | Caregiver | Demo settings | Inspect connection status, select isolated simulation mode, reset fictional data. |
 
 The production-shaped web flow has separate participant and protected caregiver areas. Participants do not sign in; the caregiver sets up the device/app assignment. Caregivers use a simple sign-in to access profile, contact, and journal controls. Role selection in mock-only rehearsal is a convenience, not an authentication boundary. Real test contact settings and remote acknowledgment require authentication independent of this role switch. Never suggest that it protects real personal information. Switching the shared participant device into caregiver view first pauses capture and output. Opening caregiver view on a separate remote device does not itself pause or take over the participant session. Returning requires an explicit resume action.
+
+### Dashboard example profiles
+
+The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
 
 ### Persistent participant controls
 
@@ -118,7 +122,9 @@ For the initial demo, use turn-based voice interaction: capture audio only in th
 | Unavailable | “Talking is unavailable right now” | Off | Offer retry, text input when applicable, and return home. |
 | Ended | “We've stopped. Microphone off.” | Off | Save journal and offer home. Never restart automatically. |
 
-After a completed spoken response, transition visibly into listening for the next turn. If an existing voice session changes to an activity, announce the change and apply the activity's capture rules. Voice capture is off during music playback or just-look.
+After a completed spoken response, use the effective preset’s turn policy: Conversational/Guided may transition visibly into listening under a current server capture grant; Quiet transitions to capture-off waiting. If an existing voice session changes to an activity, announce the change and apply the activity's capture rules. Voice capture is off during music playback or just-look.
+
+In Quiet companionship, completion of speech returns to capture-off `waiting`; never automatically open another listening turn. A participant’s explicit Speak now starts one turn and its response returns to waiting. Conversational/Guided may continue into listening after speech only under a current explicit server capture grant and valid local permissions/state. Firmware/browser clients never start capture merely because playback ended. Stop/pause/mute/camera/help override every preset; unmute alone never restores a capture grant.
 
 ### Proposed timing defaults
 
@@ -183,6 +189,8 @@ Show one large approved photo, its caption, **Next photo**, **Previous photo**, 
 **Just look** leaves the photo visible with capture off and no repeated prompt. **Talk** enters Anay's conversation pipeline with the approved current photo context; Lukas does not build another LLM service. Moving photos invalidates pending responses tied to the previous photo. Image failure offers retry/next/exit without invented descriptions; album position survives explicit robot/app handoff.
 
 ## 7. Pause, stop, and help
+
+Use the shared control table in [integration contracts section 5](integration-contracts.md#5-audio-and-device-seam-emilia--anay). Mic mute stops capture and its pending input-turn response, not unrelated approved music/speech or camera; unmute only clears mute and requires a fresh explicit speaking action. Pause silences output; global Stop ends camera and session; Stop camera leaves the activity paused. Keep these controls separately labeled.
 
 ### Pause and resume
 

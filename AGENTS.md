@@ -4,7 +4,11 @@
 
 Lemmi is a hackathon companion for familiar conversation, enjoyable activities, and caregiver continuity for people living with dementia. Stackchan K151 is the preferred participant interface where feasible. The app provides caregiver setup, notifications, and journal review, plus larger activity visuals and a complete standalone participant fallback. A caregiver may be remote; do not assume someone is beside the participant.
 
-The repository currently contains planning documents. Do not mistake proposed architecture, folder paths, commands, safeguards, or provider choices for implemented behavior. Inspect the actual tree and configuration before starting. Use the project/companion name Lemmi. The exact five avatars are dog, cat, bunny, bird, and lemming; stable IDs match these lowercase names. Reduced motion is a setting for all five, not a sixth neutral avatar.
+The repository contains planning documents and a runnable local mock starter. Read [team-start.md](docs/team-start.md) before implementation; reuse its workspace, packages, clients and commands. Do not mistake proposed architecture, folder paths, commands, safeguards, or provider choices for implemented behavior. Inspect the actual tree and configuration before starting. Use the project/companion name Lemmi. The exact five avatars are dog, cat, bunny, bird, and lemming; stable IDs match these lowercase names. Reduced motion is a setting for all five, not a sixth neutral avatar.
+
+## Demo profile scope
+
+The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
 
 ## Read the relevant specifications
 
@@ -48,7 +52,7 @@ Follow [robot-capabilities-spec.md](docs/robot-capabilities-spec.md): implement 
 - Run the backend, PostgreSQL, and local STT/TTS models on a selected team-managed lab desktop, laptop, or homelab. The lab desktop is a preferred candidate to test, not a verified latency winner. Keep the LLM external. Verify the actual demo network and laptop fallback; no STT/TTS inference is required on the ESP32. Anay owns speech/model integration and server/database deployment; Emilia owns device transport/local control.
 - Use one shared backend and session authority, one active audio endpoint, typed validated contracts, and replaceable speech/model/notification/device adapters. Do not add an agent framework, vector database, microservices, or public executable plugins without a concrete task need.
 - Follow the technical specification's proposed layout when scaffolding. Keep feature code in its assigned slice. Keep mocks explicit and isolated; never convert a failed live request into fake success.
-- Inspect manifests and lockfiles before installing or running tools. No run/build/test commands exist yet; establish real commands during scaffolding and document them in the README. Do not invent commands or claim they ran.
+- Inspect manifests and lockfiles before installing or running tools. Use the pinned Bun version, `bun install --frozen-lockfile`, and the existing `dev`, `check`, `test`, `build` and `fake-device` scripts. Preserve the Bun lockfile; do not recreate tooling or introduce npm/yarn lockfiles. Do not invent commands or claim they ran.
 - Use fictional fixtures, including approved photo context. Real contact details belong in protected configuration/storage, not fixture files. NFC, always-on listening, face identification, and microphone/generated-speech/video recording are outside the initial build. Camera is now committed as short, authorized, locally accepted caregiver check-ins, not continuous monitoring. Approved static music assets with source/permission metadata are allowed and are not microphone recordings.
 - TurtleBot is deferred under the named-team plan, with no current implementation owner. Subscription + robot sales and reviewed partner marketplace are business hypotheses, not billing/commerce/plugin tasks. Keep a declarative activity-pack seam; no public executable packs or third-party patient-data access.
 
@@ -62,6 +66,10 @@ Follow [robot-capabilities-spec.md](docs/robot-capabilities-spec.md): implement 
 - One endpoint owns music or speech playback; never overlap microphone capture/music/TTS in the first build. Session pause/stop/help silence music and speech; mic mute has a distinct label and controls capture. Unmute alone does not start capture. Local stop/mute must work without a model or server round trip. Capture only during the visible listening state. Pause, stop, disconnect, restart, and handoff invalidate stale capture/output work; late results cannot resume interaction. Verify actual device behavior before claiming independent robot use.
 - Manual help bypasses model generation and journal saving. Use verified recipients and application-owned routing. Distinguish request creation, provider acceptance, reported delivery, authenticated acknowledgment, and human-recorded resolution. None implies arrival. Network failures remain explicit.
 - Keep notification jobs durable, retries bounded, and backup/expiry behavior aligned with the specifications. Conversation stop does not silently cancel an initiated request; canceling future contact attempts is separate. Simulation is labeled and cannot send real messages or satisfy real-delivery checks.
+
+## Shared control and activity contracts
+
+Use integration-contracts sections 3 and 5: required eligibility/presentation context for activity create/reduce/project, coordinator-only `applyActivitySystemInput` for interrupts/receipts/policy changes, and explicit preference-signal effects. Mic mute cancels capture and its pending input turn, not unrelated approved playback or camera; unmute never opens capture. Quiet returns to capture-off waiting after speech. Do not implement conflicting local interpretations.
 
 ## Privacy and security
 
