@@ -118,7 +118,7 @@ def login(config):
     return tokens['access_token']  # Backend verifies issuer, binding, expiry and assigned subject.
 
 
-def create_pairing(config, token, persistent=False):
+def create_pairing(config, token, persistent=True):
     origin = https(config.get('LEMMI_PUBLIC_ORIGIN') or 'https://lemmi.chaoswarrior.dev')
     parsed = urlsplit(origin)
     if parsed.path or parsed.query:
@@ -140,7 +140,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--env-file', type=Path, default=Path(__file__).resolve().parents[1] / '.env')
     parser.add_argument('--token', action='store_true', help='Prompt privately for an existing caregiver token instead of browser login')
-    parser.add_argument('--persistent', action='store_true', help='Enroll once with a database-backed device key valid until revoked')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--persistent', dest='persistent', action='store_true', help='Use a database-backed key valid until revoked (default)')
+    mode.add_argument('--short-lived', dest='persistent', action='store_false', help='Use the original one-hour credential instead')
+    parser.set_defaults(persistent=True)
     args = parser.parse_args()
     try:
         config = settings(args.env_file)
@@ -154,6 +157,8 @@ def main():
         print(json.dumps(pairing, indent=2))
         if args.persistent:
             print('After local claim, the device key is valid until revoked. Firmware must save it privately across reboots.')
+        else:
+            print('After local claim, the device credential expires in one hour.')
         print('Not claimed or saved. Give the ID and code to Stackchan; keep them out of logs/Git.')
     except KeyError:
         parser.exit(1, 'Missing settings: browser login needs LEMMI_AUTH_ISSUER, LEMMI_AUTH_CLIENT_ID and LEMMI_AUTH_CLIENT_SECRET. Use --token if you already have a caregiver token.\n')

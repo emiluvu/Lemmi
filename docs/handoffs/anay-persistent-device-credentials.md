@@ -7,8 +7,10 @@ Branch: `anay/persistent-device-credentials`, based on `backend-deploy` at `618b
 The existing flow remains: authorized caregiver enrolls → Stackchan explicitly confirms/claims once → scoped credential authenticates HTTPS/WSS. To request a key valid until revoked, after the branch is merged/migrated/deployed run:
 
 ```sh
-python3 scripts/pair-stackchan.py --persistent
+python3 scripts/pair-stackchan.py
 ```
+
+The helper requests persistent enrollment by default. `--persistent` remains an explicit alias; `--short-lived` requests the original one-hour credential, and the two flags are mutually exclusive. The HTTP API default remains one hour when `credentialMode` is omitted.
 
 The helper still uses caregiver login and the outer domain gate, prints only the private five-minute pairing details, leaves them unclaimed and saves no token/key. `--token` and `--env-file` retain their existing behavior. Never paste pairing details/credentials into source, chat, screenshots or logs.
 
@@ -49,3 +51,5 @@ Anay confirmed Emilia will make the credential survive robot reboots. Handle nul
 The branch uses pinned Bun 1.4.4 and an isolated PostgreSQL 17 container on loopback port 55447, with dedicated runtime/schema-test databases. All data is fictional. The production database, public pairing and external providers were not used. Observed: **130 Bun tests / 2,533 expectations**, **five Python helper tests**, type/Svelte check, production build, formatting and whitespace checks passed. Production data smoke passed in default and `--persistent` modes with verified fixture TLS/identity; existing control/chat smoke passed too. Tests include an actual loopback gateway restart, same-key reconnect, capture-off/explicit-start state and active-socket revocation. A populated pre-feature schema upgrade preserves existing short-lived credential mode and foundation checksums. The full database suite retains transaction rollback checks. Python fixtures use ephemeral ports to avoid colliding with real login helpers on the shared host. Full observations are recorded in the build plan; local fixtures are not physical robot or live-provider acceptance.
 
 To repeat production-route persistent enrollment checks, use the built app and an explicitly selected disposable database ending in `_test` via `LEMMI_TEST_DATABASE_URL`, then run `bun scripts/smoke-data.ts --persistent`. The smoke resets its selected fictional test data; never point it at the deployed/shared database. Its default mode continues to test one-hour credentials.
+
+Helper-default follow-up: six Python fixtures pass after making persistent enrollment the CLI default, including `--short-lived`, compatibility of `--persistent`, conflicting-flag rejection and request-body checks. No live enrollment was performed.
