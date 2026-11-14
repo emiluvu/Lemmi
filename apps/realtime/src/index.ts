@@ -210,6 +210,7 @@ if (process.env.LEMMI_MODE === 'live') {
   const repository = config ? await openData(config) : undefined;
   const gateway = startControlGateway({
     repository,
+    demoEnrollment: process.env.LEMMI_DEMO_ENROLLMENT === '1',
     speech,
     caregiverSubject: config?.subject,
     ...controlConfig(),

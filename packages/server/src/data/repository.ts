@@ -6,12 +6,14 @@ import {
   ParticipantProfileSchema,
   JournalEventSchema,
   type SessionSnapshot,
+  type ParticipantProfile,
 } from '@lemmi/contracts';
 import {
   ProfileDetailSchema,
   ProfileUpdateSchema,
   AssetCreateSchema,
   AssetMetadataSchema,
+  ProfileCreateSchema,
   type ProfileDetail,
   type AssetMetadata,
 } from '../../../contracts/src/profile-assets';
@@ -49,7 +51,7 @@ export class DataRepository {
     await assertPrivateDatabaseLogging(this.sql);
     if (!subject || subject.length > 200) throw new Error('Configured caregiver subject required');
     await this.sql.begin(async (tx) => {
-      await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset) VALUES ('profile-alex','Alex','lemming','guided') ON CONFLICT DO NOTHING`;
+      await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset,is_demo) VALUES ('profile-alex','Alex','lemming','guided',true) ON CONFLICT DO NOTHING`;
       const access =
         await tx`SELECT subject FROM lemmi.profile_access WHERE profile_id='profile-alex'`;
       if (access.length && !access.some((row: any) => row.subject === subject))
@@ -60,7 +62,7 @@ export class DataRepository {
   }
   private async scoped(tx: TransactionSQL, principal: DataPrincipal, id: string, write = false) {
     if (
-      id !== 'profile-alex' ||
+      id.startsWith('preview-') ||
       principal.profileId !== id ||
       (write && principal.kind !== 'caregiver')
     )
@@ -71,7 +73,7 @@ export class DataRepository {
     if (!rows.length) throw new DataError('NOT_FOUND', 'Profile is unavailable');
     if (principal.kind === 'caregiver' && principal.bootId) {
       const epoch =
-        await tx`SELECT 1 FROM lemmi.devices WHERE id='stackchan-alex' AND boot_id=${principal.bootId}::uuid FOR SHARE`;
+        await tx`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${principal.bootId}::uuid FOR SHARE`;
       if (!epoch.length)
         throw new DataError('UNAVAILABLE', 'Gateway ownership changed; restart this process');
     }
@@ -121,12 +123,42 @@ export class DataRepository {
       });
     });
   }
-  async approvedProfile(subject: string): Promise<ProfileDetail> {
+  async approvedProfile(subject: string, profileId = 'profile-alex'): Promise<ProfileDetail> {
     return (await this.profile(
-      { kind: 'caregiver', subject, profileId: 'profile-alex' },
-      'profile-alex',
+      { kind: 'caregiver', subject, profileId },
+      profileId,
       true,
     )) as ProfileDetail;
+  }
+  async listProfiles(subject: string, demoOnly = false): Promise<ParticipantProfile[]> {
+    const rows = await this
+      .sql`SELECT p.id,p.preferred_name,p.avatar_id,p.revision,p.communication_preset FROM lemmi.profiles p JOIN lemmi.profile_access a ON a.profile_id=p.id WHERE a.subject=${subject} AND a.role='caregiver' AND p.deletion_state='active' AND (NOT ${demoOnly} OR p.is_demo) ORDER BY p.id LIMIT 100`;
+    return rows.map((row: any) =>
+      ParticipantProfileSchema.parse({
+        id: row.id,
+        preferredName: row.preferred_name,
+        avatarId: row.avatar_id,
+        revision: row.revision,
+        communicationSupport: { preset: row.communication_preset, configVersion: 1 },
+      }),
+    );
+  }
+  async createProfile(subject: string, raw: unknown, demo = false, bootId?: string) {
+    const input = ProfileCreateSchema.parse(raw);
+    const id = `profile-${randomUUID()}`;
+    await this.sql.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(1437236103)`;
+      if (bootId) {
+        const epoch =
+          await tx`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${bootId}::uuid FOR SHARE`;
+        if (!epoch.length) throw new DataError('UNAVAILABLE', 'Gateway ownership changed');
+      }
+      const count = await tx`SELECT count(*)::int AS n FROM lemmi.profiles`;
+      if (count[0].n >= 100) throw new DataError('UNAVAILABLE', 'Profile capacity reached');
+      await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset,is_demo) VALUES (${id},${input.preferredName},${input.avatarId},'guided',${demo})`;
+      await tx`INSERT INTO lemmi.profile_access (profile_id,subject,role) VALUES (${id},${subject},'caregiver')`;
+    });
+    return this.approvedProfile(subject, id);
   }
   async update(
     principal: DataPrincipal,
@@ -273,7 +305,8 @@ export class DataRepository {
   }
   async restart(bootId: string) {
     await this.sql.begin(async (tx) => {
-      await tx`UPDATE lemmi.devices SET credential_id=NULL,credential_hash=NULL,credential_expires_at=NULL,revoked_at=now(),boot_id=${bootId}::uuid`;
+      await tx`INSERT INTO lemmi.gateway_state (singleton,boot_id) VALUES (true,${bootId}::uuid) ON CONFLICT (singleton) DO UPDATE SET boot_id=EXCLUDED.boot_id`;
+      await tx`UPDATE lemmi.devices SET boot_id=${bootId}::uuid`;
       await tx`UPDATE lemmi.sessions SET phase='ended',generation=generation+1,ended_at=now() WHERE phase<>'ended'`;
     });
     const linked = await this.sql`SELECT storage_key FROM lemmi.media_assets`;
@@ -292,7 +325,7 @@ export class DataRepository {
       if (!profile.length) throw new DataError('REVISION_CONFLICT', 'Session profile changed');
       if (bootId) {
         const epoch =
-          await tx`SELECT 1 FROM lemmi.devices WHERE id='stackchan-alex' AND boot_id=${bootId}::uuid FOR SHARE`;
+          await tx`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${bootId}::uuid FOR SHARE`;
         if (!epoch.length) throw new DataError('REVISION_CONFLICT', 'Gateway epoch changed');
       }
       await tx`INSERT INTO lemmi.sessions (id,profile_id,generation,phase,profile_revision,privacy_revision,policy_revision,endpoint,lease_id,ended_at) VALUES (${snapshot.id},${snapshot.profileId},${snapshot.generation},${snapshot.phase},${snapshot.profileRevision},${snapshot.privacyRevision},${snapshot.policyRevision},${snapshot.endpoint},${snapshot.leaseId},${snapshot.phase === 'ended' ? new Date() : null})

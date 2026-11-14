@@ -110,6 +110,8 @@ export class SessionCoordinator {
     promise: Promise<Result<ConversationTextResult>>;
   } | null = null;
   private profile = structuredClone(caregiverProfile);
+  private privacyRevision = 0;
+  private policyRevision = 0;
   private approvedFacts: string[] = [];
   // PostgreSQL remains behind this one authority; it never restores a running session.
   pauseForProfileUpdate(patch: Record<string, unknown>) {
@@ -124,6 +126,9 @@ export class SessionCoordinator {
       ...caregiver
     } = profile;
     this.profile = structuredClone(caregiver);
+    this.privacyRevision = _privacy;
+    this.policyRevision = _policy;
+    this.journal.profileId = profile.id;
     this.approvedFacts = approvedFacts.map((fact) => fact.value);
     if (this.session?.phase === 'paused')
       this.session = { ...this.session, profileRevision: profile.revision };
@@ -143,6 +148,9 @@ export class SessionCoordinator {
   private count = 0;
   snapshot() {
     return this.session ? structuredClone(this.session) : null;
+  }
+  bindEndpoint(deviceId: string) {
+    if (this.session) this.session = { ...this.session, activeEndpointId: deviceId };
   }
   isCurrentTextReply(turnId: string): boolean {
     // A result can have resolved before an interrupt, with its socket callback still queued.
@@ -396,9 +404,9 @@ export class SessionCoordinator {
     )
       return fail('UNAVAILABLE', 'Only authenticated device controls are implemented');
     // Parsed keys/values only; never accept a client-selected scope or preview profile as live.
-    if ('profileId' in input && input.profileId !== DEMO_PROFILE_ID)
+    if ('profileId' in input && input.profileId !== this.profile.id)
       return fail('FORBIDDEN', 'Only Alex is functional; examples are preview-only');
-    if ('profile' in input && input.profile.id !== DEMO_PROFILE_ID)
+    if ('profile' in input && input.profile.id !== this.profile.id)
       return fail('FORBIDDEN', 'Profile is not assigned');
     const body = JSON.stringify(input);
     const key = 'commandId' in input ? `${op}:${input.commandId}` : null;
@@ -474,11 +482,11 @@ export class SessionCoordinator {
         this.chatIds.clear();
         this.session = SessionSnapshotSchema.parse({
           id: this.mode === 'live' ? `session-${crypto.randomUUID()}` : `session-${++this.count}`,
-          profileId: DEMO_PROFILE_ID,
+          profileId: this.profile.id,
           generation: 0,
           profileRevision: this.profile.revision,
-          privacyRevision: 0,
-          policyRevision: 0,
+          privacyRevision: this.privacyRevision,
+          policyRevision: this.policyRevision,
           phase: 'ready',
           endpoint: input.endpoint,
           leaseId: this.mode === 'live' ? `lease-${crypto.randomUUID()}` : `lease-${this.count}`,
@@ -491,6 +499,13 @@ export class SessionCoordinator {
         });
         this.activity = null;
         this.context = contextFor(this.session.id);
+        this.context.eligibility = {
+          ...this.context.eligibility,
+          profileId: this.profile.id,
+          policyRevision: this.policyRevision,
+          ...(this.mode === 'live' ? { permittedEntityIds: [], available: false } : {}),
+        };
+        this.context.presentationPolicy = structuredClone(this.session.communicationSupport);
         this.journal.sessions.push({ sessionId: this.session.id, events: [], summary: null });
         return ok(this.session);
       case 'session.get':
@@ -541,7 +556,8 @@ export class SessionCoordinator {
             this.session = {
               ...this.session,
               endpoint: action.endpoint,
-              leaseId: `lease-${++this.count}`,
+              leaseId:
+                this.mode === 'live' ? `lease-${crypto.randomUUID()}` : `lease-${++this.count}`,
             };
             break;
           default:

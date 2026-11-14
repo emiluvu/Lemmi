@@ -43,8 +43,8 @@ export async function handleDataHttp(
     (request.headers.has('origin') && request.headers.get('origin') !== config.publicOrigin)
   )
     return controlResponse(fail('FORBIDDEN', 'Configured same-origin HTTPS required'));
-  if ('profileId' in route && route.profileId !== 'profile-alex')
-    return controlResponse(fail('FORBIDDEN', 'Only Alex is assigned'));
+  if ('profileId' in route && route.profileId.startsWith('preview-'))
+    return controlResponse(fail('FORBIDDEN', 'Example profiles are preview only'));
   if (route.kind === 'asset' && !AssetIdSchema.safeParse(route.assetId).success)
     return controlResponse(fail('NOT_FOUND', 'Approved asset not found'));
   const token = bearer(request);

@@ -9,9 +9,12 @@ import {
   type ServerEvent,
   type ErrorCode,
   type SpeechOutputStart,
+  type ProfileDetail,
 } from '@lemmi/contracts';
 import {
   SessionCoordinator,
+  SessionRegistry,
+  createScheduledSpeechAdapters,
   DeviceAccess,
   bearer,
   controlResponse,
@@ -30,6 +33,7 @@ import {
 
 type SocketData = {
   identity: DeviceIdentity;
+  connectionId: string;
   hello: boolean;
   sequence: number;
   outputSequence: number;
@@ -51,6 +55,9 @@ type Options = {
   caregiverSubject?: string;
   accessKey?: string | null;
   speech?: SpeechAdapters;
+  demoEnrollment?: boolean;
+  profiles?: ProfileDetail[];
+  devices?: Array<{ profileId: string; deviceId: string; endpoint?: 'browser' | 'robot' }>;
 };
 
 // The same gateway owns pairing and the single existing session authority. A trusted local
@@ -58,10 +65,19 @@ type Options = {
 export function startControlGateway(options: Options) {
   const now = options.now ?? Date.now;
   const elapsedNow = options.now ?? (() => performance.now());
-  const coordinator = new SessionCoordinator('live', options.chatAdapter, options.speech, now);
+  const sessions = new SessionRegistry(
+    options.chatAdapter,
+    options.speech ? createScheduledSpeechAdapters(options.speech) : undefined,
+    now,
+  );
+  for (const profile of options.profiles ?? []) sessions.acceptPersistentProfile(profile);
   const sockets = new Set<Bun.ServerWebSocket<SocketData>>();
-  let connectionClaimed = false;
-  let connectionClaimedAt = 0;
+  const reservations = new Map<string, { id: string; at: number }>();
+  const ownsEndpoint = (identity: DeviceIdentity) =>
+    sessions.forProfile(identity.profileId).snapshot()?.activeEndpointId === identity.deviceId;
+  function disconnect(identity: DeviceIdentity) {
+    if (ownsEndpoint(identity)) sessions.forProfile(identity.profileId).disconnect();
+  }
   const origin = new URL(options.publicOrigin);
   if (
     origin.protocol !== 'https:' ||
@@ -69,20 +85,27 @@ export function startControlGateway(options: Options) {
     options.internalToken.length < 32
   )
     throw new Error('An HTTPS public origin and independent internal credential are required');
-  const invalidated = () => {
-    coordinator.revokeDeviceAccess();
-    for (const socket of sockets) socket.close(1008, 'Device access ended');
+  const invalidated = (deviceId?: string) => {
+    for (const coordinator of sessions.all())
+      if (!deviceId || coordinator.snapshot()?.activeEndpointId === deviceId)
+        coordinator.revokeDeviceAccess();
+    for (const socket of sockets)
+      if (!deviceId || socket.data.identity.deviceId === deviceId)
+        socket.close(1008, 'Device access ended');
   };
   const data = options.repository
     ? new PersistentData(
         options.repository,
         options.caregiverSubject ?? '',
-        coordinator,
+        sessions,
         now,
         invalidated,
       )
     : null;
   const access = data?.devices ?? new DeviceAccess(now, invalidated);
+  for (const device of options.devices ?? [])
+    if (access instanceof DeviceAccess)
+      access.assign(device.profileId, device.deviceId, device.endpoint);
   const ready = data ? data.start() : Promise.resolve();
   void ready.catch(() => {});
   type Checkpoint = NonNullable<ReturnType<SessionCoordinator['persistenceSnapshot']>>;
@@ -90,14 +113,15 @@ export function startControlGateway(options: Options) {
   let persisting: Promise<void> | null = null;
   function persist() {
     if (!data) return Promise.resolve();
-    const snapshot = coordinator.persistenceSnapshot();
-    if (snapshot) {
-      const last = checkpoints.at(-1);
-      if (last?.session.id === snapshot.session.id) checkpoints[checkpoints.length - 1] = snapshot;
+    for (const coordinator of sessions.all()) {
+      const snapshot = coordinator.persistenceSnapshot();
+      if (!snapshot) continue;
+      const index = checkpoints.findIndex((entry) => entry.session.id === snapshot.session.id);
+      if (index >= 0) checkpoints[index] = snapshot;
       else checkpoints.push(snapshot);
     }
-    if (checkpoints.length > 8) {
-      coordinator.disconnect();
+    if (checkpoints.length > 800) {
+      sessions.disconnect();
       for (const socket of sockets) socket.close(1011, 'Persistent checkpoint capacity');
       return Promise.reject(new Error('Persistent checkpoint capacity'));
     }
@@ -108,7 +132,7 @@ export function startControlGateway(options: Options) {
         while (checkpoints.length) await data.checkpoint(checkpoints.shift()!);
       } catch {
         checkpoints.length = 0;
-        coordinator.disconnect();
+        sessions.disconnect();
         for (const socket of sockets) socket.close(1011, 'Persistent data unavailable');
       } finally {
         persisting = null;
@@ -117,6 +141,7 @@ export function startControlGateway(options: Options) {
     return persisting;
   }
   function emit(ws: Bun.ServerWebSocket<SocketData>, type: ServerEvent['type'], payload: unknown) {
+    const coordinator = sessions.forProfile(ws.data.identity.profileId);
     const session = coordinator.snapshot();
     const sent = ws.send(
       JSON.stringify(
@@ -141,7 +166,7 @@ export function startControlGateway(options: Options) {
       ),
     );
     if (sent <= 0) {
-      coordinator.disconnect();
+      disconnect(ws.data.identity);
       ws.close(1013, 'Control backpressure');
     }
   }
@@ -157,6 +182,7 @@ export function startControlGateway(options: Options) {
     void persist().catch(() => {});
     for (const socket of sockets)
       if (socket.data.hello && access.current(socket.data.identity)) {
+        const coordinator = sessions.forProfile(socket.data.identity.profileId);
         emit(socket, 'state.changed', { mode: 'live', session: coordinator.snapshot() });
         const output = coordinator.speechOutputInfo();
         if (socket.data.speechOutput && socket.data.speechOutput.streamId !== output?.streamId) {
@@ -167,7 +193,11 @@ export function startControlGateway(options: Options) {
           });
           socket.data.speechOutput = undefined;
         }
-        if (output && socket.data.playbackRates.includes(output.sampleRate)) {
+        if (
+          output &&
+          ownsEndpoint(socket.data.identity) &&
+          socket.data.playbackRates.includes(output.sampleRate)
+        ) {
           const batch = coordinator.drainSpeechOutput();
           if (batch) {
             socket.data.speechOutput = batch.metadata;
@@ -186,8 +216,8 @@ export function startControlGateway(options: Options) {
         }
       }
   }
-  function endSession() {
-    coordinator.revokeDeviceAccess();
+  function endSession(identity: DeviceIdentity) {
+    if (ownsEndpoint(identity)) sessions.forProfile(identity.profileId).revokeDeviceAccess();
   }
   const server = Bun.serve<SocketData>({
     hostname: '127.0.0.1',
@@ -200,7 +230,11 @@ export function startControlGateway(options: Options) {
         return controlResponse(
           fail('FORBIDDEN', 'Trusted local proxy required; query credentials are forbidden'),
         );
-      if (url.pathname === '/internal/data' || url.pathname.startsWith('/internal/control/')) {
+      if (
+        url.pathname === '/internal/demo' ||
+        url.pathname === '/internal/data' ||
+        url.pathname.startsWith('/internal/control/')
+      ) {
         if (!localMockRequestAllowed(request, peer))
           return controlResponse(fail('FORBIDDEN', 'Internal control access only'));
         const token = bearer(request);
@@ -221,6 +255,22 @@ export function startControlGateway(options: Options) {
           await ready;
         } catch {
           return controlResponse(fail('UNAVAILABLE', 'Persistent data startup failed'));
+        }
+        if (url.pathname === '/internal/demo') {
+          if (!options.demoEnrollment || !data)
+            return controlResponse(
+              fail(
+                'UNAVAILABLE',
+                'Fictional demo enrollment is disabled or PostgreSQL is not configured',
+              ),
+            );
+          try {
+            const result = await data.demoHandle(raw);
+            broadcast();
+            return controlResponse(result);
+          } catch (error) {
+            return controlResponse(dataFailure(error));
+          }
         }
         if (url.pathname === '/internal/data') {
           if (!data || !raw || typeof raw !== 'object')
@@ -281,7 +331,7 @@ export function startControlGateway(options: Options) {
               if (result.ok)
                 for (const socket of sockets)
                   if (!access.current(socket.data.identity)) {
-                    endSession();
+                    endSession(socket.data.identity);
                     socket.close(1008, 'Device access revoked');
                   }
               return controlResponse(result);
@@ -308,25 +358,37 @@ export function startControlGateway(options: Options) {
       }
       if (!hasPrivateAccess(request, options.accessKey ?? null, now()))
         return controlResponse(fail('UNAUTHORIZED', 'Private access key required'));
-      const token = bearer(request);
+      const cookieTokens = (request.headers.get('cookie') ?? '')
+        .split(';')
+        .map((part) => part.trim())
+        .filter((part) => part.startsWith('__Host-lemmi_endpoint='));
+      const cookieToken =
+        cookieTokens.length === 1 ? cookieTokens[0]!.slice('__Host-lemmi_endpoint='.length) : null;
+      if (cookieToken && !bearer(request) && request.headers.get('origin') !== origin.origin)
+        return controlResponse(
+          fail('FORBIDDEN', 'Browser WebSocket requires the configured Origin'),
+        );
+      const token = bearer(request) ?? cookieToken;
       let identity;
       try {
         identity = token ? await access.authenticate(token) : null;
       } catch {
         return controlResponse(fail('UNAVAILABLE', 'Device authorization database unavailable'));
       }
-      if (!identity)
+      if (!identity || (!bearer(request) && identity.endpoint !== 'browser'))
         return controlResponse(fail('UNAUTHORIZED', 'Current paired device credential required'));
       if (request.method !== 'GET' || request.headers.get('upgrade')?.toLowerCase() !== 'websocket')
         return new Response(null, { status: 426 });
-      if (connectionClaimed)
+      if (reservations.has(identity.deviceId))
         return controlResponse(fail('REVISION_CONFLICT', 'Device already connected'));
-      // Reserve before upgrade/open: two concurrent handshakes must not both see an empty set.
-      connectionClaimed = true;
-      connectionClaimedAt = elapsedNow();
+      if (reservations.size >= 200)
+        return controlResponse(fail('UNAVAILABLE', 'Endpoint connection capacity reached'));
+      const connectionId = crypto.randomUUID();
+      reservations.set(identity.deviceId, { id: connectionId, at: elapsedNow() });
       const upgraded = server.upgrade(request, {
         data: {
           identity,
+          connectionId,
           hello: false,
           sequence: -1,
           outputSequence: 0,
@@ -338,7 +400,8 @@ export function startControlGateway(options: Options) {
           mediaMessages: 0,
         },
       });
-      if (!upgraded) connectionClaimed = false;
+      if (!upgraded && reservations.get(identity.deviceId)?.id === connectionId)
+        reservations.delete(identity.deviceId);
       return upgraded ? undefined : new Response(null, { status: 400 });
     },
     websocket: {
@@ -348,11 +411,16 @@ export function startControlGateway(options: Options) {
       closeOnBackpressureLimit: true,
       open(ws) {
         sockets.add(ws);
-        if (!access.current(ws.data.identity)) ws.close(1008, 'Device access ended');
+        if (
+          reservations.get(ws.data.identity.deviceId)?.id !== ws.data.connectionId ||
+          !access.current(ws.data.identity)
+        )
+          ws.close(1008, 'Device access ended');
       },
       message(ws, message) {
+        const coordinator = sessions.forProfile(ws.data.identity.profileId);
         if (!access.current(ws.data.identity)) {
-          endSession();
+          endSession(ws.data.identity);
           ws.close(1008, 'Device access expired or revoked');
           return;
         }
@@ -362,7 +430,7 @@ export function startControlGateway(options: Options) {
           ws.data.mediaMessages = 0;
         }
         if (++ws.data.messages > 90) {
-          coordinator.disconnect();
+          disconnect(ws.data.identity);
           ws.close(1008, 'Control rate limit');
           return;
         }
@@ -407,6 +475,13 @@ export function startControlGateway(options: Options) {
             error(ws, 'REVISION_CONFLICT', 'Hello already received', event.event_id);
             return;
           }
+          if (
+            event.payload.endpoint &&
+            event.payload.endpoint !== (ws.data.identity.endpoint ?? 'robot')
+          ) {
+            ws.close(1008, 'Endpoint assignment mismatch');
+            return;
+          }
           ws.data.hello = true;
           ws.data.sequence = event.sequence;
           ws.data.playbackRates =
@@ -440,6 +515,7 @@ export function startControlGateway(options: Options) {
               'resume',
               'mute',
               'help',
+              'handoff',
               ...(options.chatAdapter ? ['text'] : []),
               ...(ws.data.playbackRates.length ? ['speak'] : []),
             ],
@@ -452,12 +528,12 @@ export function startControlGateway(options: Options) {
         // packet must not become actionable when a later state happens to match it.
         ws.data.sequence = event.sequence;
         if (event.type === 'audio.chunk' && ++ws.data.mediaMessages > 60) {
-          coordinator.disconnect();
+          disconnect(ws.data.identity);
           ws.close(1008, 'Capture rate limit');
           return;
         }
         if (event.type !== 'audio.chunk' && ws.data.messages - ws.data.mediaMessages > 30) {
-          coordinator.disconnect();
+          disconnect(ws.data.identity);
           ws.close(1008, 'Control rate limit');
           return;
         }
@@ -477,8 +553,20 @@ export function startControlGateway(options: Options) {
           emit(ws, 'heartbeat', { mode: 'live' });
           return;
         }
+        if (
+          !['input.start', 'input.handoff', 'input.stop', 'input.pause', 'input.help'].includes(
+            event.type,
+          ) &&
+          !ownsEndpoint(ws.data.identity)
+        ) {
+          error(ws, 'FORBIDDEN', 'Use an explicit handoff to control this session', event.event_id);
+          return;
+        }
         if (event.type === 'input.speak' || media) {
-          if (!ws.data.playbackRates.length || current?.endpoint !== 'robot') {
+          if (
+            !ws.data.playbackRates.length ||
+            current?.endpoint !== (ws.data.identity.endpoint ?? 'robot')
+          ) {
             error(ws, 'UNAVAILABLE', 'Audio was not negotiated for this endpoint', event.event_id);
             return;
           }
@@ -608,11 +696,21 @@ export function startControlGateway(options: Options) {
           }
           result = coordinator.handle('session.start', {
             profileId: ws.data.identity.profileId,
-            endpoint: 'robot',
+            endpoint: ws.data.identity.endpoint ?? 'robot',
             commandId: event.event_id,
           });
-          if (result.ok && current?.id !== coordinator.snapshot()?.id)
+          if (result.ok && current?.id !== coordinator.snapshot()?.id) {
+            coordinator.bindEndpoint(ws.data.identity.deviceId);
             ws.data.deliveredText.clear();
+          }
+        } else if (event.type === 'input.handoff' && current) {
+          result = coordinator.handle('session.command', {
+            sessionId: current.id,
+            expectedGeneration: event.generation,
+            commandId: event.event_id,
+            action: { type: 'handoff', endpoint: ws.data.identity.endpoint ?? 'robot' },
+          });
+          if (result.ok) coordinator.bindEndpoint(ws.data.identity.deviceId);
         } else if (event.type === 'input.help') {
           result = coordinator.handle('help.create', {
             profileId: ws.data.identity.profileId,
@@ -644,20 +742,26 @@ export function startControlGateway(options: Options) {
       },
       close(ws) {
         sockets.delete(ws);
-        if (!sockets.size) connectionClaimed = false;
-        coordinator.disconnect();
+        if (reservations.get(ws.data.identity.deviceId)?.id === ws.data.connectionId) {
+          reservations.delete(ws.data.identity.deviceId);
+          disconnect(ws.data.identity);
+        }
         broadcast();
       },
     },
   });
   let checkingDatabase = false;
   const watchdog = setInterval(() => {
-    if (coordinator.sweepSpeech()) {
-      for (const socket of sockets)
-        if (socket.data.playbackRates.length)
-          error(socket, 'UNAVAILABLE', 'Speech deadline expired; retry explicitly');
-      broadcast();
-    }
+    for (const coordinator of sessions.all())
+      if (coordinator.sweepSpeech()) {
+        for (const socket of sockets)
+          if (
+            socket.data.identity.profileId === coordinator.snapshot()?.profileId &&
+            ownsEndpoint(socket.data.identity)
+          )
+            error(socket, 'UNAVAILABLE', 'Speech deadline expired; retry explicitly');
+        broadcast();
+      }
     if (data && !checkingDatabase && sockets.size) {
       checkingDatabase = true;
       void data.devices
@@ -671,14 +775,18 @@ export function startControlGateway(options: Options) {
         });
     }
     access.sweep();
-    if (connectionClaimed && !sockets.size && elapsedNow() - connectionClaimedAt > 6000)
-      connectionClaimed = false;
+    for (const [deviceId, reservation] of reservations)
+      if (
+        elapsedNow() - reservation.at > 6000 &&
+        ![...sockets].some((socket) => socket.data.connectionId === reservation.id)
+      )
+        reservations.delete(deviceId);
     for (const socket of sockets) {
       if (!access.current(socket.data.identity)) {
-        endSession();
+        endSession(socket.data.identity);
         socket.close(1008, 'Device access expired or revoked');
       } else if (elapsedNow() - socket.data.lastHeartbeat > 6000) {
-        coordinator.disconnect();
+        disconnect(socket.data.identity);
         socket.close(1001, 'Heartbeat timeout');
       }
     }
@@ -690,7 +798,7 @@ export function startControlGateway(options: Options) {
     flush: () => persist(),
     stop() {
       clearInterval(watchdog);
-      coordinator.disconnect();
+      sessions.disconnect();
       server.stop(true);
       if (data)
         void persist()

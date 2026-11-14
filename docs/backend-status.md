@@ -8,6 +8,10 @@ The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictio
 
 Maintain this deployment/acceptance record alongside the [backend API reference](backend_api.md) whenever backend behavior, configuration, availability or observed checks change. Do not promote unrun checks to passed or treat a new source commit as deployed.
 
+## Undeployed multi-profile increment
+
+Branch `anay/multi-profile-endpoints` builds on `anay/speech-pipeline` and adds isolated profile sessions, browser/robot handoff, persistent scoped enrollment, fictional profile creation/selection and a live participant frontend. See [integration handoff](handoffs/anay-multi-profile-endpoints.md). No deployment, physical firmware acceptance or real participant rollout is implied; the deployed revision below is unchanged. Local feature verification: 129 Bun tests / 2,310 expectations with isolated PostgreSQL, type/Svelte/build/format and production participant/control/chat/data/speech fixture smokes passed. Actual browser microphone/speaker and K151 checks remain unrun. Details are recorded in the handoff and build plan.
+
 ## Deployment
 
 Public origin: **https://lemmi.chaoswarrior.dev**. Open **[/access](https://lemmi.chaoswarrior.dev/access)** to unlock the outer domain gate. `/` intentionally returns 404. The shared access key is stored privately in the host's root `.env`; it does not replace caregiver authentication or device pairing.

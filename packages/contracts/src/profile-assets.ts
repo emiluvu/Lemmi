@@ -43,7 +43,7 @@ export const ProfileUpdateSchema = z.strictObject({
 export const AssetIdSchema = z.uuid();
 export const AssetMetadataSchema = z.strictObject({
   id: AssetIdSchema,
-  profileId: z.literal('profile-alex'),
+  profileId: IdSchema,
   version: z.literal(1),
   kind: z.enum(['image', 'music']),
   mediaType: z.enum(['image/png', 'audio/wav']),
@@ -80,7 +80,7 @@ export type AssetCreate = z.infer<typeof AssetCreateSchema>;
 export const DataRequestSchema = z.discriminatedUnion('operation', [
   z.strictObject({
     operation: z.literal('profile.read'),
-    profileId: z.literal('profile-alex'),
+    profileId: IdSchema,
     caregiver: z.boolean(),
   }),
   z.strictObject({ operation: z.literal('profile.update'), input: ProfileUpdateSchema }),
@@ -89,5 +89,32 @@ export const DataRequestSchema = z.discriminatedUnion('operation', [
     operation: z.literal('asset.read'),
     assetId: AssetIdSchema,
     bytes: z.boolean(),
+  }),
+]);
+
+export const ProfileCreateSchema = z.strictObject({
+  preferredName: z.string().trim().min(1).max(80),
+  avatarId: AvatarIdSchema.default('lemming'),
+});
+export const DemoSetupRequestSchema = z.discriminatedUnion('operation', [
+  z.strictObject({ operation: z.literal('profile.list') }),
+  z.strictObject({
+    operation: z.literal('endpoint.current'),
+    endpoint: z.enum(['browser', 'robot']).optional(),
+    credential: z.string().min(40).max(100),
+  }),
+  z.strictObject({
+    operation: z.literal('endpoint.release'),
+    endpoint: z.enum(['browser', 'robot']).optional(),
+    credential: z.string().min(40).max(100),
+  }),
+  z.strictObject({ operation: z.literal('profile.create'), input: ProfileCreateSchema }),
+  z.strictObject({
+    operation: z.literal('endpoint.enroll'),
+    profileId: IdSchema,
+    endpoint: z.enum(['browser', 'robot']),
+    deviceId: IdSchema.optional(),
+    previousCredential: z.string().min(40).max(100).optional(),
+    previousEndpoint: z.enum(['browser', 'robot']).optional(),
   }),
 ]);

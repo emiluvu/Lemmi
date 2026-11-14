@@ -220,7 +220,7 @@ dbtest(
   },
 );
 dbtest(
-  'device issuance is committed as hashes, revoke retries spare replacements and restart requires re-pairing',
+  'device issuance is committed as hashes, revoke retries spare replacements and restart preserves enrollment',
   async () => {
     await reset();
     let invalidations = 0;
@@ -289,7 +289,12 @@ dbtest(
     const restart = new DatabaseDeviceAuthority(repo, Date.now, () => {});
     await restart.start();
     expect(await authority.authenticate(c2.data.credential)).toBeNull();
-    expect(await restart.authenticate(c2.data.credential)).toBeNull();
+    expect(await restart.authenticate(c2.data.credential)).not.toBeNull();
+    await restart.revoke('fixture-caregiver', {
+      deviceId: 'stackchan-alex',
+      commandId: 'revoke-1',
+    });
+    expect(await restart.authenticate(c2.data.credential)).not.toBeNull();
     expect(invalidations).toBeGreaterThan(0);
   },
 );
@@ -590,7 +595,7 @@ dbtest(
         caregiver: false,
         credential,
       });
-      expect(preview.status).toBe(400);
+      expect(preview.status).toBe(403);
       await internal('control/revoke', {
         actor: 'fixture-caregiver',
         input: { deviceId: 'stackchan-alex', commandId: randomUUID() },
@@ -723,17 +728,22 @@ dbtest('revocation cancels local access immediately while SQL is blocked', async
     locked = resolve;
   });
   const lock = sql.begin(async (tx) => {
-    await tx`SELECT 1 FROM lemmi.profiles FOR UPDATE`;
+    await tx`SELECT 1 FROM lemmi.devices FOR UPDATE`;
     locked();
     await new Promise<void>((resolve) => {
       unlock = resolve;
     });
   });
   await acquired;
-  const revoke = authority.revoke('fixture-caregiver', {
-    deviceId: 'stackchan-alex',
-    commandId: randomUUID(),
+  const command = { deviceId: 'stackchan-alex', commandId: randomUUID() };
+  const revoke = authority.revoke('fixture-caregiver', command);
+  const duplicate = authority.revoke('fixture-caregiver', command);
+  let acknowledged = false;
+  void duplicate.then(() => {
+    acknowledged = true;
   });
+  await Bun.sleep(10);
+  expect(acknowledged).toBe(false);
   expect(authority.current(identity!)).toBe(false);
   unlock();
   await lock;
@@ -911,5 +921,195 @@ dbtest(
     if (!issued.ok) throw new Error('Current gateway claim failed');
     expect(await replacement.authenticate(issued.data.credential)).not.toBeNull();
     expect(await old.authenticate(issued.data.credential)).toBeNull();
+  },
+);
+
+dbtest(
+  'fictional profiles and browser/robot enrollment remain isolated through restart and switching',
+  async () => {
+    await reset();
+    const { SessionRegistry } = await import('@lemmi/server');
+    const sessions = new SessionRegistry();
+    const invalidated: string[] = [];
+    const data = new PersistentData(repo, 'fixture-caregiver', sessions, Date.now, (id) => {
+      if (id) invalidated.push(id);
+    });
+    await data.start();
+    let browser: any, robot: any, other: any;
+    try {
+      const list = await data.demoHandle({ operation: 'profile.list' });
+      expect(list.ok && list.data).toMatchObject([{ id: 'profile-alex', preferredName: 'Alex' }]);
+      const created = await data.demoHandle({
+        operation: 'profile.create',
+        input: { preferredName: 'Taylor', avatarId: 'dog' },
+      });
+      if (!created.ok || !('id' in created.data)) throw new Error('create fixture');
+      const id = created.data.id;
+      expect(id).not.toBe('profile-alex');
+      expect(id).not.toStartWith('preview-');
+      expect(
+        sessions
+          .forProfile(id)
+          .handle('session.start', { profileId: id, endpoint: 'robot', commandId: randomUUID() })
+          .ok,
+      ).toBe(true);
+      expect(sessions.forProfile('profile-alex').snapshot()).toBeNull();
+      const own = await data.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId: 'profile-alex',
+        endpoint: 'browser',
+      });
+      const second = await data.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId: id,
+        endpoint: 'robot',
+      });
+      if (!own.ok || !second.ok) throw new Error('enroll fixture');
+      browser = own.data;
+      robot = second.data;
+      expect(browser.deviceId).not.toBe(robot.deviceId);
+      expect(JSON.stringify(await sql`SELECT * FROM lemmi.devices`)).not.toContain(
+        browser.credential,
+      );
+      const principal = await data.principal(undefined, browser.credential);
+      expect((await repo.profile(principal, 'profile-alex')).id).toBe('profile-alex');
+      await expect(repo.profile(principal, id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(repo.profile(principal, 'profile-alex', true)).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.current',
+          credential: robot.credential,
+          endpoint: 'browser',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.enroll',
+          profileId: id,
+          endpoint: 'browser',
+          previousCredential: robot.credential,
+          previousEndpoint: 'browser',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(await data.devices.authenticate(robot.credential)).not.toBeNull();
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.enroll',
+          profileId: 'preview-sam',
+          endpoint: 'robot',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const privateProfile = await repo.createProfile('fixture-caregiver', {
+        preferredName: 'Private fixture',
+      });
+      await expect(
+        data.demoHandle({
+          operation: 'endpoint.enroll',
+          profileId: privateProfile.id,
+          endpoint: 'robot',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect((await repo.listProfiles('unassigned-caregiver')).length).toBe(0);
+      // Reassignment rotates this endpoint only; other participant credentials remain valid.
+      const changed = await data.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId: id,
+        endpoint: 'browser',
+        previousCredential: browser.credential,
+      });
+      if (!changed.ok) throw new Error('switch fixture');
+      other = changed.data;
+      expect(await data.devices.authenticate(browser.credential)).toBeNull();
+      expect(await data.devices.authenticate(robot.credential)).not.toBeNull();
+      expect(invalidated).toContain(browser.deviceId);
+      await data.checkpoint(sessions.forProfile(id).persistenceSnapshot());
+    } finally {
+      await data.close();
+    }
+    const replacementSessions = new SessionRegistry();
+    const replacement = new PersistentData(
+      repo,
+      'fixture-caregiver',
+      replacementSessions,
+      Date.now,
+      () => {},
+    );
+    await replacement.start();
+    try {
+      expect(await replacement.devices.authenticate(browser.credential)).toBeNull();
+      expect(await replacement.devices.authenticate(robot.credential)).not.toBeNull();
+      expect(await replacement.devices.authenticate(other.credential)).not.toBeNull();
+      expect(replacementSessions.forProfile(robot.profileId).snapshot()).toBeNull();
+      expect((await sql`SELECT phase FROM lemmi.sessions`)[0].phase).toBe('ended');
+      // A durable device can be revoked before its first post-restart authentication.
+      const fresh = new DatabaseDeviceAuthority(repo, Date.now, () => {});
+      await fresh.start();
+      expect(
+        (
+          await fresh.revoke('fixture-caregiver', {
+            deviceId: robot.deviceId,
+            commandId: 'restart-revoke',
+          })
+        ).ok,
+      ).toBe(true);
+      expect(await fresh.authenticate(robot.credential)).toBeNull();
+      expect(await fresh.authenticate(other.credential)).not.toBeNull();
+    } finally {
+      await replacement.close();
+    }
+  },
+);
+
+dbtest(
+  'the final admitted revocation receipt persists at capacity and restart cannot reopen enrollment',
+  async () => {
+    await reset();
+    // Populate actual durable history so restart exercises the admission boundary.
+    await sql`INSERT INTO lemmi.device_revocations(device_id,actor,command_id) SELECT 'stackchan-alex','fixture-caregiver','capacity-'||n FROM generate_series(1,9999) n`;
+    const authority = new DatabaseDeviceAuthority(repo, Date.now, () => {});
+    await authority.start();
+    const pair = await authority.pair('fixture-caregiver', {
+      deviceId: 'stackchan-alex',
+      profileId: 'profile-alex',
+      commandId: 'capacity-pair',
+    });
+    if (!pair.ok) throw new Error('Pairing before capacity must work');
+    const claim = await authority.claim({
+      pairingId: pair.data.pairingId,
+      code: pair.data.code,
+      localConfirmed: true,
+    });
+    if (!claim.ok) throw new Error('Claim before capacity must work');
+    const command = { deviceId: 'stackchan-alex', commandId: 'last-admitted-revoke' };
+    expect((await authority.revoke('fixture-caregiver', command)).ok).toBe(true);
+    expect((await sql`SELECT count(*)::int AS n FROM lemmi.device_revocations`)[0].n).toBe(10000);
+    expect(
+      await sql`SELECT 1 FROM lemmi.device_revocations WHERE device_id='stackchan-alex' AND command_id='last-admitted-revoke'`,
+    ).toHaveLength(1);
+    const replacement = new DatabaseDeviceAuthority(repo, Date.now, () => {});
+    await replacement.start();
+    expect((await replacement.revoke('fixture-caregiver', command)).ok).toBe(true);
+    expect(
+      (
+        await replacement.pair('fixture-caregiver', {
+          deviceId: 'stackchan-alex',
+          profileId: 'profile-alex',
+          commandId: 'after-capacity',
+        })
+      ).ok,
+    ).toBe(false);
+    expect(await replacement.authenticate(claim.data.credential)).toBeNull();
+    // Revocation remains available after capacity; receipts cannot grow without bound.
+    expect(
+      (
+        await replacement.revoke('fixture-caregiver', {
+          deviceId: 'stackchan-alex',
+          commandId: 'uncached-safety-revoke',
+        })
+      ).ok,
+    ).toBe(true);
+    expect((await sql`SELECT count(*)::int AS n FROM lemmi.device_revocations`)[0].n).toBe(10000);
   },
 );

@@ -21,53 +21,80 @@ export type DeviceIdentity = {
   profileId: string;
   expiresAt: number;
   credentialId: string;
+  endpoint?: 'browser' | 'robot';
 };
 
-// Deliberately ephemeral: restart revokes every code/credential. No secret files or DB substitute.
+// Bounded in-memory transport authority. DatabaseDeviceAuthority restores verified durable credentials.
 export class DeviceAccess {
-  private pairing: {
-    actor: string;
-    input: PairDeviceInput;
-    result: PairDeviceResult;
-    expiresAt: number;
-  } | null = null;
-  private credential: { hash: Buffer; identity: DeviceIdentity } | null = null;
+  private pairings = new Map<
+    string,
+    {
+      actor: string;
+      input: PairDeviceInput;
+      result: PairDeviceResult;
+      expiresAt: number;
+    }
+  >();
+  private credentials = new Map<string, { hash: Buffer; identity: DeviceIdentity }>();
+  private assignments = new Map<string, { profileId: string; endpoint: 'browser' | 'robot' }>([
+    [CONTROL_DEVICE_ID, { profileId: CONTROL_PROFILE_ID, endpoint: 'robot' }],
+  ]);
   private commands = new Map<string, string>();
   private claimAttempts = 0;
   private claimWindow = 0;
   constructor(
     private readonly now = Date.now,
-    private readonly invalidated = () => {},
+    private readonly invalidated: (deviceId?: string) => void = () => {},
   ) {}
-  sweep() {
-    if (this.pairing && this.pairing.expiresAt <= this.now()) this.pairing = null;
-    if (this.credential && this.credential.identity.expiresAt <= this.now()) {
-      this.credential = null;
-      this.invalidated();
+  assign(profileId: string, deviceId: string, endpoint: 'browser' | 'robot' = 'robot') {
+    const old = this.assignments.get(deviceId);
+    if (old && (old.profileId !== profileId || old.endpoint !== endpoint)) {
+      this.credentials.delete(deviceId);
+      this.pairings.delete(deviceId);
+      this.invalidated(deviceId);
     }
+    this.assignments.set(deviceId, { profileId, endpoint });
+  }
+  register(secret: string, identity: DeviceIdentity) {
+    this.assign(identity.profileId, identity.deviceId, identity.endpoint ?? 'robot');
+    this.credentials.set(identity.deviceId, { hash: digest(secret), identity: { ...identity } });
+  }
+  identities() {
+    return [...this.credentials.values()].map((v) => ({ ...v.identity }));
+  }
+  sweep() {
+    for (const [id, pairing] of this.pairings)
+      if (pairing.expiresAt <= this.now()) this.pairings.delete(id);
+    for (const [id, credential] of this.credentials)
+      if (credential.identity.expiresAt <= this.now()) {
+        this.credentials.delete(id);
+        this.invalidated(id);
+      }
   }
 
   pair(actor: string, input: PairDeviceInput): Result<PairDeviceResult> {
     this.sweep();
-    if (input.profileId !== CONTROL_PROFILE_ID || input.deviceId !== CONTROL_DEVICE_ID)
+    if (this.assignments.get(input.deviceId)?.profileId !== input.profileId)
       return fail('FORBIDDEN', 'Device/profile is not assigned');
-    const key = `${actor}:pair:${input.commandId}`;
+    const pending = this.pairings.get(input.deviceId);
+    const credential = this.credentials.get(input.deviceId);
+    const key = `${actor}:pair:${input.deviceId}:${input.commandId}`;
     const body = JSON.stringify(input);
     if (this.commands.has(key)) {
       if (this.commands.get(key) !== body) return fail('REVISION_CONFLICT', 'Command ID reused');
       if (
-        this.pairing?.input.commandId === input.commandId &&
-        this.pairing.actor === actor &&
-        this.pairing.expiresAt > this.now()
+        pending?.input.commandId === input.commandId &&
+        pending.actor === actor &&
+        pending.expiresAt > this.now()
       )
-        return ok(structuredClone(this.pairing.result));
+        return ok(structuredClone(pending.result));
       return fail('REVISION_CONFLICT', 'Pairing is no longer available; use a new command ID');
     }
     if (this.commands.size >= 256)
       return fail('UNAVAILABLE', 'Control capacity reached; restart required');
-    if (this.credential && this.credential.identity.expiresAt > this.now())
+    if (credential && credential.identity.expiresAt > this.now())
       return fail('REVISION_CONFLICT', 'Revoke the paired device before pairing again');
-    if (this.pairing && this.pairing.expiresAt > this.now())
+    if (pending && pending.expiresAt > this.now())
       return fail('REVISION_CONFLICT', 'A pairing is already pending');
     const expiresAt = this.now() + PAIRING_TTL_MS;
     const result = {
@@ -77,7 +104,7 @@ export class DeviceAccess {
       code: randomBytes(18).toString('base64url'),
       expiresAt: new Date(expiresAt).toISOString(),
     };
-    this.pairing = { actor, input: structuredClone(input), result, expiresAt };
+    this.pairings.set(input.deviceId, { actor, input: structuredClone(input), result, expiresAt });
     this.commands.set(key, body);
     return ok(structuredClone(result));
   }
@@ -90,7 +117,7 @@ export class DeviceAccess {
     }
     if (++this.claimAttempts > 20)
       return fail('UNAVAILABLE', 'Pairing attempts limited; retry later');
-    const pending = this.pairing;
+    const pending = [...this.pairings.values()].find((p) => p.result.pairingId === input.pairingId);
     if (
       !pending ||
       pending.expiresAt <= this.now() ||
@@ -99,7 +126,7 @@ export class DeviceAccess {
       input.localConfirmed !== true
     )
       return fail('UNAUTHORIZED', 'Pairing is invalid, expired or consumed');
-    this.pairing = null;
+    this.pairings.delete(pending.input.deviceId);
     const credential = randomBytes(32).toString('base64url');
     const identity = {
       deviceId: pending.input.deviceId,
@@ -107,7 +134,10 @@ export class DeviceAccess {
       credentialId: crypto.randomUUID(),
       expiresAt: this.now() + DEVICE_TTL_MS,
     };
-    this.credential = { hash: digest(credential), identity };
+    this.register(credential, {
+      ...identity,
+      endpoint: this.assignments.get(identity.deviceId)?.endpoint,
+    });
     return ok({
       deviceId: identity.deviceId,
       profileId: identity.profileId,
@@ -118,29 +148,30 @@ export class DeviceAccess {
 
   authenticate(secret: string): DeviceIdentity | null {
     this.sweep();
-    const c = this.credential;
-    return c && c.identity.expiresAt > this.now() && timingSafeEqual(c.hash, digest(secret))
-      ? { ...c.identity }
-      : null;
+    const hash = digest(secret);
+    const value = [...this.credentials.values()].find((c) => timingSafeEqual(c.hash, hash));
+    return value ? { ...value.identity } : null;
   }
   current(identity: DeviceIdentity) {
+    const value = this.credentials.get(identity.deviceId)?.identity;
     return (
-      !!this.credential &&
-      this.credential.identity.credentialId === identity.credentialId &&
-      this.credential.identity.expiresAt > this.now()
+      !!value &&
+      value.credentialId === identity.credentialId &&
+      value.profileId === identity.profileId &&
+      value.expiresAt > this.now()
     );
   }
   revoke(actor: string, input: RevokeDeviceInput): Result<{ revoked: true }> {
-    if (input.deviceId !== CONTROL_DEVICE_ID) return fail('FORBIDDEN', 'Device is not assigned');
-    const key = `${actor}:revoke:${input.commandId}`;
+    if (!this.assignments.has(input.deviceId)) return fail('FORBIDDEN', 'Device is not assigned');
+    const key = `${actor}:revoke:${input.deviceId}:${input.commandId}`;
     // A retry must never revoke a newly paired credential a second time.
     if (this.commands.has(key)) return ok({ revoked: true });
     // Revocation remains available at capacity. New pairings are already blocked then,
     // so an uncached retry cannot affect a replacement credential before restart.
     if (this.commands.size < 256) this.commands.set(key, JSON.stringify(input));
-    this.pairing = null;
-    this.credential = null;
-    this.invalidated();
+    this.pairings.delete(input.deviceId);
+    this.credentials.delete(input.deviceId);
+    this.invalidated(input.deviceId);
     return ok({ revoked: true });
   }
 }
