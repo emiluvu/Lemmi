@@ -1,5 +1,5 @@
 <script lang="ts">
-  import TeachingChoices from '#lib/features/TeachingChoices.svelte';
+  import TeachingChoices from '#lib/features/VoiceTeachingChoices.svelte';
   import AvatarArt from '#lib/features/AvatarArt.svelte';
   import { controlSessionFixture } from '@lemmi/contracts/fixtures';
   import type { SessionSnapshot } from '@lemmi/contracts';

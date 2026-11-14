@@ -81,3 +81,8 @@ passed. Local server restarted with forced dependency refresh for retest after
 backend recovery. Existing Alex credential was used only after user explicitly
 confirmed Stackchan disconnected and authorized temporary reuse; only its path
 is in ignored local configuration.
+
+
+## Shared host integration — November 14
+
+Anay merged `b27980a` into deployed runtime `9ad7446`, adapting the panel to the existing enrolled-browser cookie transport and selected fictional profile/avatar. Public entry is the existing `/participant/conversation` page; the development `/voice-config` and `/voice-stream` remain unpublished. Capture worklet is bundled, five exact avatar sprites are allowed, and session Stop is confirmed before surface changes. Absent-profile checkpoint recovery prevents prior host-admin rehearsal cleanup from disconnecting other profiles. See [current acceptance](../backend-status.md#teach-lemmi-voice-ui-and-checkpoint-recovery--november-14-2026). Human microphone/keyboard/visual and robot review remain counterpart handoffs.

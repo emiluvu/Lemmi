@@ -26,6 +26,9 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
+**Current deployment:** web/gateway `9ad7446` includes the `b27980a` Teach Lemmi voice UI and checkpoint recovery. Open `/participant/conversation`, select/enroll a fictional profile, Start conversation → Play Teach Lemmi → Start Teach Lemmi. Refresh/reconnect after the deployment. Browser enrollment stays scoped to the selected profile; no private local voice-proxy configuration is needed on the public site. See [backend status](docs/backend-status.md) for observed acceptance and remaining microphone/hardware checks.
+
+
 **Teach Lemmi source increment (`codex/teach-lemmi`):** a playable scripted Alex text demo is available in the existing Participant page. Backend teaching handlers reuse the shared coordinator, OpenRouter and speech seams, with reviewed topics, session-only feedback and a fifteen-minute active-time limit. [Tester manual](docs/teach-lemmi-tester-manual.md) and [Anay/Kylie/Emilia handoff](docs/handoffs/lukas-teach-lemmi.md) cover launch and checks. Teach Lemmi and the integrated live participant shell are deployed as runtime `f5724a0`; start at `/access` → `/participant`. Public voice is enabled for fictional team tests; actual browser microphone/speaker, physical robot acceptance and durable teaching memory/journal observations remain pending.
 
 Alex's updated fictional profile and supplied-media preparation are on `codex/alex-profile-assets`; see [content, private derivatives and integration limits](docs/handoffs/lukas-alex-profile.md). The deployed profile and supplied-media playback are not updated by these content changes.
