@@ -2,7 +2,7 @@
 
 ### Browser unlock repair acceptance — November 14, 2026
 
-Deployed web-only fix `7ad2de1` for the native form Origin suppression caused by `Referrer-Policy: no-referrer`; policy is now `same-origin`, with strict POST Origin checks retained. Five access tests / 39 expectations, type/Svelte checks, focused formatting and isolated production build passed. Public HTTPS access/header/unlock/cookie/participant/profile-list/logout passed; opaque Origin remains rejected. Only web restarted; gateway `f5724a0`, credentials and database preserved. Emilia's actual Chrome retry and counterpart acceptance remain pending. See [backend status](backend-status.md#browser-unlock-repair--november-14-2026).
+Deployed web-only fix `7ad2de1` for the native form Origin suppression caused by `Referrer-Policy: no-referrer`; policy is now `same-origin`, with strict POST Origin checks retained. Five access tests / 39 expectations, type/Svelte checks, focused formatting and isolated production build passed. Public HTTPS access/header/unlock/cookie/participant/profile-list/logout passed; opaque Origin remains rejected. Only web restarted; gateway `f5724a0`, credentials and database preserved. The user subsequently confirmed Emilia's Chrome unlock worked. Broader counterpart review remains pending. See [backend status](backend-status.md#browser-unlock-repair--november-14-2026).
 
 ## 17. Alex content preparation — November 14, 2026
 
