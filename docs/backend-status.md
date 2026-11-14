@@ -2,28 +2,28 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed backend runtime revision: **`d067ac0`**, integrating main squash commits `c402edc` (persistent keys) and `430269f` (chat/support). Later documentation-only commits do not require a runtime restart.
+Deployed backend runtime revision: **`17a8522`**, integrating `anay/multi-profile-endpoints` (`284dcb7`) with the later persistent-key/chat-support compatibility fixes. Later documentation-only commits do not require a runtime restart.
 
-The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictional Alex integration deployment, not completed P0 scope or readiness for unattended care.
+The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictional multi-profile integration deployment, not completed P0 scope or readiness for unattended care.
 
 Maintain this deployment/acceptance record alongside the [backend API reference](backend_api.md) whenever backend behavior, configuration, availability or observed checks change. Do not promote unrun checks to passed or treat a new source commit as deployed.
 
 **Media collections deployed:** migration `002_media_collections.sql` has been applied to the existing host database after a private backup. It adds corrected album/playlist metadata only; collection APIs, reviewed-pack hosting and deferred consent/journal/help/jobs/deletion/camera workflows remain unavailable. See [schema review](handoffs/anay-app-data-schema-review.md).
 
-## Multi-profile endpoint integration — preparation, not yet deployed
+## Multi-profile endpoints — deployed
 
-The user explicitly authorized full fictional multi-profile support on November 14. The isolated candidate integrates `anay/multi-profile-endpoints` (`284dcb7`) with the later persistent-key and chat/support implementation. It permits separately created fictional profiles, scoped browser/robot enrollments and independent per-profile session coordinators inside the same gateway. Existing preview cards remain static; no profile may borrow Alex's context or credentials.
+The user explicitly authorized full fictional multi-profile support on November 14. The deployed release integrates `anay/multi-profile-endpoints` (`284dcb7`) with the later persistent-key and chat/support implementation. It permits separately created fictional profiles, scoped browser/robot enrollments and independent per-profile session coordinators inside the same gateway. Existing preview cards remain static; no profile may borrow Alex's context or credentials.
 
-| Candidate surface | Integration contract / acceptance status |
+| Deployed surface | Integration contract / acceptance status |
 | --- | --- |
-| Frontend setup | `/access` → `/participant`; explicitly enabled `LEMMI_DEMO_ENROLLMENT=1`; safe list/create/enroll/current/release routes. Not yet public deployment acceptance. |
+| Frontend setup | `/access` → `/participant`; explicitly enabled `LEMMI_DEMO_ENROLLMENT=1`; safe list/create/enroll/current/release routes. Public gating, participant HTML and native setup/isolation checks passed. |
 | Browser client | `createParticipantSetup` and `ParticipantConnection`; 30-day HttpOnly endpoint cookie, same-origin WSS, explicit Start and local teardown. Actual browser permission/autoplay/keyboard/zoom recovery still unrun here. |
 | Robot setup | `bun run enroll-device PROFILE_ID PRIVATE_FILE`; separate device identity/file for each endpoint, 30-day demo enrollment. Firmware storage/flash acceptance remains Emilia's work. |
-| Existing shared key | Indefinite persistent legacy key remains valid until revoked, with null expiry; migration/integration must preserve it. Sharing one identity still permits one simultaneous connection for that identity. |
+| Existing shared key | Indefinite persistent legacy key remains valid until revoked, with null expiry; it was preserved and verified after the actual upgrade. Sharing one identity still permits one simultaneous connection for that identity. |
 | Session ownership | Multiple authorized endpoints may connect; each profile retains one active audio owner. `activeEndpointId` plus explicit handoff/Resume guards conversation/media. Different profiles remain isolated. |
-| Caregiver support | Existing hardening, profile membership, save/apply cancellation and revision behavior must be preserved independently for each profile. |
-| Speech | Existing bounded transport and shared eight-waiter adapter queue; public speech configuration is unchanged during preparation. Hardware/quality acceptance is not established by fixtures. |
-| Teach Lemmi | `codex/teach-lemmi` and its handoff reviewed; no merge or deployment in this prioritized endpoint candidate. Shared schema/coordinator/protocol/UI conflicts require a separate integration. |
+| Caregiver support | Existing hardening, profile membership, save/apply cancellation and revision behavior is preserved and regression-tested independently for each profile. |
+| Speech | Existing bounded transport and shared eight-waiter adapter queue; public speech remains disabled. Hardware/quality acceptance is not established by fixtures. |
+| Teach Lemmi | `codex/teach-lemmi` and its handoff reviewed; no merge or deployment in this prioritized endpoint deployment. Shared schema/coordinator/protocol/UI conflicts require a separate integration. |
 
 The migration candidate retains all existing checksummed migrations, adds `002_multi_profile_endpoints.sql`, and replaces the branch's incompatible receipt-table creation with `004_endpoint_revocations.sql`. The latter preserves legacy revoke history while introducing per-device receipts; no checksum edit/rename of an already applied migration is permitted. Source and tests are being reconciled in an isolated checkout. No candidate test count, production migration, new browser deployment or unchanged-key live proof is claimed until the deployment owner records it below.
 
@@ -73,7 +73,7 @@ User lingering is enabled. Application/tunnel/speech services are enabled; conta
 | --- | --- |
 | Pinned frozen-lockfile install | Passed; Bun lockfile unchanged |
 | Type/Svelte, production build, formatting, diff whitespace | Passed |
-| Bun automated suite | **151 tests passed, 3,371 expectations**, including real isolated `lemmi_test` PostgreSQL |
+| Bun automated suite | **169 tests passed, 3,585 expectations**, including real isolated `lemmi_test` PostgreSQL |
 | Production control/chat smoke | Passed with certificate-verified HTTPS/WSS and explicit identity/model fixtures |
 | Production data smoke | Passed with real isolated PostgreSQL/private media and fixture identity |
 | Python speech boundary suite | **7 tests passed**; fixture inference worker |
@@ -142,6 +142,18 @@ A reported helper failure after the browser callback was hidden behind its gener
 
 ### One-file team access — November 14, 2026
 
-On explicit user instruction, durably revoked the previous device key/pending enrollment and created one replacement persistent team-test credential. Public HTTPS claim returned null expiry; participant profile access using the resulting headers passed. Creation used the authorized private server authority; no new caregiver browser login or physical robot action was performed. The replacement is intentionally left active for the user's teammates. Its raw credential and outer key are saved only in ignored `.data/stackchan-access.json`, mode 0600; their values were not logged. Distribute that single file privately. It grants device scope, not caregiver/admin access; one active WSS endpoint remains the existing limit.
+On explicit user instruction, durably revoked the previous device key/pending enrollment and created one replacement persistent team-test credential. Public HTTPS claim returned null expiry; participant profile access using the resulting headers passed. Creation used the authorized private server authority; no new caregiver browser login or physical robot action was performed. The replacement is intentionally left active for the user's teammates. Its raw credential and outer key are saved only in ignored `.data/stackchan-access.json`, mode 0600; their values were not logged. Distribute that single file privately. It grants device scope, not caregiver/admin access; one active connection per device identity remains the limit; distinct enrolled devices may now connect concurrently with one audio owner per profile.
 
 The Python helper now performs claim and writes that same bundle by default, with `--pair-only` for the previous unclaimed-code flow. It refuses to overwrite an existing bundle before making any request. Ten local Python fixtures passed, including file/claim/redaction protections. This tooling/configuration action changes no server API or deployed runtime revision and requires no service restart. No automatic key rotation/revoke is added; a lost response still needs explicit revoke/re-enrollment.
+
+## Multi-profile endpoint deployment acceptance — November 14, 2026
+
+Deployed runtime `17a8522` after explicit full fictional multi-profile authorization. The original endpoint branch predates the later persistent-key/chat-support work; the integration preserved that work, nullable indefinite keys, current chat guards, and per-profile support/default-save/apply/context cancellation. Parallel technical reviews added transaction/epoch/membership fencing and four credential/migration regressions plus a cross-profile support regression. Teach Lemmi was reviewed only; it still requires registry/ownership/timer/live-shell adaptation and was not merged.
+
+Before production restart, the isolated integrated tree passed frozen Bun 1.4.4 install, type/Svelte, **169 Bun tests / 3,585 expectations** with separate PostgreSQL 17 runtime/schema/support databases, ten helper and seven speech-boundary Python tests, production build/format, participant-cookie/concurrent-endpoint/restart/release smoke, persistent data/support smoke, TLS control/chat fixture and six-second speech fixture output. Existing applied migration contents were byte-checked unchanged. These fixture smokes use simulated clients/model/playback, not physical hardware.
+
+Backed up private database/environment/proxy and previous source/build under ignored `.data/releases`. Applied `002_multi_profile_endpoints.sql` and reconciled `004_endpoint_revocations.sql` through the normal checksum runner; no previously applied migration changed, no existing profile was reseeded and no existing credential was rotated. The original conflicting branch receipt-creation migration was not applied. The old private revoke table is retained as `legacy_device_revocations` and command identities copied to the new device-scoped table. Enabled only fictional `LEMMI_DEMO_ENROLLMENT=1`, installed the validated scoped proxy allowlist, and restarted web/gateway. Voice settings/model/key remain unchanged.
+
+Observed after deployment: the existing shared persistent file still authenticates public scoped profile reads; its values were neither printed nor changed. Public `/access` returns 200, locked `/participant` redirects to `/access`, unkeyed `/v1/demo/profiles` returns 401, internal/caregiver/root paths return 404, and unlocked participant HTML returns 200. Created two explicitly named fictional rehearsal profiles through public APIs, enrolled distinct robot identities and connected them simultaneously over verified public WSS. Start/Pause/Stop stayed isolated by profile and audio negotiated false as configured. Revoked only those rehearsal endpoints and removed only the newly created rehearsal profiles through host-admin cleanup. The user's shared key was preserved and left active. Web/gateway report active with zero automatic restarts. No physical browser interaction/microphone/speaker/camera, new real caregiver login, real-model multi-profile conversation, reboot or venue test was performed.
+
+Frontend integration may use the same-origin participant clients and browser cookies now; robot integration may create a separate protected enrollment file/device ID per endpoint. Sharing one legacy key still identifies one device and does not create independent concurrent connections. See [current API quickstarts](backend_api.md#deployed-endpoints--frontend-and-robot-contracts) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).

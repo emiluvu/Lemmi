@@ -1,18 +1,22 @@
+# Multi-profile endpoint deployment handoff
+
+**Current deployment:** backend runtime `17a8522` is live with full fictional multi-profile enrollment, cookie participant setup and independent endpoint identities. It reconciles the historical branch below with newer persistent-key/chat-support changes. Both new compatibility migrations are applied; the user's existing shared persistent key still works. The original prototype receipt migration was replaced by `004_endpoint_revocations.sql`, retaining the existing revoke history. See [backend status](../backend-status.md) and [API quickstarts](../backend_api.md#deployed-endpoints--frontend-and-robot-contracts) for observed versus pending acceptance.
+
 # Anay → Kylie / Emilia: multiple profiles and endpoints
 
-Feature branch: `anay/multi-profile-endpoints`, based on `anay/speech-pipeline` at `151ebc3`. Worktree: `/tmp/lemmi-multi-profile-endpoints`. The shared checkout, main, backend-deploy and running deployment are unchanged. This extends the user-authorized demo beyond the earlier Alex-only scope. Existing preview cards remain static and cannot become live sessions.
+Feature branch: `anay/multi-profile-endpoints`, based on `anay/speech-pipeline` at `151ebc3`. Worktree: `/tmp/lemmi-multi-profile-endpoints`. Original branch work did not modify shared deployment; the current integration is now deployed as recorded above. This extends the user-authorized demo beyond the earlier Alex-only scope. Existing preview cards remain static and cannot become live sessions.
 
 ## Current integration note — November 14
 
-The user authorized full fictional multi-profile deployment and prioritized it ahead of Teach Lemmi. This handoff's original branch observations remain historical: the branch predates the persistent-key and chat/support deployments. The isolated candidate reconciles those later implementations instead of replacing them. Candidate code is not proof of host deployment; [backend status](../backend-status.md) records the actual running revision and checks.
+The user authorized full fictional multi-profile deployment and prioritized it ahead of Teach Lemmi. This handoff's original branch observations remain historical: the branch predates the persistent-key and chat/support deployments. The deployed integration reconciles those later implementations instead of replacing them; [backend status](../backend-status.md) records the actual running revision and checks.
 
 - Keep existing media/support/persistent migrations and their checksums unchanged. Add `002_multi_profile_endpoints.sql` and the reconciled `004_endpoint_revocations.sql`. Do not apply the original `003_device_revocation_receipts.sql` over the already-created production receipt table. The reconciliation must retain legacy revoke receipts and persistent credential hashes.
 - Existing null-expiry persistent keys remain supported; they are distinct from the new finite 30-day demo endpoint enrollments. `ParticipantEndpointSchema`/`ParticipantEnrollmentSchema` accept nullable expiry for compatibility, while new browser-cookie enrollments require finite expiry. Sharing the same credential creates one identity, not independently concurrent endpoint reservations.
 - Retain communication-support save/read/apply and chat hardening with per-profile membership/revision/cancellation. New demo setup authority cannot read caregiver-only profile guidance, edit biography/support, access journals/contacts or authorize cameras.
 - The source implementation must preserve the original local control/capture/output safety boundaries, explicit per-profile ownership and profile-isolated histories. Physical browser/K151 behavior remains acceptance work.
-- `codex/teach-lemmi` is reviewed separately and is not merged into this endpoint candidate. Its handoff names future commands/snapshot fields; clients must not send those until that integration ships.
+- `codex/teach-lemmi` is reviewed separately and is not merged into this endpoint release. Its handoff names future commands/snapshot fields; clients must not send those until that integration ships.
 
-For the exact frontend client exports, paths, auth and ownership protocol, use the [backend API candidate quickstart](../backend_api.md#endpoint-integration-candidate--frontend-and-robot-contracts). The original commands below describe intended deployment setup; apply them only through the tested release procedure, with the actual proxy allowlist and private backup.
+For the exact frontend client exports, paths, auth and ownership protocol, use the [backend API quickstart](../backend_api.md#deployed-endpoints--frontend-and-robot-contracts). The original commands below describe intended deployment setup; apply them only through the tested release procedure, with the actual proxy allowlist and private backup.
 
 ## Run and integrate
 
