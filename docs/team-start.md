@@ -73,6 +73,8 @@ SvelteKit is **3.2.0**, Svelte **5.57.3**, Vite **8.3.8**, Zod **4.6.7**, TypeSc
 - Subscriptions poll the one authority, with unsubscribe and no overlapping requests; production event streaming, full revision-conflict snapshots and complete server event vocabulary remain work for Anay. Fake-device wire traffic currently supports hello/heartbeat/basic controls/state, not audio/camera/teaching actions.
 - The starter is limited to bounded in-memory history (100 sessions, 100 events/session, 256 command IDs), not production retention. No diagnostic/clinical or emergency claims follow from its tests.
 
+For the current firmware/backend boundary and Anay’s next tasks, read the [device integration handoff](handoffs/anay-device-integration.md). It distinguishes compile-checked source from untested hardware and names the missing protocol exports.
+
 ## Start each person’s Codex
 
 Create a feature branch from updated main, for example `git switch -c emilia/stackchan-foundation` (use your own name/task). Keep one editing owner for root manifests, lockfile and shared contracts. Pull/rebase shared changes between slices. Do not commit real credentials, contacts or biography.
