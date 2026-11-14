@@ -6,6 +6,8 @@ Current deployment: [backend status](docs/backend-status.md) — running service
 
 Backend integration reference: [backend_api.md](docs/backend_api.md) — current routes, clients, events, auth, speech interfaces, limits and pending handoffs; maintained with backend changes.
 
+Undeployed database increment (`anay/app-data-schema`): [Emilia schema review](docs/handoffs/anay-app-data-schema-review.md) and [migration setup](db/README.md) cover the corrected album/playlist storage migration. No new collection API or journal/notification workflow is enabled.
+
 A personalized companion for familiar conversation, enjoyable activities, and connection with family.
 
 Lemmi is a Cal Poly Vibecode Club hackathon project exploring how an app and an optional Stackchan robot can support people living with dementia. Caregiver-provided context—such as preferred names, interests, familiar people, and communication preferences—helps the companion make interactions more personal.

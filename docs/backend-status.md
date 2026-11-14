@@ -8,6 +8,8 @@ The implemented backend is deployed on `mobrob-Precision-3680`. This is a fictio
 
 Maintain this deployment/acceptance record alongside the [backend API reference](backend_api.md) whenever backend behavior, configuration, availability or observed checks change. Do not promote unrun checks to passed or treat a new source commit as deployed.
 
+**Undeployed increment, November 14:** `anay/app-data-schema` reviews Emilia's `4e8993f` draft and promotes only corrected album/playlist metadata in migration `002_media_collections.sql`. PostgreSQL 14.24 upgrade/rollback and existing backend tests pass locally; no public API or shared/deployed database changed. Consent/journal/help/jobs/deletion/camera tables remain proposal-only. See [review, checks and next handoff](handoffs/anay-app-data-schema-review.md). The schema increment is now merged into `main` (`a6f7ff9`) and incorporated into `anay/speech-pipeline`; neither source merge changes the deployed revision recorded above.
+
 ## Deployment
 
 Public origin: **https://lemmi.chaoswarrior.dev**. Open **[/access](https://lemmi.chaoswarrior.dev/access)** to unlock the outer domain gate. `/` intentionally returns 404. The shared access key is stored privately in the host's root `.env`; it does not replace caregiver authentication or device pairing.
