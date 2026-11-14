@@ -29,6 +29,17 @@ It is not connected to the microphone or network; the running 0.5 sketch is unch
 See [audio handoff and checks](audio/README.md) for exact commands, integration
 requirements and provisional final-tail handling. No hardware upload is needed.
 
+## Offline petting experiment
+
+At Emilia's explicit request, a separate `lemmi_petting/` sketch adds a locally
+enabled three-zone stroke test and short static face reaction. Camera, mic,
+speaker and motion initialization stay disabled. It preserves the verified 0.5
+camera/audio sketch; uploading petting temporarily replaces that menu. Read
+[petting checks](petting-checks.md) for exact commands and recorded hardware checks.
+Emilia verified a face reaction, improved smoothness and stopped-state suppression
+on petting 0.2. Back-zone response recovered after hands-clear re-enabling.
+This separate experiment does not establish the secure F13/integrated F14 gate.
+
 ## First test
 
 `lemmi_foundation/lemmi_foundation.ino` shows Ready, Stop and a separate microphone mute setting. Stop latches until an explicit Ready action. Both Ready and Unmute leave capture off. Microphone/speaker initialization is disabled, and camera/network/motion APIs are not initialized. This proves no actual capture/output cancellation until a later audio-enabled hardware test; a software setting is not a physical microphone disconnect.

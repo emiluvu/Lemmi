@@ -22,10 +22,15 @@ allowed = {
     "event=mic_muted capture=off",
     "event=mic_unmuted capture=off",
     "event=ready capture=off",
+    "event=pet_stop capture=off camera=off",
+    "event=pet_disabled capture=off camera=off",
+    "event=pet_enabled capture=off camera=off",
+    "event=pet_ack capture=off camera=off",
 }
-boot = re.compile(r"firmware=(?:lemmi-foundation/0\.1|lemmi-feasibility/0\.[2345]) display=\d{2,4}x\d{2,4} capture=off camera=off")
+boot = re.compile(r"firmware=(?:lemmi-foundation/0\.1|lemmi-feasibility/0\.[2345]|lemmi-petting/0\.[12]) display=\d{2,4}x\d{2,4} capture=off camera=off")
 diagnostics = re.compile(
-    r"(?:event=camera_frame width=\d{1,5} height=\d{1,5} format=-?\d{1,10} bytes=\d{1,10} valid=[01]|"
+    r"(?:event=pet_sensor_unavailable stage=[1-6] capture=off camera=off|"
+    r"event=camera_frame width=\d{1,5} height=\d{1,5} format=-?\d{1,10} bytes=\d{1,10} valid=[01]|"
     r"event=camera_allowed local_only=1 limit_ms=15000|"
     r"event=audio_start kind=(?:mic|tone) ok=[01]|"
     r"event=test_stop reason=(?:local|expired|declined|mute|audio_error|camera_done|start_timeout) cleanup_ms=\d{1,10} camera_pending=[01]|"

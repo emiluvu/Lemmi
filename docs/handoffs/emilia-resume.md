@@ -9,7 +9,41 @@ Updated November 13, 2026. This is a restart handoff for a new ChatGPT/Codex acc
 - Read `AGENTS.md`, `firmware/stackchan/README.md`, `firmware/stackchan/hardware-checks.md`, `docs/robot-capabilities-spec.md` and `docs/integration-contracts.md`.
 - Keep firmware implementation on this branch. Anay owns backend/contracts, Kylie UI/art, Lukas activity logic/content. Anay’s separate handoff is already on main: `docs/handoffs/anay-device-integration.md` (`236768d`). Do not recreate the scaffold or move firmware onto main as part of resuming.
 
-## Latest increment — offline audio packetizer
+## Current running firmware — offline petting 0.2
+
+Emilia explicitly requested pettable local reactions while waiting for Anay.
+The repo normally orders integrated F14 after secure F13; this remains a separate
+local-only experiment. `lemmi_petting/` starts with reactions disabled and requires
+local Enable. A top-strip stroke produces a short static happy face. Camera,
+mic, speaker, network and motion initialization are disabled. Full StackChan BSP
+is not installed/called because its begin path also enables servo power.
+
+Petting 0.2 was uploaded by Emilia; all four image hashes verified, and the saved
+private application hash matches the current build. Pinned compile passed:
+557,323 program bytes / 26,404 static globals, plus a runtime 61,440-byte DRAM
+canvas. Gesture/suppression ASan/UBSan, helper and backup-integrity checks passed.
+
+Observed by Emilia on 0.2:
+
+- A front→middle→back stroke showed the happy face; she confirmed the earlier
+  flicker was gone after the partial/off-screen drawing changes.
+- Initially she reported only two touch indicators. After Disable and re-enable
+  with her hand clear, touching just the back zone lit the third indicator.
+  This is consistent with a touch-baseline issue; no hardware defect or exact
+  calibration cause was established. Enable with hands off, then wait two seconds.
+- After red Stop, petting produced no face; she confirmed it stayed stopped.
+
+Release/cooldown prevent queues. Ready leaves reactions disabled until a fresh
+Enable; hardware Ready/reboot checks and sustained reliability remain pending.
+Read [petting checks](../../firmware/stackchan/petting-checks.md) for exact commands,
+source references and observations. Guide Emilia one action at a time.
+
+This petting-only app currently replaces the 0.5 camera/audio test menu. The
+verified 0.5 sources, offline packetizer and original private flash backup are
+preserved. To return to camera/audio checks use build/upload target feasibility.
+Secure F13, integrated F14, final avatar art and safe motion remain unverified.
+
+## Previous increment — offline audio packetizer
 
 `firmware/stackchan/audio/PcmPacketizer.h` now frames arbitrary int16 buffers into
 320-sample / 640-byte little-endian packets using one fixed slot. It supports
@@ -48,6 +82,10 @@ Observed locally across 0.4/0.5:
 - Global Stop during active mic reported `reason=local cleanup_ms=4` at
   04:21:28 UTC. A separate active tone Stop reported `reason=local cleanup_ms=5`
   at 04:22:02 UTC; Emilia confirms the sound cut off early.
+- A subsequent continuous monitored 0.5 run (05:17–05:18 UTC) exercised camera
+  → local Stop → mic → local Stop → audible speaker. Camera teardown=65 ms,
+  mic handler cleanup=4 ms, speaker expiry cleanup=6 ms. Reverse audio→camera
+  reuse and sustained repetitions remain unverified.
 - Tone at 64/255 is audible. Earlier 24/255 tones were inaudible despite library
   acceptance; the pinned library squares master volume.
 
@@ -63,7 +101,7 @@ output leases/receipts remain to implement together.
 No intelligible speech or end-to-end STT/TTS is yet verified. Camera transport
 encoding also remains unresolved: hardware preview is RGB565, shared schema JPEG.
 
-Next hardware checks: sequential audio→camera→audio reuse, additional expiry/
+Next hardware checks: reverse audio→camera reuse, additional expiry/
 request/decline/reboot edge cases and repeated/peak heap measurements. Next
 integration handoff: agreed authenticated live control/media contracts from Anay.
 No F13/F14 acceptance, general watchdog proof or network-load latency is claimed.

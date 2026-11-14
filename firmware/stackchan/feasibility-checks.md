@@ -313,3 +313,24 @@ Anay can implement speech adapters against the proposed shared 16 kHz mono
 pcm_s16le / 20 ms / 640-byte frame contract. Firmware still needs bounded
 256→320-sample packetization, explicit live grants/receipts and the agreed
 authenticated WSS transport. No microphone/generated-speech recording was added.
+
+## 0.5 camera → mic → speaker reuse observed
+
+In one monitored 0.5 run on November 14 UTC (November 13 local), Emilia followed
+the separate explicit local actions for camera → microphone → speaker. She
+confirmed the camera returned to off, the microphone test completed its local
+Stop sequence, and the speaker tone was audible after those peripheral changes.
+The monitor reported:
+
+- Startup 05:17:36: 0.5, display 320×240, capture/camera off.
+- Camera Allow 05:17:56 → local Stop 05:17:58: one valid frame metadata event,
+  6 accepted 160×120 RGB565 frame copies, result code=0, max wait=49 ms, heap
+  before/after 281252/281220 bytes, handler cleanup=1 ms, teardown=65 ms,
+  max loop gap=99 ms.
+- Mic start 05:18:28: ok=1 → local Stop 05:18:30: cleanup=4 ms, camera_pending=0.
+- Speaker starts 05:18:47 and 05:18:51: both ok=1 → expiry with cleanup=6 ms,
+  camera_pending=0. Emilia separately confirmed the tone was audible.
+
+This establishes sequential camera→mic→speaker resource reuse in this run;
+reverse audio→camera reuse, longer repetitions, peak heap, network load and real
+speech/STT/TTS remain unverified. No new firmware was uploaded for this check.

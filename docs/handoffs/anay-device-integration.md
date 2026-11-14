@@ -34,6 +34,10 @@ cleanup and Emilia confirms the tone cut off early. Handler timings start after
 touch detection, not at physical contact. Intelligible speech and live STT/TTS
 remain unverified. Earlier 24/255 tone requests were inaudible despite ok=1.
 
+A later monitored 0.5 run also exercised camera → local Stop → mic → local Stop
+→ audible speaker without a new firmware upload between tests. Reverse switching,
+stress/peak-memory and live media remain unverified.
+
 Use the existing proposed 16 kHz mono signed little-endian PCM contract:
 20 ms / 320 samples / 640 bytes, base64 in current JSON audio.chunk schema.
 Offline firmware requests 256 int16 mono samples at 16 kHz and discards them;

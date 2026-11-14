@@ -90,3 +90,32 @@ Stop: `audio_start kind=tone ok=1` at 04:22:02.476 → `reason=local cleanup_ms=
 camera_pending=0` at 04:22:02.679; Emilia confirms the audible tone cut off early.
 Both are local handler measurements after touch detection. Live transport, speech
 intelligibility, full watchdog and network cancellation remain unverified.
+
+0.5 sequential reuse observed in one monitored run: camera Allow → local Stop
+(6 valid frame copies, teardown 65 ms), then mic start → local Stop (4 ms cleanup),
+then speaker starts → expiry (6 ms cleanup). Emilia confirms the speaker was
+audible after the camera/mic changes. This verifies camera→mic→speaker reuse in
+that run, not reverse audio→camera reuse, stress/peak-memory or live STT/TTS.
+
+## Separate offline petting experiment — pending hardware
+
+Emilia explicitly requested a touch/reaction prototype while backend handoff is
+pending. Source uses only the Si12T strip and static visual response, with local
+Enable/Stop and media/motion initialization disabled. Host recognizer sanitizer
+checks passed; sensor presence, actual gesture detection, Stop and restart behavior
+are unobserved. See [petting checks](petting-checks.md). Secure F13 and integrated
+F14 acceptance remain pending. No change to the verified 0.5 source or private backup.
+
+Petting 0.1 was uploaded/hash-verified by Emilia. She enabled it and observed the
+happy face on some strokes, missed strokes and screen flicker while touching.
+Thus touch/reaction operation exists, but reliable interaction is not passed.
+0.2 source limits updates to the content region/circles, uses off-screen face
+composition and tolerates overlap/timing variation. Updated gesture sanitizer
+tests pass; actual rendering improvement and Stop/restart checks remain pending.
+
+Petting 0.2 upload/hash verification passed; private application hash matches the
+current build. Emilia confirms a stroke shows the happy face without the earlier
+flicker, and Stop suppresses further pet reactions. A reported missing back zone
+responded as the third dot after hands-clear disable/re-enable; baseline is a
+possible explanation, not a proven diagnosis. Ready/reboot/repeated reliability
+checks remain pending. Current petting-only firmware keeps camera/mic/motion off.
