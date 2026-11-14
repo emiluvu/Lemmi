@@ -7,6 +7,9 @@ import {
   SessionCommandSchema,
   ActivityTransitionSchema,
   validateActivityCommandContext,
+  ConversationTextCommandSchema,
+  ConversationReplySchema,
+  type ConversationTextResult,
   type ActivityEvent,
   type ActivitySystemInput,
   type Operation,
@@ -33,10 +36,49 @@ import {
   projectActivity,
   applyActivitySystemInput,
 } from '@lemmi/activities';
+import { createHash } from 'node:crypto';
+import { companionInput } from './adapters/companion-prompt';
+import { fixedInputReply, routeParticipantText } from './adapters/input-routing';
+import type { ChatAdapter, ChatMessage } from './adapters/types';
 // One in-memory authority. Live mode currently exposes controls only, with no media/retention.
 export class SessionCoordinator {
-  constructor(private readonly mode: 'mock' | 'live' = 'mock') {}
+  constructor(
+    private readonly mode: 'mock' | 'live' = 'mock',
+    private readonly chatAdapter?: ChatAdapter,
+  ) {}
+  private dialogue: ChatMessage[] = [];
+  private chatIds = new Map<string, string>();
+  private lastChat: { commandId: string; result: Result<ConversationTextResult> } | null = null;
+  private pendingChat: {
+    commandId: string;
+    controller: AbortController;
+    promise: Promise<Result<ConversationTextResult>>;
+  } | null = null;
   private profile = structuredClone(caregiverProfile);
+  private approvedFacts: string[] = [];
+  // PostgreSQL remains behind this one authority; it never restores a running session.
+  pauseForProfileUpdate(patch: Record<string, unknown>) {
+    if (Object.keys(patch).some((key) => key !== 'communicationSupport'))
+      this.interrupt({ type: 'system.pause', reason: 'config_change' });
+  }
+  acceptPersistentProfile(profile: import('@lemmi/contracts').ProfileDetail) {
+    const {
+      approvedFacts,
+      privacyRevision: _privacy,
+      policyRevision: _policy,
+      ...caregiver
+    } = profile;
+    this.profile = structuredClone(caregiver);
+    this.approvedFacts = approvedFacts.map((fact) => fact.value);
+    if (this.session?.phase === 'paused')
+      this.session = { ...this.session, profileRevision: profile.revision };
+  }
+  persistenceSnapshot() {
+    const session = this.snapshot();
+    const events =
+      this.journal.sessions.find((record) => record.sessionId === session?.id)?.events ?? [];
+    return session ? { session, events: structuredClone(events) } : null;
+  }
   private session: SessionSnapshot | null = null;
   private activity: ActivityState | null = null;
   private context: ActivityContext | null = null;
@@ -46,6 +88,191 @@ export class SessionCoordinator {
   private count = 0;
   snapshot() {
     return this.session ? structuredClone(this.session) : null;
+  }
+  isCurrentTextReply(turnId: string): boolean {
+    // A result can have resolved before an interrupt, with its socket callback still queued.
+    // Clear-on-interrupt receipt ownership closes that race even when mute keeps generation.
+    return (
+      this.lastChat?.commandId === turnId &&
+      this.lastChat.result.ok &&
+      this.lastChat.result.data.kind === 'reply'
+    );
+  }
+  private cancelChat() {
+    this.pendingChat?.controller.abort();
+    this.pendingChat = null;
+    this.dialogue = [];
+    this.lastChat = null;
+  }
+  // Async text uses its own bounded transient receipt path: the generic command cache must
+  // never retain raw participant utterances/results after Stop, pause, mute or disconnect.
+  async submitText(raw: unknown): Promise<Result<ConversationTextResult>> {
+    const parsed = ConversationTextCommandSchema.safeParse(raw);
+    if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid participant text command');
+    const input = parsed.data;
+    const session = this.session;
+    if (this.mode !== 'live')
+      return fail('UNAVAILABLE', 'Live text conversation is unavailable in mock mode');
+    if (!session || session.id !== input.sessionId) return fail('NOT_FOUND', 'Session not found');
+    if (
+      session.generation !== input.expectedGeneration ||
+      session.phase === 'paused' ||
+      session.phase === 'ended'
+    )
+      return fail('REVISION_CONFLICT', 'Use the current active session snapshot');
+    const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+    const previous = this.chatIds.get(input.commandId);
+    if (previous) {
+      if (previous !== fingerprint)
+        return fail('REVISION_CONFLICT', 'Text command ID reused with different input');
+      if (this.pendingChat?.commandId === input.commandId) return this.pendingChat.promise;
+      if (this.lastChat?.commandId === input.commandId)
+        return structuredClone(this.lastChat.result);
+      return fail(
+        'REVISION_CONFLICT',
+        'Text turn is no longer replayable; no provider retry was made',
+      );
+    }
+    const route = routeParticipantText(input.text);
+    // Explicit help/Stop/refusal bypass generation, dialogue retention and ordinary turn limits.
+    if (route === 'stop' || route === 'pause') {
+      const result = this.handle('session.command', {
+        commandId: input.commandId,
+        sessionId: session.id,
+        expectedGeneration: session.generation,
+        action: { type: route },
+      });
+      return result.ok ? ok({ kind: 'control', action: route, session: this.snapshot()! }) : result;
+    }
+    if (route === 'help')
+      return this.handle('help.create', {
+        profileId: session.profileId,
+        commandId: input.commandId,
+        mode: 'real',
+      }) as Result<ConversationTextResult>;
+    const fixed = fixedInputReply(route, input.language);
+    if (fixed) {
+      if (route === 'incomplete_need' && this.pendingChat)
+        return fail('REVISION_CONFLICT', 'A conversation turn is pending');
+      if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
+      this.cancelChat();
+      if (route === 'unwell' || route === 'urgent' || route === 'topic_refusal')
+        this.interrupt({
+          type: 'system.pause',
+          reason: route === 'topic_refusal' ? 'participant' : 'help',
+        });
+      else this.session = { ...session, phase: 'waiting', captureGrant: null };
+      const result = ok<ConversationTextResult>({
+        kind: 'reply',
+        reply: { turnId: input.commandId, text: fixed, language: input.language, source: 'fixed' },
+        session: this.snapshot()!,
+      });
+      this.lastChat = { commandId: input.commandId, result };
+      return structuredClone(result);
+    }
+    if (
+      this.pendingChat ||
+      !['ready', 'waiting'].includes(session.phase) ||
+      (this.activity && this.activity.phase !== 'ended')
+    )
+      return fail('REVISION_CONFLICT', 'Finish or interrupt the current turn/activity first');
+    if (this.chatIds.size >= 256)
+      return fail('UNAVAILABLE', 'Text turn capacity reached; start a new session');
+    this.chatIds.set(input.commandId, fingerprint);
+    this.lastChat = null;
+    if (!this.chatAdapter)
+      return fail('UNAVAILABLE', 'Configure the server LLM key/model before chatting');
+    const prepared = companionInput({
+      text: input.text,
+      language: input.language,
+      preset: session.communicationSupport.preset,
+      preferredName: this.profile.preferredName,
+      history: this.dialogue,
+      approvedFacts: this.approvedFacts,
+    });
+    if (!prepared.ok) return prepared;
+    this.session = { ...session, phase: 'processing', captureGrant: null };
+    const pending = {
+      commandId: input.commandId,
+      controller: new AbortController(),
+      promise: Promise.resolve(fail('UNAVAILABLE', 'Turn not started')) as Promise<
+        Result<ConversationTextResult>
+      >,
+    };
+    this.pendingChat = pending;
+    const signal = AbortSignal.any([pending.controller.signal, AbortSignal.timeout(20000)]);
+    const current = () =>
+      this.pendingChat === pending &&
+      this.session?.id === session.id &&
+      this.session.phase === 'processing' &&
+      this.session.generation === session.generation &&
+      this.session.leaseId === session.leaseId &&
+      this.session.profileRevision === session.profileRevision &&
+      this.session.privacyRevision === session.privacyRevision &&
+      this.session.policyRevision === session.policyRevision;
+    pending.promise = (async () => {
+      let result: Result<ConversationTextResult>;
+      try {
+        const response = await new Promise<Awaited<ReturnType<ChatAdapter['complete']>>>(
+          (resolve, reject) => {
+            const aborted = () => reject(new Error('Turn canceled'));
+            signal.addEventListener('abort', aborted, { once: true });
+            Promise.resolve()
+              .then(() => {
+                signal.throwIfAborted();
+                return this.chatAdapter!.complete(prepared.data, signal);
+              })
+              .then(resolve, reject)
+              .finally(() => signal.removeEventListener('abort', aborted));
+          },
+        );
+        if (!current() || signal.aborted)
+          return fail('REVISION_CONFLICT', 'Discarded an obsolete conversation result');
+        this.session = { ...this.session!, phase: 'waiting', captureGrant: null };
+        if (!response.ok) result = response;
+        else if (
+          !ConversationReplySchema.safeParse({
+            ...response.data,
+            turnId: input.commandId,
+            source: 'model',
+          }).success ||
+          response.data.language !== input.language
+        )
+          result = fail('UNAVAILABLE', 'Invalid conversation reply');
+        else if (
+          (response.data.text.match(/\?/g)?.length ?? 0) >
+          (session.communicationSupport.preset === 'quiet' ? 0 : 1)
+        )
+          result = fail('UNAVAILABLE', 'Response did not meet the configured question limit');
+        else {
+          this.dialogue = [
+            ...this.dialogue,
+            { role: 'user', content: input.text },
+            { role: 'assistant', content: response.data.text },
+          ].slice(-6) as ChatMessage[];
+          result = ok({
+            kind: 'reply',
+            reply: {
+              turnId: input.commandId,
+              text: response.data.text,
+              language: input.language,
+              source: 'model',
+            },
+            session: this.snapshot()!,
+          });
+        }
+      } catch {
+        if (!current()) return fail('REVISION_CONFLICT', 'Conversation turn was canceled');
+        this.session = { ...this.session!, phase: 'waiting', captureGrant: null };
+        result = fail('UNAVAILABLE', 'Conversation service unavailable or timed out');
+      }
+      if (this.pendingChat === pending) {
+        this.pendingChat = null;
+        this.lastChat = { commandId: input.commandId, result };
+      }
+      return structuredClone(result);
+    })();
+    return pending.promise;
   }
   private participant() {
     return ParticipantProfileSchema.parse({
@@ -71,6 +298,7 @@ export class SessionCoordinator {
     }
   }
   private interrupt(input: Extract<ActivitySystemInput, { type: 'system.pause' | 'system.end' }>) {
+    this.cancelChat();
     if (!this.session || this.session.phase === 'ended') return;
     this.session = {
       ...this.session,
@@ -111,11 +339,15 @@ export class SessionCoordinator {
         return previous.body === body
           ? structuredClone(previous.result)
           : fail('REVISION_CONFLICT', 'Command ID reused with different input');
-      const safeStop =
+      const action =
+        op === 'session.command' ? SessionCommandSchema.safeParse(input).data?.action : undefined;
+      const safetyControl =
         this.mode === 'live' &&
-        op === 'session.command' &&
-        SessionCommandSchema.safeParse(input).data?.action.type === 'stop';
-      if (this.cache.size >= 256 && !safeStop)
+        (op === 'help.create' ||
+          action?.type === 'stop' ||
+          action?.type === 'pause' ||
+          (action?.type === 'mute' && action.muted));
+      if (this.cache.size >= 256 && !safetyControl)
         return fail('UNAVAILABLE', 'Command capacity reached; restart gateway');
     }
     let result: Result<unknown>;
@@ -168,6 +400,8 @@ export class SessionCoordinator {
           return fail('REVISION_CONFLICT', 'One mock session is already open');
         if (this.journal.sessions.length >= 100)
           return fail('UNAVAILABLE', 'Mock session capacity reached; restart gateway');
+        this.cancelChat();
+        this.chatIds.clear();
         this.session = SessionSnapshotSchema.parse({
           id: this.mode === 'live' ? `session-${crypto.randomUUID()}` : `session-${++this.count}`,
           profileId: DEMO_PROFILE_ID,
@@ -221,6 +455,11 @@ export class SessionCoordinator {
             };
             break;
           case 'mute':
+            if (action.muted) {
+              const pending = this.pendingChat !== null;
+              this.cancelChat();
+              if (pending) this.session = { ...this.session, phase: 'waiting' };
+            }
             this.session = {
               ...this.session,
               micMuted: action.muted,

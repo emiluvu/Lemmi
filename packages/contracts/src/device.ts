@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IdSchema, RevisionSchema, ErrorCodeSchema } from './common';
 import { SessionSnapshotSchema } from './session';
+import { ConversationReplySchema } from './conversation';
 export const CheckInStateSchema = z.enum([
   'off',
   'requested',
@@ -95,6 +96,14 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     ...base,
+    type: z.literal('input.text'),
+    payload: z.strictObject({
+      text: z.string().trim().min(1).max(1000),
+      language: z.enum(['en', 'de']),
+    }),
+  }),
+  z.strictObject({
+    ...base,
     type: z.literal('input.mute'),
     payload: z.strictObject({ muted: z.boolean() }),
   }),
@@ -139,8 +148,16 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       credentialExpiresAt: z.string().datetime(),
       audio: z.literal(false),
       camera: z.literal(false),
-      controls: z.array(z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help'])).max(6),
+      textChat: z.boolean().optional(),
+      controls: z
+        .array(z.enum(['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text']))
+        .max(7),
     }),
+  }),
+  z.strictObject({
+    ...base,
+    type: z.literal('response.text'),
+    payload: ConversationReplySchema,
   }),
   z.strictObject({
     ...base,

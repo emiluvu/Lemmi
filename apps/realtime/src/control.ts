@@ -5,6 +5,7 @@ import {
   ClaimDeviceInputSchema,
   RevokeDeviceAuthorityInputSchema,
   fail,
+  ok,
   type ServerEvent,
   type ErrorCode,
 } from '@lemmi/contracts';
@@ -16,7 +17,13 @@ import {
   isLoopbackHost,
   localMockRequestAllowed,
   secretMatches,
+  hasPrivateAccess,
   type DeviceIdentity,
+  type ChatAdapter,
+  PersistentData,
+  dataFailure,
+  boundedJson,
+  type DataRepository,
 } from '@lemmi/server';
 
 type SocketData = {
@@ -27,14 +34,24 @@ type SocketData = {
   lastHeartbeat: number;
   window: number;
   messages: number;
+  deliveredText: Set<string>;
 };
-type Options = { publicOrigin: string; internalToken: string; port: number; now?: () => number };
+type Options = {
+  publicOrigin: string;
+  internalToken: string;
+  port: number;
+  now?: () => number;
+  chatAdapter?: ChatAdapter;
+  repository?: DataRepository;
+  caregiverSubject?: string;
+  accessKey?: string | null;
+};
 
 // The same gateway owns pairing and the single existing session authority. A trusted local
 // reverse proxy terminates HTTPS/WSS; it must overwrite Host and X-Forwarded-Proto.
 export function startControlGateway(options: Options) {
   const now = options.now ?? Date.now;
-  const coordinator = new SessionCoordinator('live');
+  const coordinator = new SessionCoordinator('live', options.chatAdapter);
   const sockets = new Set<Bun.ServerWebSocket<SocketData>>();
   let connectionClaimed = false;
   let connectionClaimedAt = 0;
@@ -45,10 +62,53 @@ export function startControlGateway(options: Options) {
     options.internalToken.length < 32
   )
     throw new Error('An HTTPS public origin and independent internal credential are required');
-  const access = new DeviceAccess(now, () => {
+  const invalidated = () => {
     coordinator.revokeDeviceAccess();
     for (const socket of sockets) socket.close(1008, 'Device access ended');
-  });
+  };
+  const data = options.repository
+    ? new PersistentData(
+        options.repository,
+        options.caregiverSubject ?? '',
+        coordinator,
+        now,
+        invalidated,
+      )
+    : null;
+  const access = data?.devices ?? new DeviceAccess(now, invalidated);
+  const ready = data ? data.start() : Promise.resolve();
+  void ready.catch(() => {});
+  type Checkpoint = NonNullable<ReturnType<SessionCoordinator['persistenceSnapshot']>>;
+  const checkpoints: Checkpoint[] = [];
+  let persisting: Promise<void> | null = null;
+  function persist() {
+    if (!data) return Promise.resolve();
+    const snapshot = coordinator.persistenceSnapshot();
+    if (snapshot) {
+      const last = checkpoints.at(-1);
+      if (last?.session.id === snapshot.session.id) checkpoints[checkpoints.length - 1] = snapshot;
+      else checkpoints.push(snapshot);
+    }
+    if (checkpoints.length > 8) {
+      coordinator.disconnect();
+      for (const socket of sockets) socket.close(1011, 'Persistent checkpoint capacity');
+      return Promise.reject(new Error('Persistent checkpoint capacity'));
+    }
+    if (persisting) return persisting;
+    if (!checkpoints.length) return Promise.resolve();
+    persisting = (async () => {
+      try {
+        while (checkpoints.length) await data.checkpoint(checkpoints.shift()!);
+      } catch {
+        checkpoints.length = 0;
+        coordinator.disconnect();
+        for (const socket of sockets) socket.close(1011, 'Persistent data unavailable');
+      } finally {
+        persisting = null;
+      }
+    })();
+    return persisting;
+  }
   function emit(ws: Bun.ServerWebSocket<SocketData>, type: ServerEvent['type'], payload: unknown) {
     const session = coordinator.snapshot();
     const sent = ws.send(
@@ -57,7 +117,13 @@ export function startControlGateway(options: Options) {
           protocol_version: 1,
           event_id: crypto.randomUUID(),
           session_id: session?.id ?? null,
-          turn_id: null,
+          turn_id:
+            type === 'response.text' &&
+            payload &&
+            typeof payload === 'object' &&
+            'turnId' in payload
+              ? payload.turnId
+              : null,
           generation: session?.generation ?? 0,
           sequence: ws.data.outputSequence++,
           type,
@@ -79,6 +145,7 @@ export function startControlGateway(options: Options) {
     emit(ws, 'error', { code, message, ...(commandId ? { commandId } : {}) });
   }
   function broadcast() {
+    void persist().catch(() => {});
     for (const socket of sockets)
       if (socket.data.hello && access.current(socket.data.identity))
         emit(socket, 'state.changed', { mode: 'live', session: coordinator.snapshot() });
@@ -89,7 +156,7 @@ export function startControlGateway(options: Options) {
   const server = Bun.serve<SocketData>({
     hostname: '127.0.0.1',
     port: options.port,
-    maxRequestBodySize: 4096,
+    maxRequestBodySize: 29 * 1024 * 1024,
     async fetch(request, server) {
       const url = new URL(request.url);
       const peer = server.requestIP(request)?.address ?? null;
@@ -97,7 +164,7 @@ export function startControlGateway(options: Options) {
         return controlResponse(
           fail('FORBIDDEN', 'Trusted local proxy required; query credentials are forbidden'),
         );
-      if (url.pathname.startsWith('/internal/control/')) {
+      if (url.pathname === '/internal/data' || url.pathname.startsWith('/internal/control/')) {
         if (!localMockRequestAllowed(request, peer))
           return controlResponse(fail('FORBIDDEN', 'Internal control access only'));
         const token = bearer(request);
@@ -107,42 +174,87 @@ export function startControlGateway(options: Options) {
           return new Response(null, { status: 405, headers: { 'Cache-Control': 'no-store' } });
         let raw: unknown;
         try {
-          raw = await request.json();
+          raw = await boundedJson(
+            request,
+            url.pathname === '/internal/data' ? 29 * 1024 * 1024 : 4096,
+          );
         } catch {
           return controlResponse(fail('VALIDATION_ERROR', 'Invalid JSON'));
         }
-        switch (url.pathname) {
-          case '/internal/control/pair': {
-            const parsed = PairDeviceAuthorityInputSchema.safeParse(raw);
-            return controlResponse(
-              parsed.success
-                ? access.pair(parsed.data.actor, parsed.data.input)
-                : fail('VALIDATION_ERROR', 'Invalid pairing request'),
-            );
-          }
-          case '/internal/control/claim': {
-            const parsed = ClaimDeviceInputSchema.safeParse(raw);
-            return controlResponse(
-              parsed.success
-                ? access.claim(parsed.data)
-                : fail('VALIDATION_ERROR', 'Invalid local confirmation'),
-            );
-          }
-          case '/internal/control/revoke': {
-            const parsed = RevokeDeviceAuthorityInputSchema.safeParse(raw);
-            if (!parsed.success)
-              return controlResponse(fail('VALIDATION_ERROR', 'Invalid revocation request'));
-            const result = access.revoke(parsed.data.actor, parsed.data.input);
-            if (result.ok)
-              for (const socket of sockets)
-                if (!access.current(socket.data.identity)) {
-                  endSession();
-                  socket.close(1008, 'Device access revoked');
-                }
+        try {
+          await ready;
+        } catch {
+          return controlResponse(fail('UNAVAILABLE', 'Persistent data startup failed'));
+        }
+        if (url.pathname === '/internal/data') {
+          if (!data || !raw || typeof raw !== 'object')
+            return controlResponse(fail('UNAVAILABLE', 'PostgreSQL data mode is not configured'));
+          const { actor, credential, ...operation } = raw as Record<string, unknown>;
+          try {
+            const result = await data.handle(operation, actor, credential);
+            broadcast();
+            if (
+              operation.operation === 'asset.read' &&
+              operation.bytes === true &&
+              result.ok &&
+              'bytes' in result.data
+            ) {
+              const value = result.data as {
+                metadata: { mediaType: string; byteLength: number };
+                bytes: Buffer;
+              };
+              return new Response(new Uint8Array(value.bytes), {
+                headers: {
+                  'content-type': value.metadata.mediaType,
+                  'content-length': String(value.metadata.byteLength),
+                  'cache-control': 'no-store, private',
+                  'x-content-type-options': 'nosniff',
+                },
+              });
+            }
+            if (operation.operation === 'asset.read' && result.ok && 'metadata' in result.data)
+              return controlResponse(ok(result.data.metadata));
             return controlResponse(result);
+          } catch (error) {
+            return controlResponse(dataFailure(error));
           }
-          default:
-            return controlResponse(fail('NOT_FOUND', 'Unknown control operation'));
+        }
+        try {
+          switch (url.pathname) {
+            case '/internal/control/pair': {
+              const parsed = PairDeviceAuthorityInputSchema.safeParse(raw);
+              return controlResponse(
+                parsed.success
+                  ? await access.pair(parsed.data.actor, parsed.data.input)
+                  : fail('VALIDATION_ERROR', 'Invalid pairing request'),
+              );
+            }
+            case '/internal/control/claim': {
+              const parsed = ClaimDeviceInputSchema.safeParse(raw);
+              return controlResponse(
+                parsed.success
+                  ? await access.claim(parsed.data)
+                  : fail('VALIDATION_ERROR', 'Invalid local confirmation'),
+              );
+            }
+            case '/internal/control/revoke': {
+              const parsed = RevokeDeviceAuthorityInputSchema.safeParse(raw);
+              if (!parsed.success)
+                return controlResponse(fail('VALIDATION_ERROR', 'Invalid revocation request'));
+              const result = await access.revoke(parsed.data.actor, parsed.data.input);
+              if (result.ok)
+                for (const socket of sockets)
+                  if (!access.current(socket.data.identity)) {
+                    endSession();
+                    socket.close(1008, 'Device access revoked');
+                  }
+              return controlResponse(result);
+            }
+            default:
+              return controlResponse(fail('NOT_FOUND', 'Unknown control operation'));
+          }
+        } catch (error) {
+          return controlResponse(dataFailure(error));
         }
       }
       if (
@@ -153,8 +265,20 @@ export function startControlGateway(options: Options) {
         return controlResponse(fail('FORBIDDEN', 'HTTPS/WSS at the configured origin required'));
       if (url.pathname !== '/v1/device-stream')
         return controlResponse(fail('NOT_FOUND', 'Unknown device route'));
+      try {
+        await ready;
+      } catch {
+        return controlResponse(fail('UNAVAILABLE', 'Persistent data startup failed'));
+      }
+      if (!hasPrivateAccess(request, options.accessKey ?? null, now()))
+        return controlResponse(fail('UNAUTHORIZED', 'Private access key required'));
       const token = bearer(request);
-      const identity = token ? access.authenticate(token) : null;
+      let identity;
+      try {
+        identity = token ? await access.authenticate(token) : null;
+      } catch {
+        return controlResponse(fail('UNAVAILABLE', 'Device authorization database unavailable'));
+      }
       if (!identity)
         return controlResponse(fail('UNAUTHORIZED', 'Current paired device credential required'));
       if (request.method !== 'GET' || request.headers.get('upgrade')?.toLowerCase() !== 'websocket')
@@ -173,6 +297,7 @@ export function startControlGateway(options: Options) {
           lastHeartbeat: now(),
           window: now(),
           messages: 0,
+          deliveredText: new Set<string>(),
         },
       });
       if (!upgraded) connectionClaimed = false;
@@ -241,7 +366,16 @@ export function startControlGateway(options: Options) {
             credentialExpiresAt: new Date(ws.data.identity.expiresAt).toISOString(),
             audio: false,
             camera: false,
-            controls: ['start', 'stop', 'pause', 'resume', 'mute', 'help'],
+            textChat: !!options.chatAdapter,
+            controls: [
+              'start',
+              'stop',
+              'pause',
+              'resume',
+              'mute',
+              'help',
+              ...(options.chatAdapter ? ['text'] : []),
+            ],
           });
           emit(ws, 'command.ack', { mode: 'live', commandId: event.event_id, applied: true });
           broadcast();
@@ -266,6 +400,65 @@ export function startControlGateway(options: Options) {
           emit(ws, 'heartbeat', { mode: 'live' });
           return;
         }
+        if (event.type === 'input.text') {
+          // Do not await provider work in the control handler. Stop/mute/help/heartbeat
+          // remain responsive; the coordinator drops all obsolete turn results.
+          const work = coordinator.submitText({
+            commandId: event.event_id,
+            sessionId: event.session_id,
+            expectedGeneration: event.generation,
+            ...event.payload,
+          });
+          broadcast();
+          void work
+            .then((result) => {
+              if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
+              const latest = coordinator.snapshot();
+              if (
+                result.ok &&
+                result.data.kind === 'reply' &&
+                (!coordinator.isCurrentTextReply(result.data.reply.turnId) ||
+                  !latest ||
+                  latest.phase === 'ended' ||
+                  (latest.phase === 'paused' && result.data.reply.source !== 'fixed') ||
+                  latest.id !== result.data.session.id ||
+                  latest.generation !== result.data.session.generation ||
+                  latest.leaseId !== result.data.session.leaseId ||
+                  latest.profileRevision !== result.data.session.profileRevision ||
+                  latest.privacyRevision !== result.data.session.privacyRevision ||
+                  latest.policyRevision !== result.data.session.policyRevision)
+              ) {
+                error(
+                  ws,
+                  'REVISION_CONFLICT',
+                  'Discarded obsolete conversation output',
+                  event.event_id,
+                );
+                return;
+              }
+              emit(ws, 'command.ack', {
+                mode: 'live',
+                commandId: event.event_id,
+                applied: result.ok,
+              });
+              if (
+                result.ok &&
+                result.data.kind === 'reply' &&
+                !ws.data.deliveredText.has(result.data.reply.turnId)
+              ) {
+                if (ws.data.deliveredText.size >= 256) ws.data.deliveredText.clear();
+                ws.data.deliveredText.add(result.data.reply.turnId);
+                emit(ws, 'response.text', result.data.reply);
+              } else if (!result.ok)
+                error(ws, result.error.code, result.error.message, event.event_id);
+              broadcast();
+            })
+            .catch(() => {
+              if (sockets.has(ws))
+                error(ws, 'UNAVAILABLE', 'Conversation service unavailable', event.event_id);
+            });
+          return;
+        }
         let result;
         if (event.type === 'input.start') {
           if (event.session_id !== null || event.generation !== 0) {
@@ -282,6 +475,8 @@ export function startControlGateway(options: Options) {
             endpoint: 'robot',
             commandId: event.event_id,
           });
+          if (result.ok && current?.id !== coordinator.snapshot()?.id)
+            ws.data.deliveredText.clear();
         } else if (event.type === 'input.help') {
           result = coordinator.handle('help.create', {
             profileId: ws.data.identity.profileId,
@@ -319,7 +514,20 @@ export function startControlGateway(options: Options) {
       },
     },
   });
+  let checkingDatabase = false;
   const watchdog = setInterval(() => {
+    if (data && !checkingDatabase && sockets.size) {
+      checkingDatabase = true;
+      void data.devices
+        .verifyCurrent()
+        .then((valid) => {
+          if (!valid) invalidated();
+        })
+        .catch(() => invalidated())
+        .finally(() => {
+          checkingDatabase = false;
+        });
+    }
     access.sweep();
     if (connectionClaimed && !sockets.size && now() - connectionClaimedAt > 6000)
       connectionClaimed = false;
@@ -335,10 +543,18 @@ export function startControlGateway(options: Options) {
   }, 500);
   return {
     server,
+    ready,
+    data,
+    flush: () => persist(),
     stop() {
       clearInterval(watchdog);
       coordinator.disconnect();
       server.stop(true);
+      if (data)
+        void persist()
+          .catch(() => {})
+          .finally(() => data.close())
+          .catch(() => {});
     },
   };
 }

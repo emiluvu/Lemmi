@@ -2,6 +2,10 @@
 
 Backend checklist: [Anay's tasks](docs/anay_tasks.md) — teammate blockers, backend work and agent claims.
 
+Current deployment: [backend status](docs/backend-status.md) — running services, verified live paths and remaining limitations.
+
+Backend integration reference: [backend_api.md](docs/backend_api.md) — current routes, clients, events, auth, speech interfaces, limits and pending handoffs; maintained with backend changes.
+
 A personalized companion for familiar conversation, enjoyable activities, and connection with family.
 
 Lemmi is a Cal Poly Vibecode Club hackathon project exploring how an app and an optional Stackchan robot can support people living with dementia. Caregiver-provided context—such as preferred names, interests, familiar people, and communication preferences—helps the companion make interactions more personal.
@@ -12,7 +16,7 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
-**Shared mock starter implemented; product features remain in development.** The repository includes a pinned Bun/SvelteKit workspace, runtime-validated contracts, typed HTTP/fixture clients, a loopback mock session gateway, participant/caregiver development shells, a small pure music example and a fake-device connector. An optional authenticated control foundation is described below. See [Team start guide](docs/team-start.md) for clone/run commands, implemented seams, limitations and each person’s first task. No firmware, real audio/media, caregiver sign-in UI, database, external AI, real notifications or camera streaming is implemented. Managed-provider configuration and deployment verification remain pending. The broader specifications remain the target, not a claim of completed P0 behavior.
+**Shared mock starter implemented; product features remain in development.** The repository includes a pinned Bun/SvelteKit workspace, runtime-validated contracts, typed HTTP/fixture clients, a loopback mock session gateway, participant/caregiver development shells, a small pure music example and a fake-device connector. Optional authenticated controls, text-chat integration and local speech adapters are described below. See [Team start guide](docs/team-start.md) for clone/run commands, implemented seams, limitations and each person’s first task. Integrated firmware/media playback, caregiver sign-in UI, real notifications and camera streaming remain pending. External LLM configuration/live testing and deployment verification are unfinished. The broader specifications remain the target, not a claim of completed P0 behavior.
 
 Lemmi is an experimental prototype. It has not been clinically evaluated and does not diagnose, treat, assess cognitive decline, or replace caregivers or medical professionals. Use fictional profiles and team rehearsal. Lukas is also planning an optional supervised live demo with Grandma after private rehearsal and her agreement; her health status is unspecified, and a teammate fallback is always available. Testing with people living with dementia requires further care-professional review and participant involvement in the design.
 
@@ -22,9 +26,15 @@ Activity contracts A01–A04 now provide separate states for all four activities
 
 An optional **authenticated control foundation** now adds scoped device pairing/revocation, a managed-provider token verification adapter, and control-only WebSockets through the existing session coordinator. See [Anay’s control handoff](docs/handoffs/anay-control-foundation.md) for contracts, private configuration and TLS/provisioning requirements. Default startup remains the local mock. Actual identity-provider setup, public TLS/network deployment, caregiver sign-in UI, hardware, media and real notifications remain unverified or unavailable; this is not completed product authentication or robot readiness.
 
+**Speech/chat increment:** the authenticated gateway can accept explicit text turns through the same coordinator using a server-configured OpenRouter model/key; model responses have only been tested with fixtures so far. A separate private local engine wrapper runs faster-whisper/Piper, with CPU English synthetic synthesis→transcription verified on Framework WSL Ubuntu 22.04.5. STT/TTS settings and endpoints are independent; real device microphone ingestion, STT→chat, generated-speech playback and German voice/demo validation remain pending. Use the [Ubuntu speech setup](services/local-speech/README.md) and [Emilia/Kylie speech handoff](docs/handoffs/anay-speech-chat.md). Default `bun run dev` stays mock-only and makes no model calls.
+
+Optional **PostgreSQL/profile/private-media mode** now persists fictional Alex's approved profile/facts, device credential hashes and session checkpoints, with protected resource APIs and private PNG/PCM-WAV storage. See [database setup](db/README.md) and [A18/A19 handoff](docs/handoffs/anay-database-profile-assets.md). Default mock startup still needs no database. Full journal/summary, notification, preference and deletion workflows remain pending; real identity-provider/host/hardware readiness is not established by local fixture checks.
+
 ## Demo profile scope
 
 The demo implements one functional fictional profile, Alex, end to end. Additional fictional profile cards may illustrate the caregiver dashboard, but must be labeled **Example profile — preview only**. They do not open live participant sessions, write journals/preferences, receive notifications, pair devices or request camera access. They have no real contacts or private data. A preview may open clearly labeled static detail content; it must never reuse Alex’s live data or credentials under another name. Multi-profile management and switching are outside this demo. Keep live APIs resource-scoped and reject unassigned/example profile IDs; isolated authorization fixtures do not require a second functional profile.
+
+Backend deployment uses the `backend-deploy` integration branch; see the [new-machine and Cloudflare deployment guide](docs/backend-deploy.md). The [current Ubuntu host setup](docs/host-setup.md) records running local services and observed checks; the public tunnel/gate, actual VoidAuth caregiver setup, PostgreSQL bootstrap and public computer-device text-chat path have been verified. Host DNS and speech-quality limitations remain documented there.
 
 ## Who we are designing for
 

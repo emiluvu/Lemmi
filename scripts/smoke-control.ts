@@ -8,6 +8,8 @@ const directory = await mkdtemp(join(tmpdir(), 'lemmi-control-smoke-'));
 const keyPath = join(directory, 'key.pem');
 const certPath = join(directory, 'cert.pem');
 const children: ReturnType<typeof Bun.spawn>[] = [];
+const chatFixture = process.argv.includes('--chat-fixture');
+const accessKey = crypto.randomUUID();
 let proxy: ReturnType<typeof Bun.serve> | undefined;
 let identity: ReturnType<typeof Bun.serve> | undefined;
 function availablePort() {
@@ -51,6 +53,23 @@ try {
   );
   requireValue(certificate.exitCode === 0, 'OpenSSL test certificate generation failed');
   const ca = await Bun.file(certPath).text();
+  const fixturePath = join(directory, 'openrouter-fixture.ts');
+  if (chatFixture)
+    await Bun.write(
+      fixturePath,
+      `
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === 'https://openrouter.ai/api/v1/chat/completions') {
+        const body = JSON.parse(String(init?.body));
+        if (body.model !== 'fixture/english-chat' || body.provider?.zdr !== true || body.stream !== false)
+          return new Response(null, {status: 400});
+        return Response.json({choices:[{finish_reason:'stop', message:{role:'assistant', content:'Hello. We can take our time.'}}]});
+      }
+      return originalFetch(input, init);
+    };
+  `,
+    );
   const tls = { key: Bun.file(keyPath), cert: Bun.file(certPath) };
   const managedToken = crypto.randomUUID();
   const clientSecret = crypto.randomUUID();
@@ -105,7 +124,7 @@ try {
         }
       }
       if (
-        !/^\/v1\/(devices\/stackchan-alex\/(pairings|revoke)|device-pairings\/claim)$/.test(
+        !/^\/(access(?:\/logout)?|v1\/(devices\/stackchan-alex\/(pairings|revoke)|device-pairings\/claim))$/.test(
           url.pathname,
         )
       )
@@ -141,6 +160,10 @@ try {
     LEMMI_MODE: 'live',
     LEMMI_PUBLIC_ORIGIN: origin,
     LEMMI_CONTROL_TOKEN: crypto.randomUUID(),
+    LEMMI_ACCESS_KEY: accessKey,
+    // Control fixtures must never attach to the deployment's real database.
+    LEMMI_DATABASE_URL: '',
+    LEMMI_PRIVATE_MEDIA_DIR: '',
     GATEWAY_PORT: String(gatewayPort),
     HOST: '127.0.0.1',
     PORT: String(webPort),
@@ -152,18 +175,31 @@ try {
     LEMMI_AUTH_INTROSPECTION_URL: `https://127.0.0.1:${identity.port}/introspect`,
     LEMMI_AUTH_ISSUER: 'https://fixture-issuer.invalid',
     LEMMI_AUTH_AUDIENCE: 'lemmi-control',
+    LEMMI_AUTH_TOKEN_BINDING: 'audience',
     LEMMI_AUTH_CLIENT_ID: 'fixture-client',
     LEMMI_AUTH_CLIENT_SECRET: clientSecret,
     LEMMI_CAREGIVER_SUBJECT: 'fixture-caregiver-alex',
+    // Never inherit real provider keys/model into a production wiring smoke.
+    OPENROUTER_API_KEY: chatFixture ? 'fixture-not-a-real-key' : '',
+    OPENROUTER_MODEL: chatFixture ? 'fixture/english-chat' : '',
+    LEMMI_CHAT_LANGUAGE: 'en',
   };
   for (const script of ['apps/realtime/src/index.ts', 'apps/web/build/index.js'])
     children.push(
-      Bun.spawn([process.execPath, script], { env, stdout: 'ignore', stderr: 'inherit' }),
+      Bun.spawn(
+        [
+          process.execPath,
+          ...(chatFixture && script.includes('realtime') ? ['--preload', fixturePath] : []),
+          script,
+        ],
+        { env, stdout: 'ignore', stderr: 'inherit' },
+      ),
     );
   async function call(path: string, input: unknown, token?: string, requestOrigin = origin) {
     return fetch(`${origin}${path}`, {
       method: 'POST',
       headers: {
+        'X-Lemmi-Access-Key': accessKey,
         'content-type': 'application/json',
         origin: requestOrigin,
         ...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -181,6 +217,29 @@ try {
     }
   });
   const pairPath = '/v1/devices/stackchan-alex/pairings';
+  const missingAccess = await fetch(`${origin}${pairPath}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${managedToken}`, 'content-type': 'application/json' },
+    body: '{}',
+    tls: { ca },
+  });
+  requireValue(missingAccess.status === 401, 'Domain gate accepted a missing key');
+  const unlock = await fetch(`${origin}/access`, {
+    method: 'POST',
+    headers: { origin, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ key: accessKey }),
+    tls: { ca },
+  });
+  requireValue(unlock.status === 200, 'Browser private-key exchange failed');
+  const cookie = unlock.headers.get('set-cookie')?.split(';')[0];
+  requireValue(Boolean(cookie), 'Browser private access cookie missing');
+  const withoutIdentity = await fetch(`${origin}${pairPath}`, {
+    method: 'POST',
+    headers: { cookie: cookie!, 'content-type': 'application/json' },
+    body: '{}',
+    tls: { ca },
+  });
+  requireValue(withoutIdentity.status === 401, 'Domain cookie substituted for caregiver identity');
   const input = {
     deviceId: 'stackchan-alex',
     profileId: 'profile-alex',
@@ -196,11 +255,27 @@ try {
     'Preview profile accepted',
   );
   requireValue(
-    (await fetch(`${origin}${pairPath}`, { tls: { ca } })).status === 405,
+    (
+      await fetch(`${origin}${pairPath}`, {
+        headers: { 'X-Lemmi-Access-Key': accessKey },
+        tls: { ca },
+      })
+    ).status === 405,
     'GET permitted a pairing operation',
   );
   const paired = await call(pairPath, input, managedToken);
   requireValue(paired.status === 200, `Production pairing route failed (${paired.status})`);
+  const browserPair = await fetch(`${origin}${pairPath}`, {
+    method: 'POST',
+    headers: {
+      cookie: cookie!,
+      authorization: `Bearer ${managedToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(input),
+    tls: { ca },
+  });
+  requireValue(browserPair.status === 200, 'Browser cookie plus caregiver identity was rejected');
   const pairing = ((await paired.json()) as any).data;
   const claimed = await call('/v1/device-pairings/claim', {
     pairingId: pairing.pairingId,
@@ -233,6 +308,11 @@ try {
   await observed('Authenticated computer harness');
   (harness.stdin as Bun.FileSink).write('start\n');
   await observed('Session: ready');
+  if (chatFixture) {
+    (harness.stdin as Bun.FileSink).write('chat Hello\n');
+    await observed('Lemmi: Hello. We can take our time.');
+    await observed('Session: waiting');
+  }
   (harness.stdin as Bun.FileSink).write('pause\n');
   await observed('Session: paused');
   (harness.stdin as Bun.FileSink).write('resume\n');
@@ -247,7 +327,9 @@ try {
   await harness.exited;
   await reading;
   requireValue(
-    !output.includes(device.credential) && !output.includes(pairing.code),
+    !output.includes(device.credential) &&
+      !output.includes(pairing.code) &&
+      !output.includes(accessKey),
     'Provisioning secret reached harness output',
   );
   requireValue(
@@ -255,7 +337,7 @@ try {
     'Revocation did not close the computer client',
   );
   console.info(
-    'PASS: production SvelteKit routes → fixture managed identity over verified HTTPS → gateway pairing → verified WSS computer harness → start/pause/resume/revoke. No real provider, hardware, media or notifications.',
+    `PASS: production SvelteKit routes → fixture managed identity over verified HTTPS → gateway pairing → verified WSS computer harness → start/${chatFixture ? 'fixture OpenRouter chat/' : ''}pause/resume/revoke. No real provider, hardware, media or notifications.`,
   );
 } finally {
   for (const child of children) if (child.exitCode === null) child.kill();

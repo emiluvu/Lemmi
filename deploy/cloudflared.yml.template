@@ -1,0 +1,8 @@
+tunnel: YOUR_TUNNEL_UUID
+credentials-file: "@ROOT@/.data/cloudflared/YOUR_TUNNEL_UUID.json"
+ingress:
+  - hostname: YOUR_DOMAIN
+    service: http://127.0.0.1:8080
+    originRequest:
+      httpHostHeader: YOUR_DOMAIN
+  - service: http_status:404

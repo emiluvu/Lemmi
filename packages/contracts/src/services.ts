@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import {
+  ProfileDetailSchema,
+  ProfileUpdateSchema,
+  AssetCreateSchema,
+  AssetMetadataSchema,
+  AssetIdSchema,
+} from './profile-assets';
+import {
   IdSchema,
   RevisionSchema,
   ParticipantProfileSchema,
@@ -78,6 +85,10 @@ export const operations = {
   'device.claim': operation(ClaimDeviceInputSchema, ClaimDeviceResultSchema),
   'device.revoke': operation(RevokeDeviceInputSchema, RevokeDeviceResultSchema),
   'profile.load': operation(profile, ParticipantProfileSchema),
+  'profile.detail': operation(profile, ProfileDetailSchema),
+  'profile.update': operation(ProfileUpdateSchema, ProfileDetailSchema),
+  'assets.create': operation(AssetCreateSchema, AssetMetadataSchema),
+  'assets.metadata': operation(z.strictObject({ assetId: AssetIdSchema }), AssetMetadataSchema),
   'profile.loadCaregiver': operation(profile, CaregiverProfileSchema),
   'profile.save': operation(
     z.strictObject({ profile: CaregiverProfileSchema, expectedRevision: RevisionSchema }),
@@ -205,6 +216,8 @@ export function createClients(transport: ServiceTransport) {
       revoke: (input: OperationInput<'device.revoke'>) => call('device.revoke', input),
     },
     profile: {
+      detail: (input: OperationInput<'profile.detail'>) => call('profile.detail', input),
+      update: (input: OperationInput<'profile.update'>) => call('profile.update', input),
       load: (input: OperationInput<'profile.load'>) => call('profile.load', input),
       loadCaregiver: (input: OperationInput<'profile.loadCaregiver'>) =>
         call('profile.loadCaregiver', input),
@@ -252,7 +265,11 @@ export function createClients(transport: ServiceTransport) {
       reviewSummary: (input: OperationInput<'journal.reviewSummary'>) =>
         call('journal.reviewSummary', input),
     },
-    assets: { resolve: (input: OperationInput<'assets.resolve'>) => call('assets.resolve', input) },
+    assets: {
+      create: (input: OperationInput<'assets.create'>) => call('assets.create', input),
+      metadata: (input: OperationInput<'assets.metadata'>) => call('assets.metadata', input),
+      resolve: (input: OperationInput<'assets.resolve'>) => call('assets.resolve', input),
+    },
     checkIn: {
       subscribe: (
         input: OperationInput<'checkIn.status'>,
@@ -280,15 +297,34 @@ export function createHttpTransport(
         return { ok: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid command' } };
       try {
         let path = `/v1/${mode}/${op}`;
+        let method = 'POST';
+        let body: unknown = input;
         if (mode === 'live') {
+          if (op === 'profile.load' && 'profileId' in input) {
+            path = `/v1/participant/profiles/${encodeURIComponent(input.profileId as string)}`;
+            method = 'GET';
+            body = undefined;
+          }
+          if ((op === 'profile.detail' || op === 'profile.update') && 'profileId' in input) {
+            path = `/v1/profiles/${encodeURIComponent(input.profileId as string)}`;
+            method = op === 'profile.update' ? 'PATCH' : 'GET';
+            body = method === 'GET' ? undefined : input;
+          }
+          if (op === 'assets.create' && 'profileId' in input)
+            path = `/v1/profiles/${encodeURIComponent(input.profileId as string)}/assets`;
+          if (op === 'assets.metadata' && 'assetId' in input) {
+            path = `/v1/assets/${encodeURIComponent(input.assetId as string)}/metadata`;
+            method = 'GET';
+            body = undefined;
+          }
           if (op === 'device.claim') path = '/v1/device-pairings/claim';
           if ((op === 'device.pair' || op === 'device.revoke') && 'deviceId' in input)
             path = `/v1/devices/${encodeURIComponent(input.deviceId as string)}/${op === 'device.pair' ? 'pairings' : 'revoke'}`;
         }
         const response = await fetcher(path, {
-          method: 'POST',
+          method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
+          body: body === undefined ? undefined : JSON.stringify(body),
           signal: AbortSignal.timeout(5000),
         });
         const result: unknown = await response.json();

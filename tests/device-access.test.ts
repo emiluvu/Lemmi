@@ -168,6 +168,54 @@ test('caregiver identity is verified with issuer/audience/expiry and server-owne
   expect((await authenticateCaregiver(new Request(request.url), config)).ok).toBe(false);
 });
 
+test('VoidAuth client binding is opt-in and rejects foreign tokens without audience fallback', async () => {
+  const now = Date.now();
+  const request = new Request('https://lemmi.invalid', {
+    headers: { authorization: 'Bearer opaque-voidauth-access-token' },
+  });
+  const valid = {
+    active: true,
+    iss: config.issuer,
+    client_id: config.clientId,
+    sub: config.subject,
+    exp: Math.floor(now / 1000) + 300,
+    token_type: 'Bearer',
+  };
+  const verify = (body: unknown, tokenBinding: 'audience' | 'client_id' = 'client_id') =>
+    authenticateCaregiver(
+      request,
+      { ...config, tokenBinding },
+      async () => Response.json(body),
+      now,
+    );
+  expect((await verify(valid)).ok).toBe(true);
+  expect((await verify(valid, 'audience')).ok).toBe(false);
+  for (const patch of [
+    { client_id: 'another-app', aud: config.audience },
+    { client_id: undefined },
+    { aud: 'another-resource' },
+    { aud: null },
+    { iss: 'another-issuer' },
+    { sub: 'another-caregiver' },
+    { token_type: 'RefreshToken' },
+    { exp: 0 },
+    { active: false },
+  ])
+    expect((await verify({ ...valid, ...patch })).ok).toBe(false);
+  const env = {
+    LEMMI_AUTH_INTROSPECTION_URL: config.endpoint,
+    LEMMI_AUTH_ISSUER: config.issuer,
+    LEMMI_AUTH_CLIENT_ID: config.clientId,
+    LEMMI_AUTH_CLIENT_SECRET: config.clientSecret,
+    LEMMI_CAREGIVER_SUBJECT: config.subject,
+  };
+  expect(() => caregiverAuthConfig(env)).toThrow();
+  expect(caregiverAuthConfig({ ...env, LEMMI_AUTH_TOKEN_BINDING: 'client_id' }).tokenBinding).toBe(
+    'client_id',
+  );
+  expect(() => caregiverAuthConfig({ ...env, LEMMI_AUTH_TOKEN_BINDING: 'automatic' })).toThrow();
+});
+
 test('configuration refuses plaintext identity endpoints, public origins and reused mock credentials', () => {
   expect(() => caregiverAuthConfig({})).toThrow();
   expect(() =>
