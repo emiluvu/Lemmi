@@ -334,3 +334,187 @@ test('mic mute preserves approved gateway output, pause cancels its stream and r
     d.close();
   }
 });
+
+test('urgent voice guidance uses the paused generation, audible PCM and receipts without resuming', async () => {
+  const pcm = new Uint8Array(882 * 12).fill(4);
+  let modelCalls = 0,
+    spoken = '';
+  const d = await device({
+    chat: {
+      async complete() {
+        modelCalls++;
+        throw new Error('Urgent route must bypass the model');
+      },
+    },
+    speech: {
+      stt: {
+        async transcribe() {
+          return ok({ text: 'I cannot breathe', language: 'en' });
+        },
+      },
+      tts: {
+        async synthesize(input) {
+          spoken = input.text;
+          return ok({ pcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' });
+        },
+      },
+    },
+  });
+  try {
+    const capture = await d.capture(),
+      oldGeneration = d.session().generation;
+    capture.finish();
+    await d.until(() => d.events.some((e) => e.type === 'response.start'));
+    const text = d.events.find((e) => e.type === 'response.text');
+    const response = d.events.find((e) => e.type === 'response.start');
+    if (text?.type !== 'response.text' || response?.type !== 'response.start')
+      throw new Error('Missing fixed speech');
+    expect(text.payload.source).toBe('fixed');
+    expect(text.payload.text).toBe(spoken);
+    expect(spoken).toContain('Caregiver contact is not configured');
+    expect(modelCalls).toBe(0);
+    expect(response.generation).toBe(oldGeneration + 1);
+    expect(response.turn_id).toBe(text.payload.turnId);
+    expect(response.turn_id).not.toBe(capture.grant.turnId);
+    const receipt = (status: string, playedChunks: number) =>
+      d.send(
+        'audio.receipt',
+        {
+          leaseId: response.payload.leaseId,
+          streamId: response.payload.streamId,
+          status,
+          playedChunks,
+        },
+        response.payload.turnId,
+      );
+    const started = receipt('started', 0);
+    await d.until(() =>
+      d.events.some(
+        (e) => e.type === 'command.ack' && e.payload.commandId === started && e.payload.applied,
+      ),
+    );
+    for (const [played, total] of [
+      [4, 8],
+      [8, 12],
+    ]) {
+      receipt('progress', played!);
+      await d.until(() => d.events.filter((e) => e.type === 'audio.chunk').length === total);
+      expect(d.session().phase).toBe('paused');
+    }
+    await d.until(() => d.events.some((e) => e.type === 'audio.end'));
+    const completed = receipt('completed', 12);
+    await d.until(() =>
+      d.events.some(
+        (e) => e.type === 'command.ack' && e.payload.commandId === completed && e.payload.applied,
+      ),
+    );
+    expect(d.session().phase).toBe('paused');
+    expect(d.session().captureGrant).toBeNull();
+    expect(pcm.every((x) => x === 0)).toBe(true);
+    expect(
+      d.events
+        .filter((e) => e.type === 'state.changed')
+        .every(
+          (e) =>
+            e.type === 'state.changed' &&
+            !['speaking', 'waiting'].includes(e.payload.session?.phase ?? ''),
+        ),
+    ).toBe(true);
+    expect(d.events.some((e) => e.type === 'error')).toBe(false);
+  } finally {
+    d.close();
+  }
+});
+
+test('Stop during fixed synthesis suppresses late fixed text/audio and wipes late PCM', async () => {
+  let finish!: (value: any) => void, signal!: AbortSignal;
+  const d = await device({
+    speech: {
+      stt: {
+        async transcribe() {
+          return ok({ text: 'I cannot breathe', language: 'en' });
+        },
+      },
+      tts: {
+        synthesize(_input, canceled) {
+          signal = canceled;
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        },
+      },
+    },
+  });
+  try {
+    const capture = await d.capture();
+    capture.finish();
+    await d.until(() => !!finish && d.session().phase === 'paused');
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
+    expect(signal.aborted).toBe(true);
+    const pcm = new Uint8Array(882).fill(5);
+    finish(ok({ pcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }));
+    await d.until(() => pcm.every((x) => x === 0));
+    expect(
+      d.events.some((e) => ['response.text', 'response.start', 'audio.chunk'].includes(e.type)),
+    ).toBe(false);
+    expect(d.session().captureGrant).toBeNull();
+  } finally {
+    d.close();
+  }
+});
+
+test('an explicit pause flushes already approved fixed output and rejects its obsolete receipt', async () => {
+  const pcm = new Uint8Array(882 * 12).fill(6);
+  const d = await device({
+    speech: {
+      stt: {
+        async transcribe() {
+          return ok({ text: 'I cannot breathe', language: 'en' });
+        },
+      },
+      tts: {
+        async synthesize() {
+          return ok({ pcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' });
+        },
+      },
+    },
+  });
+  try {
+    const capture = await d.capture();
+    capture.finish();
+    await d.until(() => d.events.some((e) => e.type === 'response.start'));
+    const response = d.events.find((e) => e.type === 'response.start');
+    if (response?.type !== 'response.start') throw new Error('Missing fixed speech');
+    d.send(
+      'audio.receipt',
+      {
+        leaseId: response.payload.leaseId,
+        streamId: response.payload.streamId,
+        status: 'started',
+        playedChunks: 0,
+      },
+      response.payload.turnId,
+    );
+    d.send('input.pause');
+    await d.until(() => d.events.some((e) => e.type === 'response.cancel'));
+    expect(pcm.every((x) => x === 0)).toBe(true);
+    d.send(
+      'audio.receipt',
+      {
+        leaseId: response.payload.leaseId,
+        streamId: response.payload.streamId,
+        status: 'progress',
+        playedChunks: 4,
+      },
+      response.payload.turnId,
+    );
+    await d.until(() =>
+      d.events.some((e) => e.type === 'error' && e.payload.code === 'REVISION_CONFLICT'),
+    );
+    expect(d.session().phase).toBe('paused');
+    expect(d.session().captureGrant).toBeNull();
+  } finally {
+    d.close();
+  }
+});
