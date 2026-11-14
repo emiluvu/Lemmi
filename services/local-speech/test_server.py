@@ -68,8 +68,12 @@ class Boundaries(unittest.TestCase):
 
     def test_pcm_bounds_and_language(self):
         headers = {"Content-Type": "application/octet-stream", "X-Lemmi-Language": "en"}
-        for body in [b"", b"\0" * 3, b"\0" * (MAX_PCM + 2)]:
+        for body in [b"", b"\0" * 3]:
             self.assertEqual(self.call("/v1/stt", body, headers=headers)[0], 400)
+        # The server rejects an oversized Content-Length before reading its body.
+        # Sending that entire body can race the deliberate connection close and
+        # raise BrokenPipe in the client instead of observing the rejection.
+        self.assertEqual(self.call("/v1/stt", b"", headers={**headers, "Content-Length": str(MAX_PCM + 2)})[0], 400)
         self.assertEqual(self.call("/v1/stt", b"\0" * 640, headers={**headers, "X-Lemmi-Language": "unsupported"})[0], 400)
         status, _, body = self.call("/v1/stt", b"\0" * 640, headers=headers)
         self.assertEqual(status, 200)

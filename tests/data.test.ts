@@ -862,3 +862,54 @@ dbtest(
     }
   },
 );
+
+dbtest(
+  'stale gateway pairing cannot overwrite a replacement boot or issue usable credentials',
+  async () => {
+    await reset();
+    const old = new DatabaseDeviceAuthority(repo, Date.now, () => {});
+    await old.start();
+    const pending = await old.pair('fixture-caregiver', {
+      deviceId: 'stackchan-alex',
+      profileId: 'profile-alex',
+      commandId: randomUUID(),
+    });
+    if (!pending.ok) throw new Error('Fixture pairing failed');
+    const replacement = new DatabaseDeviceAuthority(repo, Date.now, () => {});
+    await replacement.start();
+    const stale = await old.claim({
+      pairingId: pending.data.pairingId,
+      code: pending.data.code,
+      localConfirmed: true,
+    });
+    expect(stale.ok).toBe(false);
+    const rows =
+      await sql`SELECT boot_id, credential_id FROM lemmi.devices WHERE id='stackchan-alex'`;
+    expect(rows[0].boot_id).toBe(replacement.bootId);
+    expect(rows[0].credential_id).toBeNull();
+    expect(
+      (
+        await old.pair('fixture-caregiver', {
+          deviceId: 'stackchan-alex',
+          profileId: 'profile-alex',
+          commandId: randomUUID(),
+        })
+      ).ok,
+    ).toBe(false);
+    const next = await replacement.pair('fixture-caregiver', {
+      deviceId: 'stackchan-alex',
+      profileId: 'profile-alex',
+      commandId: randomUUID(),
+    });
+    if (!next.ok) throw new Error('Current gateway pairing failed');
+    const issued = await replacement.claim({
+      pairingId: next.data.pairingId,
+      code: next.data.code,
+      localConfirmed: true,
+    });
+    expect(issued.ok).toBe(true);
+    if (!issued.ok) throw new Error('Current gateway claim failed');
+    expect(await replacement.authenticate(issued.data.credential)).not.toBeNull();
+    expect(await old.authenticate(issued.data.credential)).toBeNull();
+  },
+);

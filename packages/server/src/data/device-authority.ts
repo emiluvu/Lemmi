@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { DeviceAccess, type DeviceIdentity } from '../device-access';
+import {
+  DeviceAccess,
+  CONTROL_DEVICE_ID,
+  CONTROL_PROFILE_ID,
+  type DeviceIdentity,
+} from '../device-access';
 import {
   fail,
   type PairDeviceInput,
@@ -37,8 +42,14 @@ export class DatabaseDeviceAuthority {
   }
   pair(actor: string, input: PairDeviceInput) {
     return this.serial(async () => {
+      if (input.deviceId !== CONTROL_DEVICE_ID || input.profileId !== CONTROL_PROFILE_ID)
+        return fail('FORBIDDEN', 'Device/profile is not assigned');
       // Scope checked again against persisted membership, not only configured provider subject.
       await this.repository.approvedProfile(actor);
+      const current = await this.repository
+        .sql`SELECT 1 FROM lemmi.devices WHERE id=${input.deviceId} AND profile_id=${input.profileId} AND boot_id=${this.bootId}::uuid`;
+      if (!current.length)
+        return fail('UNAVAILABLE', 'Gateway ownership changed; restart before pairing');
       return this.access.pair(actor, input);
     });
   }
@@ -49,7 +60,7 @@ export class DatabaseDeviceAuthority {
       const identity = this.access.authenticate(result.data.credential)!;
       try {
         const rows = await this.repository
-          .sql`UPDATE lemmi.devices SET credential_id=${identity.credentialId}::uuid,credential_hash=${sha256(result.data.credential)},credential_expires_at=${new Date(identity.expiresAt)},boot_id=${this.bootId}::uuid,revoked_at=NULL WHERE id=${identity.deviceId} AND profile_id=${identity.profileId} AND EXISTS (SELECT 1 FROM lemmi.profiles WHERE id=${identity.profileId} AND deletion_state='active') RETURNING id`;
+          .sql`UPDATE lemmi.devices SET credential_id=${identity.credentialId}::uuid,credential_hash=${sha256(result.data.credential)},credential_expires_at=${new Date(identity.expiresAt)},revoked_at=NULL WHERE id=${identity.deviceId} AND profile_id=${identity.profileId} AND boot_id=${this.bootId}::uuid AND EXISTS (SELECT 1 FROM lemmi.profiles WHERE id=${identity.profileId} AND deletion_state='active') RETURNING id`;
         if (!rows.length) throw new Error('Assignment unavailable');
         if (!this.access.current(identity)) {
           await this.repository

@@ -195,6 +195,12 @@ A18–A19, Linux, Bun **1.4.4**, native PostgreSQL **14.24** on an isolated loop
 
 These are database/API results only. The temporary native test cluster is stopped after checks; a permanent host/database and actual managed sign-in/proxy/network setup remain unverified. The optional PostgreSQL 17 compose configuration was not run (Docker unavailable). JPEG/MP3/range support, browser UI/accessibility, notifications, complete journal/policy/deletion workflows and counterpart boundary review remain pending. Contact/policy tables are foundations, not functioning workflows. Exact commands/contracts/limits: [database setup](../db/README.md), [A18/A19 handoff](handoffs/anay-database-profile-assets.md). Shared branch and other-agent files are preserved; this increment is uncommitted.
 
+### backend-deploy merge verification
+
+Refreshed/pulled `backend-deploy` (`51ede5e`) and main (`53c7a5f`) in an isolated checkout. Resolved five main-integration conflicts in merge commit `98d476c`, retaining the branch's backend implementation and main's published activity-contract notes. A reproduced stale-gateway claim could overwrite a replacement boot marker; conditional credential issuance and stale-pairing rejection now prevent it, with a new real-PostgreSQL regression test. A flaky Python oversized-body rejection test and contradictory planned API rows were also corrected.
+
+Resolved-tree observations, Bun **1.4.4**, native PostgreSQL **14.24**: **91 Bun tests / 833 expectations**, **7 Python boundary tests**, type/Svelte check, production build, formatting/diff checks and certificate-verified control/chat and real-DB data smokes pass; the default mock web smoke also passes. Test infrastructure is temporary and no live credentials/providers/hardware were used. Conflict-marker-contaminated initial checks and a sandbox-denied initial build were discarded and rerun correctly. Full evidence, corrected defects and remaining host/product limits: [merge verification](handoffs/anay-backend-deploy-verification.md).
+
 | Check | Owner | Counterpart | Result |
 | --- | --- | --- | --- |
 | F15 one functional profile; example/unassigned IDs rejected by live services; explicit refusal/preference precedence; separate remembering permission | Anay | Kylie + Emilia | Pending |

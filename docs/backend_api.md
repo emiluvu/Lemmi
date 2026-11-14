@@ -288,7 +288,7 @@ State/pack/view/event/transition field details and breaking placeholder changes 
 | Shape | Fields / boundary |
 | --- | --- |
 | `ParticipantProfile` | `id,preferredName,avatarId,revision,communicationSupport` only; no caregiver guidance/contact/journal |
-| `CaregiverProfile` | Adds `source:'caregiver_provided',interests,sensitiveTopicGuidance,rememberingEnabled,excerptSavingEnabled`; caregiver-only in the future live API |
+| `CaregiverProfile` | Adds `source:'caregiver_provided',interests,sensitiveTopicGuidance,rememberingEnabled,excerptSavingEnabled`; caregiver-only; live `ProfileDetail` extends this shape |
 | `AvatarId` / expression | Exactly `dog,cat,bunny,bird,lemming`; separate expression enum `idle,listening,processing,speaking,paused,unavailable`. Reduced motion is not another avatar |
 | `CommunicationSupport` | `preset:'conversational'|'guided'|'quiet',configVersion:1`; not clinical stage, and not automatic language/privacy/help settings |
 | `PreferencesSnapshot` | Profile/policy revision, remembering flag, structured preferences/items; mock is empty/off. No raw utterance history |
@@ -361,9 +361,9 @@ The following come from the technical/integration/robot/personalization specs an
 
 | Planned surface | Target routes / missing integration | Owner / task |
 | --- | --- | --- |
-| Profile/context/privacy/deletion | `/v1/profiles`, `/v1/profiles/:id`, photos upload, session privacy and deletion jobs | Anay A18/A19/A25; Kylie views |
+| Profile creation/privacy/deletion | Profile collection/create, session privacy and deletion jobs; Alex read/PATCH and approved-media uploads already exist (A18/A19 above) | Anay A25; Kylie views |
 | Browser session/text/audio | Profile session start, `/v1/sessions/:id/commands`, authorized read/event/text and audio grant/stream/end | Anay A12/A13; Kylie/Emilia consumers; do not reuse caregiver/device credentials across roles |
-| Activities/media | `/v1/activity-packs`, `/v1/sessions/:id/activities`, instance view/actions, `/v1/assets/:id`; pack catalog, pure reducers, effects/receipt executor | Anay A05/A19 + Lukas logic + Kylie view |
+| Activities/playback | `/v1/activity-packs`, `/v1/sessions/:id/activities`, instance view/actions, pack catalog and effects/receipt executor; authorized `/v1/assets/:id` byte reads already exist (A19 above) | Anay A05 + Lukas logic + Kylie view |
 | Journal/summary/overview | Profile/session journal, observation and summary review/edit/delete, `/v1/profiles/:id/overview` | Anay A23/A27; Kylie |
 | Contacts/help/jobs | Verified contacts/test, `/v1/help-requests` plus status/acknowledge/cancel/resolve, signed notification callbacks and durable jobs | Anay A21/A22; real opted-in team tests |
 | Preferences | Profile preference load/edit/forget/remembering and presentation-bound signals | Anay A24/A25; Lukas eligibility/effects; Kylie controls |
