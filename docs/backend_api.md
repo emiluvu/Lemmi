@@ -1,5 +1,18 @@
 # Lemmi backend integration reference
 
+**Current public deployment: web/gateway `dafdf4e`.** Browser Photo Story (`photo_album`) is available on confirmed fictional demo profiles with existing gate/enrollment; production mock operations remain blocked. `/participant/photo-story` uses the same live participant controller as conversation. The teaching voice continuity fix from `4690bf6` is included. This supersedes local-only/missing-photo statements below. [Current status and acceptance](backend-status.md#public-photo-story-deployed--november-14-2026).
+
+Public photo additions (protocol version 1, browser capability only):
+
+- `device.ready.photoStory?:boolean`; robots receive false and no new activity event stream.
+- Owner-only `input.photo.start {}` requires a current ready/waiting session and no teaching/other activity; it displays a reviewed scene without capture or automatic speech.
+- Owner-only `input.photo.action {instanceId,expectedRevision,action}` accepts existing typed `photo.*` or `activity.leave`; commands remain session/generation-bound and deduplicated by event ID. `photo.talk` explicitly requests a caption-grounded opening through the shared model/speech path; `photo.skip` emits factual `photo_skipped` plus `photo_selected`. Typed/voice follow-ups reuse existing conversation/audio events. Nothing is inferred as approved biography.
+- Owner-only `input.photo.repeat {}` repeats the current retained transient reply through shared speech or text. No durable dialogue retention.
+- `activity.changed {activity:ActivityView|null}` broadcasts current safe views only to authenticated browsers in that profile, after its session snapshot; private discussion context is never projected. Starts/actions advance generation and cancel stale local/server output.
+- `GET /v1/demo/photo-assets/photo-story-garden|photo-story-park` requires gate + current browser enrollment cookie, current selected scene and matching DB profile/device/epoch/revisions. Other IDs/noncurrent/ended scenes are rejected; fixed SVG map, 64 KiB maximum, SVG content type/no-store/nosniff/sandbox CSP. 401/403 for missing/ended authorization, 404 for unknown/unavailable scene, 409 for changed context, 503 for disabled/unavailable service. No URL credentials, arbitrary file paths, private family photos or public raw SVG/worklet alias.
+
+Public enablement is host-owned and gated by `LEMMI_DEMO_ENROLLMENT=1` plus DB `is_demo`; local rehearsal's private profile/journal operation allowance remains `localOnly` only. Scene policy becomes unavailable when retained preference policy cannot be safely established. Manual controls, unmute-without-capture and Quiet capture-off behavior are unchanged. Public camera/journal/other activities remain unavailable or labeled previews. Actual browser/robot audio acceptance remains separate from automated fixture and actual text/model checks.
+
 **Current prioritized deployment: web/gateway `d3d4337`.** Spoken teaching Next/Not sure/Like/Avoid responses acquire fresh server-owned turn/stream/generation authority after validated transitions, preserving cancellation/deadlines/lease/privacy guards. No new route/schema or firmware command. Source is the narrow server fix from `4690bf6`, not its separate local voice demo/automatic listening client. Existing clients must consume current-generation output; capture still requires explicit Speak now. Sixty-four targeted checks plus type/build passed; public persistent-key/WSS teaching topic switch/Stop passed without microphone/model. [Observed acceptance](backend-status.md#teaching-voice-continuity-deployed--november-14-2026).
 
 **Live presentation update:** `codex/main-ui-alignment` / `a0a3797` is installed in web runtime `eab2c35`. Live profile/dialog and conversation styling now match the reference UI; no new API, proxy allowlist, auth, transport or firmware change. Private profile/journal/excerpt data remain unavailable in the shared fictional setup view. The Photo Story source reconciliation is included but its loopback rehearsal operations/assets are not public and the gateway remains `f5724a0`. Source is published to main and backend-deploy. [Deployment checks](backend-status.md#live-ui-alignment-deployed--november-14-2026).
@@ -429,7 +442,7 @@ Camera allow/decline/started/ended and device.health schemas remain preliminary;
 
 ### Activity integration: Lukas → coordinator → Kylie
 
-The four stable IDs are `music_playlist`, `twenty_questions`, `photo_album`, `object_matching`. Pure exports in `@lemmi/activities` are `createActivity`, `reduceActivity`, `projectActivity`, `applyActivitySystemInput`. They take validated approved content and required context and return state/view or `{nextState,events,effects}`; no I/O/network/model/database/timer authority inside reducers. Current runnable reducer/host is **music only**; other states/fixtures are contracts, not completed games.
+The four stable IDs are `music_playlist`, `twenty_questions`, `photo_album`, `object_matching`. Pure exports in `@lemmi/activities` are `createActivity`, `reduceActivity`, `projectActivity`, `applyActivitySystemInput`. They take validated approved content and required context and return state/view or `{nextState,events,effects}`; no I/O/network/model/database/timer authority inside reducers. Pure music and photo reducers exist; public Photo Story hosting is described above. Guessing/matching remain unavailable; music playback hosting is still incomplete.
 
 `ActivityCommand` is `{commandId,sessionId,instanceId,expectedRevision,action,presentation?}`. Matching actions require the current coordinator-issued `presentation`; do not generate a token/entity ID in UI. Session Stop/help/mute/pause are not activity actions; only the coordinator dispatches system interrupts/receipts/policy updates.
 
@@ -437,7 +450,7 @@ The four stable IDs are `music_playlist`, `twenty_questions`, `photo_album`, `ob
 | --- | --- | --- |
 | Music | `track.select {trackId}`, `track.play`, `track.pause`, `track.next` | Current track/playback; `requested` differs from endpoint receipt-backed `playing` |
 | Guessing | `guess.answer {answer:'yes'|'no'|'not_sure'}`, `guess.skip`, `guess.reveal`, `guess.new_round` | Reviewed bounded acyclic tree/candidates/rounds; safe view exposes question/roundPhase/offeredGuess, not hidden candidate tables/counts |
-| Photos | `photo.select {photoId}`, `photo.next`, `photo.previous`, `photo.just_look`, `photo.talk` | Stable entry ID, position and just-look/talk state; private discussion context never enters participant view; scene exploration uses the same activity |
+| Photos | `photo.select {photoId}`, `photo.next`, `photo.previous`, `photo.skip`, `photo.just_look`, `photo.talk` | Stable entry ID, position and just-look/talk state; private discussion context never enters participant view; scene exploration uses the same activity |
 | Matching | `match.select {choiceId}`, `match.show`, `match.not_sure`, `match.next`, `match.finish` | Visible sample/two candidates; nullable nested presentation; no correctness/ability field |
 | Any | `activity.leave` | Exit without matching evidence; empty/unavailable matching views use Leave rather than forged match actions |
 

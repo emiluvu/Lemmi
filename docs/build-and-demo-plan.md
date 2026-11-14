@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+### Public Photo Story acceptance — November 14, 2026
+
+Deployed web/gateway `dafdf4e` after explicit user request: confirmed fictional profiles, existing endpoint WSS/audio, generic reviewed caption-only scenes, owner/revision controls and scoped current-scene media. Teaching voice continuity retained. Independent technical review found no blocking auth/cancellation defect. Full database-enabled suite 240 passed / 4,387 expectations with no skips; type/Svelte/build/whitespace and production participant/media/control smokes passed. Actual public separate-fictional-profile page/enroll/WSS/Start/Photo/scoped garden/Talk real-model reply/Skip/park/Stop passed; noncurrent/ended reads denied, temporary profile removed. Backup retained; gateway/web restarted once. No human microphone/speaker, robot or keyboard/zoom acceptance performed; private data, uploads, camera and full journals remain unavailable. [Exact boundary and observed checks](backend-status.md#public-photo-story-deployed--november-14-2026).
+
 ### Prioritized teaching voice continuity deployment — November 14, 2026
 
 Deployed `d3d4337`: narrow server replacement-output fix from Lukas `4690bf6`, retaining live UI and per-profile access. Independent technical review found no blocking authority/cancellation problem; historical `c006d26` already had spoken switching's canceled-reply bug. Sixty-four targeted checks / 2,228 expectations, type/Svelte zero errors/warnings/build passed. Public same-key WSS Start/teaching/typed Different topic/changed prompt/Stop passed; actual microphone/provider/hardware not used. Gateway/web restarted, sessions ended safely, persistent keys retained. Broader branch hands-free local demo not integrated by this hotfix. [Status](backend-status.md#teaching-voice-continuity-deployed--november-14-2026).
