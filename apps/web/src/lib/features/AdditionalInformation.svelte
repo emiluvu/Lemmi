@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PhotoStoryFiles from '#lib/features/PhotoStoryFiles.svelte';
+  let { profileId }: { profileId: string } = $props();
   let files = $state<File[]>([]);
   let error = $state('');
   function selectFiles(event: Event) {
@@ -18,6 +20,8 @@
 
 <section class="additional-information" aria-labelledby="additional-information-title">
   <h2 id="additional-information-title">Additional Information</h2>
+  <PhotoStoryFiles {profileId} />
+  <h3>Additional Background</h3>
   <p>
     Add caregiver-provided background, interests, and history for review as conversation context.
   </p>

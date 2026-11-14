@@ -8,6 +8,7 @@
     control,
     photoSrc = null,
     preview = false,
+    approvedPreview = false,
     busy = false,
     message = '',
   }: {
@@ -17,6 +18,7 @@
     control: (action: 'pause' | 'stop' | 'help') => void;
     photoSrc?: string | null;
     preview?: boolean;
+    approvedPreview?: boolean;
     busy?: boolean;
     message?: string;
   } = $props();
@@ -52,7 +54,9 @@
       </div>{/if}
     <figcaption>
       {view.caption ?? 'No caption provided.'}{#if preview}<small
-          >Illustrative preview artwork, not a personal photograph.</small
+          >{approvedPreview
+            ? 'Approved picture · browser-only preview.'
+            : 'Illustrative preview artwork, not a personal photograph.'}</small
         >{/if}
     </figcaption>
   </figure>
@@ -81,7 +85,7 @@
     width: min(100%, 1040px);
     margin: auto;
     padding: 24px;
-    border: 3px solid var(--outline-brown);
+    border: 1.5px solid var(--outline-brown);
     border-radius: 26px;
     background: #fffdf7;
     color: var(--ink);
@@ -128,7 +132,7 @@
   figcaption small {
     display: block;
     margin-top: 4px;
-    font-size: 14px;
+    font-size: 20px;
     font-weight: 400;
   }
   .story-prompt {
@@ -144,9 +148,14 @@
   .story-actions button {
     flex: 1 1 170px;
   }
+  .story-actions button,
+  .story-controls button {
+    min-height: 56px;
+    font-size: 20px;
+  }
   .story-controls {
     position: sticky;
-    bottom: -32px;
+    bottom: 0;
     margin: 18px -24px -24px;
     padding: 16px 24px;
     border-top: 1px solid #d7c9b5;
@@ -171,7 +180,7 @@
     border-radius: 10px;
   }
   .story-message {
-    font-size: 18px;
+    font-size: 20px;
   }
   @media (max-width: 600px) {
     .photo-story {
@@ -183,7 +192,10 @@
     .story-controls {
       margin: 16px -16px -16px;
       padding: 12px 16px;
-      bottom: -32px;
+      bottom: 0;
+    }
+    .story-controls button {
+      flex: 1 1 140px;
     }
   }
 </style>

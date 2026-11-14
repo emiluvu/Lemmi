@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onMount, getContext } from 'svelte';
+  import { photoStoryPreviewKey, type PhotoStoryPreviewContext } from '#lib/photo-story-preview.ts';
   import { clients } from '#lib/clients.ts';
   import AvatarArt from '#lib/features/AvatarArt.svelte';
   import PhotoStory from '#lib/features/PhotoStory.svelte';
@@ -12,14 +13,45 @@
   );
   let storyOpen = $state(false);
   let storyMessage = $state('');
+  const photoFiles = getContext<PhotoStoryPreviewContext>(photoStoryPreviewKey);
+  let selectedPhotoId = $state<string | null>(null);
+  const approvedPhotos = $derived(
+    photoFiles.photos.filter((photo) => photo.profileId === profile?.id),
+  );
+  const selectedPhoto = $derived(
+    approvedPhotos.find((photo) => photo.id === selectedPhotoId) ?? approvedPhotos[0] ?? null,
+  );
+  const currentPhotoPreview = $derived(
+    photoPreview && selectedPhoto
+      ? {
+          ...photoPreview,
+          currentAssetId: selectedPhoto.id,
+          assetIds: approvedPhotos.map((photo) => photo.id),
+          caption: selectedPhoto.caption || 'An approved preview picture.',
+        }
+      : photoPreview,
+  );
   function previewAction(action: ActivityAction) {
+    // Presentation-only image selection; no activity reducer or session is running.
+    if (
+      approvedPhotos.length &&
+      (action.type === 'photo.next' || action.type === 'photo.previous')
+    ) {
+      const index = approvedPhotos.findIndex((photo) => photo.id === selectedPhoto?.id);
+      const next =
+        (index + (action.type === 'photo.next' ? 1 : -1) + approvedPhotos.length) %
+        approvedPhotos.length;
+      selectedPhotoId = approvedPhotos[next].id;
+      storyMessage = '';
+      return;
+    }
     if (action.type === 'activity.leave') {
       storyOpen = false;
       storyMessage = '';
       return;
     }
     storyMessage =
-      'Design preview only. Photo navigation and discussion need the shared activity host.';
+      'Picture preview only. AI discussion needs the shared activity host; local pictures are not sent to AI.';
   }
   function previewControl(action: 'pause' | 'stop' | 'help') {
     if (action === 'stop') {
@@ -91,25 +123,27 @@
 <svelte:head><title>Talk with Lemmi</title></svelte:head>
 
 <section class="conversation-screen" aria-labelledby="conversation-title">
+  <div class="conversation-wordmark">Lemmi</div>
   <button
     class="conversation-exit"
     onclick={openExit}
     aria-label="Exit conversation"
     title="Return to dashboard">✕</button
   >
-  {#if storyOpen && photoPreview && profile}
+  {#if storyOpen && currentPhotoPreview && profile}
     <PhotoStory
-      view={photoPreview}
+      view={currentPhotoPreview}
       avatarId={profile.avatarId}
       submit={previewAction}
       control={previewControl}
-      photoSrc="/images/lemmings-wildflowers.png"
+      photoSrc={selectedPhoto?.url ?? '/images/lemmings-wildflowers.png'}
+      approvedPreview={Boolean(selectedPhoto)}
       preview
       message={storyMessage}
     />
   {:else}
     <div class="conversation-center">
-      <p class="eyebrow">Your AI companion</p>
+      <p class="eyebrow">Your companion</p>
       <h1 id="conversation-title">Talk with Lemmi</h1>
       <div class="conversation-avatar">
         {#if appearanceLoading}<p role="status">Loading your companion…</p>
@@ -211,6 +245,7 @@
 
 <style>
   :global(body:has(.conversation-screen) .drawer-toggle),
+  :global(body:has(.conversation-screen) .app-topbar),
   :global(body:has(.conversation-screen) .app-rail) {
     display: none;
   }
@@ -219,16 +254,18 @@
     inset: 0;
     z-index: 10;
     overflow-y: auto;
-    padding: 64px 24px 32px;
-    background: radial-gradient(ellipse at center, #fbf8ef, #edf0e3 62%, #e0e6d1);
+    padding: 96px 24px 32px;
+    background:
+      linear-gradient(#fffaf066, #fffaf066),
+      #fbf3df url('/images/surfaces/conversation-meadow-v1.png') center / cover no-repeat;
     display: grid;
     place-items: center;
     text-align: center;
   }
   .conversation-exit {
     position: absolute;
-    right: 24px;
-    top: 16px;
+    right: max(24px, env(safe-area-inset-right));
+    top: 20px;
     width: 56px;
     min-height: 56px;
     padding: 8px;
@@ -237,27 +274,50 @@
     color: #22331f;
     font-size: 24px;
     border-radius: 50%;
+    box-shadow:
+      inset 0 2px 0 #ffffff,
+      0 3px 0 #684b3226,
+      0 5px 12px #684b3212;
   }
   .conversation-center {
     display: grid;
     justify-items: center;
-    width: min(100%, 640px);
+    width: min(100%, 720px);
+  }
+  .conversation-wordmark {
+    position: absolute;
+    top: 24px;
+    left: 32px;
+    color: #35482d;
+    font-size: 28px;
+    font-weight: 750;
+    letter-spacing: -1px;
   }
   h1 {
-    margin: 4px 0 24px;
-    font-size: clamp(32px, 5vw, 52px);
+    margin: 4px 0 12px;
+    font-size: clamp(32px, 4vw, 44px);
     color: #22331f;
   }
   h2 {
-    margin: 24px 0 0;
+    margin: 16px 0 0;
+    font-size: 28px;
   }
   .conversation-center > p {
     margin: 8px 0;
+    font-size: 20px;
+  }
+  .conversation-center > .eyebrow {
+    font-size: 14px;
+  }
+  .conversation-center > button {
+    font-size: 20px;
+    min-height: 56px;
+    margin-top: 16px;
   }
   .conversation-avatar {
     display: block;
-    width: min(560px, 90vw);
-    height: clamp(260px, 48vh, 480px);
+    width: min(440px, 100%);
+    height: clamp(200px, 34dvh, 340px);
     flex-shrink: 0;
   }
   .conversation-capture {
@@ -265,7 +325,28 @@
     font-weight: 700;
   }
   .conversation-feedback {
-    min-height: 2em;
+    margin-bottom: 0;
+  }
+  .conversation-feedback:empty {
+    display: none;
+  }
+  @media (max-height: 700px) {
+    .conversation-screen {
+      place-items: start center;
+    }
+    .conversation-avatar {
+      height: 180px;
+    }
+  }
+  /* Keep the same layout while calming the scenery behind narrow-screen text. */
+  @media (max-width: 600px) {
+    .conversation-wordmark {
+      left: 24px;
+    }
+    .conversation-screen {
+      background-image:
+        linear-gradient(#fff8e34d, #fff8e34d), url('/images/surfaces/conversation-meadow-v1.png');
+    }
   }
   .conversation-exit-dialog {
     width: min(400px, calc(100% - 32px));

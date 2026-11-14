@@ -13,7 +13,8 @@
 <section class="card">
   <h2>Alex’s photo</h2>
   <p>
-    Open the profile list and use Change photo on Alex’s card. Example profiles are static previews.
+    Open Alex’s profile, choose Edit profile, then Change profile photo. Example profiles are static
+    previews.
   </p>
   <a class="button-link" href="/caregiver">Open profiles</a>
 </section>

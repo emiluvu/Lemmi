@@ -133,68 +133,71 @@
   }
 </script>
 
-<h1>Ready when you are{profile ? `, ${profile.preferredName}` : ''}</h1>
-<p>Microphone off. Camera off. Commands below exercise mock state only.</p>
-<section id="conversation" class="card">
-  <h2>Talk with Lemmi</h2>
-  <p>
-    Voice conversation is not connected in this starter. Start a mock session below to try the
-    shared controls; no microphone audio is captured.
-  </p>
-  {#if session && session.phase !== 'ended'}<button
-      onclick={() => command({ type: 'speak' })}
-      disabled={busy || session.phase === 'paused'}>Start conversation</button
-    >{/if}
-</section>
-{#if !session || session.phase === 'ended'}<button onclick={start} disabled={busy || !profile}
-    >Start mock session</button
-  >{/if}
-{#if session}<section class="card">
-    <h2>Session: {session.phase}</h2>
+<section class="participant-shell">
+  <h1>Ready when you are{profile ? `, ${profile.preferredName}` : ''}</h1>
+  <p>Microphone off. Camera off. Commands below exercise mock state only.</p>
+  <section id="conversation" class="card">
+    <h2>Talk with Lemmi</h2>
     <p>
-      Endpoint: {session.endpoint} · Generation {session.generation} · Microphone {session.micMuted
-        ? 'muted'
-        : 'off'}
+      Voice conversation is not connected in this starter. Start a mock session below to try the
+      shared controls; no microphone audio is captured.
     </p>
-    <button onclick={() => run(refresh)} disabled={busy}>Refresh shared state</button>
-  </section>{/if}
-{#if session && session.phase !== 'ended'}
-  <section class="card">
-    <h2>Music transport example</h2>
-    <p>
-      No audio asset or playback executor is installed. A request will never be labeled as heard or
-      played.
-    </p>
-    {#if !activity || activity.phase === 'ended'}<button
-        onclick={music}
-        disabled={busy || session.phase === 'paused'}>Open music example</button
+    {#if session && session.phase !== 'ended'}<button
+        onclick={() => command({ type: 'speak' })}
+        disabled={busy || session.phase === 'paused'}>Start conversation</button
       >{/if}
-    {#if activity}<p>{activity.prompt}</p>
-      <p>
-        Activity {activity.phase} · Playback {activity.activityId === 'music_playlist'
-          ? activity.playback
-          : 'unavailable'}
-      </p>
-      <div class="controls">
-        {#each activity.choices as choice}<button onclick={() => act(choice.action)} disabled={busy}
-            >{choice.label}</button
-          >{/each}
-      </div>{/if}
   </section>
-  <div class="controls sticky" aria-label="Session controls">
-    <button
-      onclick={() => command({ type: session?.phase === 'paused' ? 'resume' : 'pause' })}
-      disabled={busy}>{session.phase === 'paused' ? 'Resume to ready' : 'Pause'}</button
-    >
-    <button onclick={() => command({ type: 'stop' })} disabled={busy}>Stop</button>
-    <button onclick={() => command({ type: 'mute', muted: !session?.micMuted })} disabled={busy}
-      >{session.micMuted ? 'Unmute (capture stays off)' : 'Mute microphone'}</button
-    >
-    <button onclick={help} disabled={busy}>Demo help — no real message</button>
-  </div>
-{:else}<button onclick={help} disabled={busy}>Demo help — no real message</button>{/if}
-<p role="status" aria-live="polite">{busy ? 'Working…' : message}</p>
-<p>
-  Photo talk, guessing, matching and Teach Lemmi have typed seams/fixtures; their implementations
-  are pending.
-</p>
+  {#if !session || session.phase === 'ended'}<button onclick={start} disabled={busy || !profile}
+      >Start mock session</button
+    >{/if}
+  {#if session}<section class="card">
+      <h2>Session: {session.phase}</h2>
+      <p>
+        Endpoint: {session.endpoint} · Generation {session.generation} · Microphone {session.micMuted
+          ? 'muted'
+          : 'off'}
+      </p>
+      <button onclick={() => run(refresh)} disabled={busy}>Refresh shared state</button>
+    </section>{/if}
+  {#if session && session.phase !== 'ended'}
+    <section class="card">
+      <h2>Music transport example</h2>
+      <p>
+        No audio asset or playback executor is installed. A request will never be labeled as heard
+        or played.
+      </p>
+      {#if !activity || activity.phase === 'ended'}<button
+          onclick={music}
+          disabled={busy || session.phase === 'paused'}>Open music example</button
+        >{/if}
+      {#if activity}<p>{activity.prompt}</p>
+        <p>
+          Activity {activity.phase} · Playback {activity.activityId === 'music_playlist'
+            ? activity.playback
+            : 'unavailable'}
+        </p>
+        <div class="controls">
+          {#each activity.choices as choice}<button
+              onclick={() => act(choice.action)}
+              disabled={busy}>{choice.label}</button
+            >{/each}
+        </div>{/if}
+    </section>
+    <div class="controls sticky" aria-label="Session controls">
+      <button
+        onclick={() => command({ type: session?.phase === 'paused' ? 'resume' : 'pause' })}
+        disabled={busy}>{session.phase === 'paused' ? 'Resume to ready' : 'Pause'}</button
+      >
+      <button onclick={() => command({ type: 'stop' })} disabled={busy}>Stop</button>
+      <button onclick={() => command({ type: 'mute', muted: !session?.micMuted })} disabled={busy}
+        >{session.micMuted ? 'Unmute (capture stays off)' : 'Mute microphone'}</button
+      >
+      <button onclick={help} disabled={busy}>Demo help — no real message</button>
+    </div>
+  {:else}<button onclick={help} disabled={busy}>Demo help — no real message</button>{/if}
+  <p role="status" aria-live="polite">{busy ? 'Working…' : message}</p>
+  <p>
+    Photo talk, guessing, matching and Teach Lemmi have typed seams/fixtures; their implementations
+    are pending.
+  </p>
+</section>
