@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+### Browser playback buffering — November 14, 2026
+
+Deployed `da731c8` for reported voice choppiness: negotiated browser credit 12×20 ms, default/robot 4, per-owner bounds, consumed-only receipts, immediate Stop/revision cancellation; models/voice/data unchanged. Type/Svelte zero errors/warnings/build/whitespace passed; 241 tests /4,357 expectations passed, 34 DB-dependent cases skipped for this audio-only run. New real-gateway/browser scheduling tests cover negotiation, refill, overflow, no premature completion, Stop and legacy behavior. Actual public temporary browser endpoint negotiated twelve without starting/taking over a session; endpoint released. Gateway/web restarted and all services active. Human audible improvement remains a requested retry, not verified acceptance. [Status](backend-status.md#smoother-browser-speech--november-14-2026).
+
 ### Public Photo Story acceptance — November 14, 2026
 
 Deployed web/gateway `dafdf4e` after explicit user request: confirmed fictional profiles, existing endpoint WSS/audio, generic reviewed caption-only scenes, owner/revision controls and scoped current-scene media. Teaching voice continuity retained. Independent technical review found no blocking auth/cancellation defect. Full database-enabled suite 240 passed / 4,387 expectations with no skips; type/Svelte/build/whitespace and production participant/media/control smokes passed. Actual public separate-fictional-profile page/enroll/WSS/Start/Photo/scoped garden/Talk real-model reply/Skip/park/Stop passed; noncurrent/ended reads denied, temporary profile removed. Backup retained; gateway/web restarted once. No human microphone/speaker, robot or keyboard/zoom acceptance performed; private data, uploads, camera and full journals remain unavailable. [Exact boundary and observed checks](backend-status.md#public-photo-story-deployed--november-14-2026).

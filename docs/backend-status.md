@@ -2,7 +2,13 @@
 
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
-Deployed web and gateway runtime revision: **`9ad7446`** (Teach Lemmi voice UI from `origin/integration/frontend-backend` **`b27980a`**, enrolled-browser integration, and deleted-profile checkpoint recovery). Later documentation-only commits do not require a runtime restart.
+Deployed web and gateway runtime revision: **`da731c8`** (bounded browser playback buffering, retaining the integrated voice UI, public Photo Story and checkpoint recovery). Later documentation-only commits do not require a runtime restart.
+
+## Smoother browser speech — November 14, 2026
+
+User reported choppy voice. The transport allowed only four 20 ms frames (80 ms) outstanding, replenished after consumed-frame receipts; this can underflow when round trips exceed the remaining playback lead. Added explicit browser negotiation `playback.outputWindowChunks:12` (240 ms). Ready advertises actual 4 or 12; old/default clients and robot identities retain four. Each speech owner pins its negotiated window, including teaching/fixed replacement owners. Browser players bound queues to negotiated credit, preserve consumed-only receipts (progress every two actual frames), and cancel/wipe scheduled nodes on Stop/revision change. Generic BrowserAudio now has the same 80 ms initial scheduling lead as VoiceClient. The server's outgoing backpressure ceiling is bounded at 64 KiB for a twelve-frame burst; input frame and request limits are unchanged. No voice/model/provider/data setting changed.
+
+Observed: 241 tests passed / 4,357 expectations, 34 database tests skipped (no isolated database was configured for this audio-only fix), no failures; type/Svelte zero errors/warnings/build/whitespace passed. New scheduling/credit tests prove contiguous 20 ms browser scheduling, no credit before consumption, twelve-frame bounds/overflow cleanup, exact refill, robot/default four and Stop/stale-receipt rejection. The initial full run's two old timing/cadence expectations were updated to the actual 80 ms lead/two-frame receipt cadence and the final run passed. Source/build/manifest rollback: `.data/smoother-audio-rollback-path`. Restarted gateway/web, all four services active. Actual public browser negotiation returned twelve using a temporary Alex browser endpoint; no session Start/handoff/model/microphone was sent and the test endpoint was released. Actual audible improvement/human voice retry remains unverified; no hardware/audio-quality acceptance is claimed.
 
 ## Teach Lemmi voice UI and checkpoint recovery — November 14, 2026
 
