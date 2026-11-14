@@ -14,7 +14,7 @@ This is local integration work; nothing was pushed or deployed by this pass.
 
 The copied caregiver dashboard, profile panel, imagery, fonts, temporary photo selection and conversation scene are retained. Alex's supplied fictional background is shown in the caregiver panel from `packages/activities/src/alex-profile.ts`, rather than an invented second biography fixture. Temporary biography edits do not update the live database. Supplied photographs/song bytes are not committed or uploaded; no media approval is inferred.
 
-In mock mode, `/participant/conversation` keeps the designed scene and offers **Try Teach Lemmi**. Its explicit Start uses the original typed clients and shared mock coordinator. Gardening/Beaches/Banking, scripted replies, topic choices and safety controls use the teaching implementation. Closing via the demo exit flow requests Stop first; local interruption/disconnection also suppresses delayed replies. The existing public demo PIN is a presentation gate, not caregiver authentication.
+In mock mode, `/participant/conversation` keeps the designed scene and offers **Try Teach Lemmi**. Its explicit Start uses the original typed clients and shared mock coordinator. Subscriptions depend on derived scalar session/activity IDs, so receiving a fresh snapshot does not resubscribe. Gardening/Beaches/Banking, scripted replies, topic choices and safety controls use the teaching implementation. Closing via the demo exit flow requests Stop first; local interruption/disconnection also suppresses delayed replies. The existing public demo PIN is a presentation gate, not caregiver authentication.
 
 In live mode, `/participant` uses Anay's `createParticipantSetup`, `ParticipantConnection` and `BrowserAudio`. It renders the assigned avatar, supports explicit text/speech controls, adds negotiated Teach Lemmi controls, and uses the backend's current snapshot/ownership. The local caregiver HTTP-RPC clients remain explicitly mock-only. They are not repurposed as live caregiver authentication.
 
@@ -40,6 +40,10 @@ No new public route, credential scope, external provider, database migration con
 - Existing `scripts/smoke-web.ts`, copied to ignored `.data/integration-smoke-web.ts` with **only** its origin changed from 5173 to **5187**: passed against isolated mock gateway **3017**. Validates SvelteKit → coordinator → music request, preview denial, Pause and explicit live unavailability. Original script unchanged.
 - `TMPDIR=/private/tmp bun run smoke:control`: passed against the production build with fixture identity, verified HTTPS/WSS, pairing, Start/Pause/Resume/revoke. No real provider/media/contact or running deployment used.
 - Chrome inspection of the integration preview: copied dashboard and inert preview cards; Alex background/explicit temporary-draft label; conversation scene → Teach Lemmi → explicit Start → reviewed Gardening prompt → fictional roses answer/scripted follow-up → Pause (reply cleared and input disabled) → keyboard Resume → Not sure/Beaches → Stop/session ended. Camera/mic remained off. This is a mock text rehearsal, not live media acceptance.
+
+### Final polling fix and recheck
+
+Final preview-log inspection exposed rapid repeated reads in the imported mock screen: every replacement snapshot could rerun the subscription effect. The integration now derives scalar session/activity IDs before subscribing. A fresh Chrome rehearsal confirmed Start → Teach Lemmi/Gardening → Stop, and preview logs measured **3 session reads over 3 seconds** rather than a request loop. Type/Svelte check (0 errors/warnings), production build and full format check passed again after this UI-only fix. The 154-test software result above predates this final UI-only change; browser cadence and rebuilt type checks directly verify its affected boundary. Isolated preview processes were stopped afterward; existing servers on ports 5173/3001 were left running.
 
 ## Next connection gate
 

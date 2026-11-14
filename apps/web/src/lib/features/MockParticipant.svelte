@@ -13,6 +13,9 @@
   let profile = $state<ParticipantProfile | null>(null);
   let session = $state<SessionSnapshot | null>(null);
   let activity = $state<ActivityView | null>(null);
+  // A fresh snapshot object must not restart a subscription to the same resource.
+  const subscribedSessionId = $derived(session?.id ?? null);
+  const subscribedActivityId = $derived(activity?.instanceId ?? null);
   let busy = $state(false);
   let message = $state('');
   let answer = $state('');
@@ -48,7 +51,7 @@
     });
   });
   $effect(() => {
-    const id = session?.id;
+    const id = subscribedSessionId;
     if (!id) return;
     return clients.session.subscribe({ sessionId: id }, (result) => {
       if (result.ok && (!session || result.data.generation >= session.generation))
@@ -62,8 +65,8 @@
     });
   });
   $effect(() => {
-    const sessionId = session?.id;
-    const instanceId = activity?.instanceId;
+    const sessionId = subscribedSessionId;
+    const instanceId = subscribedActivityId;
     if (!sessionId || !instanceId) return;
     return clients.activities.subscribe({ sessionId, instanceId }, (result) => {
       if (result.ok && (!activity || result.data.revision >= activity.revision))
