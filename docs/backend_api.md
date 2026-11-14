@@ -206,6 +206,14 @@ Revocation clears pending enrollment/current credential, ends the session and cl
 
 **Path difference from the draft:** technical-spec's `/v1/devices/pair` and `DELETE /v1/devices/:id/pairing` are proposed older route names, not implemented aliases. Use the three POST routes above until the shared specs/consumers are deliberately migrated.
 
+### Python pairing helper
+
+From the repo root, run `python3 scripts/pair-stackchan.py` (Python 3.10+, standard library only). It reads the private root `.env` with environment-variable overrides, performs a state/PKCE VoidAuth login on `http://127.0.0.1:3333/callback`, and requests a fresh pairing using the public caregiver endpoint. Use the printed authorization URL in a browser on the helper machine, or forward its loopback port over SSH. This reuses the existing registered setup redirect URL; it does not change caregiver assignments or the database configuration.
+
+The helper prints the private `pairingId`, `code` and `expiresAt` for immediate Stackchan provisioning. It **leaves the code unclaimed**, stores no tokens/pairing files, never automatically revokes an existing device, and does not open a microphone or start a session. Keep its terminal output out of shared logs. If a pairing/device already exists, resolve it explicitly through the caregiver revocation route before generating a replacement. Missing access key is prompted privately; browser login requires issuer/client ID/secret in private configuration. `--token` privately prompts for an existing caregiver access token instead of browser login; `--env-file PATH` selects another private settings file. Basic literal/quoted dotenv values are supported, without variable expansion.
+
+Four local Python fixture tests cover state/PKCE, public authorization headers and fresh command IDs, assignment/TLS constraints, and unchanged configuration. Run `python3 -m unittest discover -s tests -p test_pair_stackchan.py -v`. The helper itself has not been used to create a live pairing; existing live backend acceptance is recorded separately.
+
 ## 6. Firmware / authenticated WebSocket protocol
 
 Connect `wss://<configured-host-or-IP>[:port]/v1/device-stream` using `Authorization: Bearer <paired-device-credential>` in the upgrade request. Same gateway/session as HTTP controls; no dependency on an open browser tab. One connection at a time, reserved atomically during upgrade. No URL tokens, insecure certificate bypass or caregiver/provider credentials on the device.
