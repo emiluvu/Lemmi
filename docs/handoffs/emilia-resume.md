@@ -9,6 +9,51 @@ Updated November 13, 2026. This is a restart handoff for a new ChatGPT/Codex acc
 - Read `AGENTS.md`, `firmware/stackchan/README.md`, `firmware/stackchan/hardware-checks.md`, `docs/robot-capabilities-spec.md` and `docs/integration-contracts.md`.
 - Keep firmware implementation on this branch. Anay owns backend/contracts, Kylie UI/art, Lukas activity logic/content. Anay’s separate handoff is already on main: `docs/handoffs/anay-device-integration.md` (`236768d`). Do not recreate the scaffold or move firmware onto main as part of resuming.
 
+## Main/backend sync checkpoint
+
+Merged `origin/main` at `be1e096` into this firmware branch with merge commit
+`56ccfaa`, without conflicts. Firmware sources were unchanged by that merge;
+petting 0.2 remains the last observed running device firmware and the original
+private backup is preserved. Root TypeScript check passed using existing Node and
+the pinned installed TypeScript (`node node_modules/typescript/bin/tsc --noEmit -p
+tsconfig.json`). No Bun executable was found in the inspected PATH, standard
+locations or npm runner cache; full Bun checks/smokes were not rerun or installed.
+Anay's 91-test merge evidence is in his verification handoff, not a new local run.
+
+Read the current [backend status](../backend-status.md),
+[API inventory](../backend_api.md),
+[control handoff](anay-control-foundation.md),
+[speech handoff](anay-speech-chat.md) and
+[merge verification](anay-backend-deploy-verification.md) before implementation.
+They supersede earlier claims here that only the loopback mock gateway exists.
+The documented public origin is `https://lemmi.chaoswarrior.dev`; device WSS path
+is `/v1/device-stream`. Actual public robot connectivity was not tested here.
+
+Next firmware increment is **authenticated controls first**:
+
+- Private local provisioning and explicit on-device pairing confirmation, HTTPS
+  claim at `/v1/device-pairings/claim`, then certificate-verified WSS. Device
+  HTTP/WSS must include `X-Lemmi-Access-Key`; WSS also needs its scoped Bearer
+  device credential. Obtain/store these privately, not in chat, source or logs.
+  The domain key is not pairing or caregiver identity. No provider/admin keys
+  belong on firmware.
+- Consume the shared updated hello/ready/control/state/ack/error fixtures. Report
+  audio unsupported and camera false on the connected control-only path; physical
+  offline feasibility does not authorize live streaming. Heartbeat about every
+  two seconds, six-second watchdog; no automatic start/resume on reconnect.
+- One-hour credentials are revoked on gateway restart; use explicit re-pairing.
+  The deployed host's ordinary DNS path had a documented issue. Preserve SNI,
+  hostname/certificate validation and correct clock; do not bypass TLS to connect.
+
+Substantial backend code now exists: scoped pairing/access/persistence, control
+WSS, input.text/response.text and private speech adapters. However, actual
+`device.ready` still requires audio=false/camera=false. Capture grants, audio
+media ingestion, playback receipts and camera relay remain pending. The offline
+packetizer can be integrated only once those contracts exist. TTS currently
+produces 22,050 Hz mono int16; microphone input proposal is 16,000 Hz. Do not
+conflate the rates or claim end-to-end robot STT/TTS. Secure F13 remains ahead of
+integrated F14 polish; the existing petting experiment stays standalone.
+
 ## Current running firmware — offline petting 0.2
 
 Emilia explicitly requested pettable local reactions while waiting for Anay.
