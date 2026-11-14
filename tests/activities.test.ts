@@ -63,3 +63,47 @@ test('resume produces no output; delayed receipts cannot reactivate paused/ended
   ).nextState;
   expect(applyActivitySystemInput(state, receipt, musicPack, ctx).nextState.phase).toBe('ended');
 });
+test('policy updates restore eligible music safely without replaying a paused track', () => {
+  const ctx = contextFor('s');
+  const unavailable = {
+    ...ctx,
+    eligibility: { ...ctx.eligibility, policyRevision: 1, sessionHiddenIds: ['topic:gardening'] },
+  };
+  const availableAgain = {
+    ...ctx,
+    eligibility: { ...ctx.eligibility, policyRevision: 2 },
+  };
+  let state = createActivity({ instanceId: 'a' }, musicPack, ctx);
+  state = applyActivitySystemInput(
+    state,
+    { type: 'system.pause', reason: 'camera' },
+    musicPack,
+    ctx,
+  ).nextState;
+  state = applyActivitySystemInput(
+    state,
+    { type: 'system.eligibility_changed' },
+    musicPack,
+    unavailable,
+  ).nextState;
+  expect(state).toMatchObject({ phase: 'paused', currentTrackId: null, playback: 'stopped' });
+  state = applyActivitySystemInput(
+    state,
+    { type: 'system.eligibility_changed' },
+    musicPack,
+    availableAgain,
+  ).nextState;
+  expect(state).toMatchObject({ phase: 'paused', currentTrackId: null });
+  const resumed = applyActivitySystemInput(
+    state,
+    { type: 'system.resume' },
+    musicPack,
+    availableAgain,
+  );
+  expect(resumed.nextState).toMatchObject({
+    phase: 'ready',
+    currentTrackId: 'garden-track',
+    playback: 'stopped',
+  });
+  expect(resumed.effects).toEqual([]);
+});

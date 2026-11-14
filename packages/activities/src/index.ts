@@ -128,17 +128,32 @@ export function applyActivitySystemInput(
       break;
     case 'system.resume':
       if (state.phase !== 'paused') throw new Error('Not paused');
-      next.phase = tracks(pack, ctx).length ? 'ready' : 'unavailable';
+      {
+        const firstEligibleTrack = tracks(pack, ctx)[0];
+        next.currentTrackId = firstEligibleTrack?.id ?? null;
+        next.playback = 'stopped';
+        next.phase = firstEligibleTrack ? 'ready' : 'unavailable';
+      }
       break;
     case 'system.end':
       next.phase = 'ended';
       next.playback = 'stopped';
       break;
     case 'system.eligibility_changed':
-      if (!tracks(pack, ctx).some((t) => t.id === state.currentTrackId)) {
+      {
+        const eligible = tracks(pack, ctx);
+        const firstEligibleTrack = eligible[0];
+        const currentIsEligible = eligible.some((t) => t.id === state.currentTrackId);
+        if (currentIsEligible) break;
         next.currentTrackId = null;
         next.playback = 'stopped';
-        next.phase = state.phase === 'paused' ? 'paused' : 'unavailable';
+        // A pause must retain its safe empty position. Resume later chooses a
+        // current eligible track explicitly; it never replays an old effect.
+        if (state.phase === 'paused') next.phase = 'paused';
+        else if (firstEligibleTrack) {
+          next.currentTrackId = firstEligibleTrack.id;
+          next.phase = 'ready';
+        } else next.phase = 'unavailable';
         effects.push({ type: 'stop_media' });
       }
       break;
