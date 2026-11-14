@@ -5,5 +5,9 @@
   "libraries": {
     "M5GFX": "0.3.0",
     "M5Unified": "0.3.0"
+  },
+  "deviceTools": {
+    "esptool": "4.12.0",
+    "pyserial": "3.5"
   }
 }

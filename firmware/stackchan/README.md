@@ -1,6 +1,6 @@
 # Emilia’s Stackchan firmware
 
-The `emilia/firmware-foundation` branch contains an initial standalone display/touch test. It is not a connected Lemmi client. It has not been flashed or hardware-verified yet. The pinned setup and compile scripts passed on the development Mac; the explicit target build reports 549,947 bytes of program storage and 26,036 bytes of static globals. These are compiler figures, not measured runtime memory or control latency.
+The `emilia/firmware-foundation` branch contains an initial standalone display/touch test. It is not a connected Lemmi client. It has now been uploaded and hash-verified on the connected device after a complete verified private backup. Serial output confirms the foundation firmware boots and reports a 320×240 display, including after a separate controlled reboot. Emilia confirms the visible screen and Stop → Unmute → Ready behavior; readability at intended distance, controls under load and audio/camera/network failure checks remain pending; see `hardware-checks.md`. The pinned setup and compile scripts passed on the development Mac; the explicit target build reports 549,947 bytes of program storage and 26,036 bytes of static globals. These are compiler figures, not measured runtime memory or control latency.
 
 ## First test
 
@@ -19,15 +19,17 @@ python3 tools/build.py
 
 Setup downloads the pinned official Arduino CLI, checks the archive against the official SHA-256 manifest, then installs the pinned board platform/libraries in ignored local `.tools/` and `.arduino/` directories. The first compiler download is large because the platform bundles toolchains for multiple chips. This bootstrap currently supports macOS; other platforms require an explicit addition. It does not open a serial port.
 
-Build writes ignored output under `build/foundation/` and never uploads firmware. There is deliberately no automatic upload step. Do not commit local tools, build products, flash backups or credentials. Any future setup/core/library version change should update `toolchain.json` and be compile-checked.
+Build writes ignored output under `build/foundation/` and never uploads firmware. The setup/build scripts never upload. The explicit `tools/upload.py` helper is for a separately authorized upload: it requires the device-matching, verified 16 MB private backup and the tested esptool 4.12.0 Python environment; it uses the pinned board package’s four image offsets and does not erase all flash or change eFuses. Do not commit local tools, build products, flash backups or credentials. Any future setup/core/library version change should update `toolchain.json` and be compile-checked.
 
 ## Connected hardware observations
 
 - macOS exposes `/dev/cu.usbmodem2101`; the USB descriptor identifies an Espressif JTAG/serial interface. Port names may change after reboot/flashing.
-- Emilia reports the normal existing face is running. Its exact firmware version and configuration are not known.
-- USB detection does not establish audio/camera/touch or motion capabilities. No serial reset, flash write, camera capture or device motion has been requested by the setup/build scripts.
+- Before upload, Emilia reported the normal existing face. A full private flash image was saved and verified against the device; the old application version was not identified. The foundation test now boots, per its allowlisted serial status.
+- USB/boot status does not establish audio/camera/touch or motion capabilities. Setup/build scripts still do not access the serial port. The separately authorized upload performed the expected flash write/reset; no camera capture or motion command was issued.
 
-Before replacing firmware, establish the recovery route and, where readable, keep any flash backup private under ignored `backups/`. A flash backup can contain network credentials. M5Stack documents factory restoration using M5Burner; restoration/settings recovery has not been rehearsed on this device. Uploading the test replaces the running application and will not retain the factory face/agent experience while the test runs.
+Before replacing firmware, establish the recovery route and, where readable, keep any flash backup private under ignored `backups/`. A flash backup can contain network credentials. M5Stack documents factory restoration using M5Burner; restoration/settings recovery has not been rehearsed on this device. The pre-upload 16 MB image did pass device verification and has a private SHA-256 manifest. Uploading the test replaces the running application and will not retain the factory face/agent experience while the test runs.
+
+For bounded, receive-only serial observation after upload, run `python3 tools/monitor.py --port PORT --seconds 30` using a Python environment with pyserial. It sets DTR/RTS inactive before opening, sends no commands and only prints allowlisted Lemmi status lines. It must not run concurrently with backup/upload. Device helper dependencies are pinned in `tools/requirements-device.txt`; the working device-transfer environment used esptool 4.12.0 and pyserial 3.5. The board package’s bundled esptool 5.3.0 failed during the initial backup read, so it was not used for the upload.
 
 ## Hardware checks after an authorized upload
 
