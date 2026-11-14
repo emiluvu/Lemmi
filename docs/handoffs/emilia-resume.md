@@ -9,7 +9,29 @@ Updated November 13, 2026. This is a restart handoff for a new ChatGPT/Codex acc
 - Read `AGENTS.md`, `firmware/stackchan/README.md`, `firmware/stackchan/hardware-checks.md`, `docs/robot-capabilities-spec.md` and `docs/integration-contracts.md`.
 - Keep firmware implementation on this branch. Anay owns backend/contracts, Kylie UI/art, Lukas activity logic/content. Anay’s separate handoff is already on main: `docs/handoffs/anay-device-integration.md` (`236768d`). Do not recreate the scaffold or move firmware onto main as part of resuming.
 
-## Current offline status — resume here
+## Latest increment — offline audio packetizer
+
+`firmware/stackchan/audio/PcmPacketizer.h` now frames arbitrary int16 buffers into
+320-sample / 640-byte little-endian packets using one fixed slot. It supports
+strictly increasing local epochs, cancellation/wiping, stale rejection and
+fail-closed overflow. It does not authorize/start capture or transmit anything.
+The current 0.5 device firmware and private backup are unchanged.
+
+Synthetic host tests with ASan/UBSan passed, including five 256-sample inputs to
+four complete frames, signed byte order, arbitrary boundaries, cancellation at
+every buffered size, stale producers/consumers and non-padded final tails. Pinned
+ESP32 compile-only probe passed (309,748 program bytes / 23,504 static globals).
+No hardware upload or speech recording was performed. Single-owner synchronization
+and revalidation/clearing of caller-owned frames before live send are mandatory.
+Final partial-tail policy (currently discarded) needs Anay's agreement.
+
+Read [audio README](../../firmware/stackchan/audio/README.md) for reproduction and
+the exact request to Anay: reachable authenticated WSS/pairing/certificate setup;
+updated shared grant/cancel/end/receipt schemas and fixtures; PCM/JSON-versus-binary
+and TTS format agreement; heartbeat/expiry/backpressure; a scoped no-recording test
+endpoint. Do not invent shared exports or expose the loopback mock gateway.
+
+## Current offline hardware status
 
 0.5 is uploaded and running; Emilia's local upload passed all four image hashes.
 Serial confirms 0.5, 320×240, camera/capture off at boot. Final compile and SCCB
@@ -35,8 +57,9 @@ No raw audio/frame recording, payload logging, network or motion was added.
 
 Anay can develop speech adapters against the proposed shared 16 kHz mono
 pcm_s16le contract: 20 ms / 320 samples / 640 bytes, base64 in current JSON schema.
-Actual firmware mic requests are 256 samples; bounded packetization and live
-WSS/pairing/capture grants/output leases/receipts remain to implement together.
+Actual firmware mic requests are 256 samples; the packetizer above is tested
+offline but not yet wired into capture/transport. Live WSS/pairing/capture grants/
+output leases/receipts remain to implement together.
 No intelligible speech or end-to-end STT/TTS is yet verified. Camera transport
 encoding also remains unresolved: hardware preview is RGB565, shared schema JPEG.
 

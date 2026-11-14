@@ -20,6 +20,15 @@ commands, measured-versus-proposed limits and the local test procedure. The agen
 upload attempt was blocked by macOS serial access before any firmware write;
 Emilia subsequently completed the upload from local Terminal. The original foundation sketch and verified private backup are preserved.
 
+## Offline microphone packetizer
+
+[audio/PcmPacketizer.h](audio/PcmPacketizer.h) now provides bounded synthetic-tested
+256-to-320-sample PCM framing, explicit little-endian encoding and local-epoch
+cancellation. Host sanitizer tests and the pinned ESP32 compile-only probe passed.
+It is not connected to the microphone or network; the running 0.5 sketch is unchanged.
+See [audio handoff and checks](audio/README.md) for exact commands, integration
+requirements and provisional final-tail handling. No hardware upload is needed.
+
 ## First test
 
 `lemmi_foundation/lemmi_foundation.ino` shows Ready, Stop and a separate microphone mute setting. Stop latches until an explicit Ready action. Both Ready and Unmute leave capture off. Microphone/speaker initialization is disabled, and camera/network/motion APIs are not initialized. This proves no actual capture/output cancellation until a later audio-enabled hardware test; a software setting is not a physical microphone disconnect.

@@ -2,7 +2,24 @@
 
 **Updated:** November 13, 2026. Read with `AGENTS.md`, [team start](../team-start.md), [integration contracts](../integration-contracts.md) and [robot capabilities](../robot-capabilities-spec.md).
 
-## Current firmware/audio handoff — November 13 local
+## Offline packetizer increment
+
+Emilia implemented and synthetic-tested `firmware/stackchan/audio/PcmPacketizer.h`:
+256-sample mic buffers can be split/combined into 320-sample / 640-byte PCM s16le
+frames with one bounded slot. Host sanitizers and pinned ESP32 compilation passed.
+It is not wired to capture/WSS; local epochs are not server authorization. Final
+partial tails are provisionally discarded, pending shared stream-end agreement.
+The uploaded 0.5 device is unchanged. No real samples were recorded or transmitted.
+
+Please provide the concrete live handoff in
+[audio README](../../firmware/stackchan/audio/README.md#anay-handoff-required-before-live-use):
+WSS/pairing/trust; sample updated shared schemas/fixtures for capture grants,
+independent output leases/cancellation, stream end and playback receipts; confirm
+microphone framing/base64 and TTS output format; heartbeat/deadline/backpressure;
+and a scoped endpoint with actual no-recording/buffer/temp-file behavior documented.
+Shared contract files remain Anay-owned and unchanged by this increment.
+
+## Current firmware/audio hardware handoff — November 13 local
 
 0.5 is uploaded/hash-verified and starts with camera/capture off (320×240).
 Emilia observed a correctly colored local 160×120 RGB565 preview (38400-byte
@@ -20,7 +37,7 @@ remain unverified. Earlier 24/255 tone requests were inaudible despite ok=1.
 Use the existing proposed 16 kHz mono signed little-endian PCM contract:
 20 ms / 320 samples / 640 bytes, base64 in current JSON audio.chunk schema.
 Offline firmware requests 256 int16 mono samples at 16 kHz and discards them;
-it still needs a bounded packetizer. WSS/pairing, capture/output grants,
+the offline packetizer is now available but not integrated. WSS/pairing, capture/output grants,
 input/output cancellation, stream ends and playback receipts remain joint work.
 Agree TTS output format/rate explicitly before freezing it. No microphone data
 or generated speech is currently sent to or recorded by this firmware.
