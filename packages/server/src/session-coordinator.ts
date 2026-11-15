@@ -53,6 +53,8 @@ import { createHash } from 'node:crypto';
 import { companionInput } from './adapters/companion-prompt';
 import { fixedInputReply, routeParticipantText } from './adapters/input-routing';
 import { permittedModelReply } from './adapters/reply-policy';
+import { mentionsTopic, redirectInstructions } from './adapters/conversation-redirects';
+import { conversationRecap } from './adapters/conversation-recap';
 import type { ChatAdapter, ChatMessage } from './adapters/types';
 import { SpeechTurns, type SpeechAdapters } from './speech-turns';
 import { elapsedEpochClock } from './elapsed-clock';
@@ -379,6 +381,7 @@ export class SessionCoordinator {
     return this.speech?.sweep() ?? false;
   }
   private dialogue: ChatMessage[] = [];
+  private redirectedTopics = new Set<string>();
   private chatIds = new Map<string, string>();
   private lastChat: { commandId: string; result: Result<ConversationTextResult> } | null = null;
   private pendingChat: {
@@ -573,6 +576,7 @@ export class SessionCoordinator {
     this.pendingChat?.controller.abort();
     this.pendingChat = null;
     this.dialogue = [];
+    this.redirectedTopics.clear();
     this.lastChat = null;
     this.speech?.interrupt(inputOnly, preserveSpeech);
   }
@@ -663,7 +667,10 @@ export class SessionCoordinator {
       talk.events.forEach((event) => this.event(event));
       input.purpose = 'photo_opening';
     }
-    const fixed = fixedInputReply(route, input.language);
+    const fixed =
+      route === 'recap' && input.language === 'en'
+        ? conversationRecap(this.dialogue, this.profile.conversationRedirects?.awayFrom ?? [])
+        : fixedInputReply(route, input.language);
     if (route === 'topic_refusal' && session.teaching?.entityId)
       this.teachingHidden.add(session.teaching.entityId);
     const interrupts = [
@@ -680,7 +687,18 @@ export class SessionCoordinator {
       if (!interrupts && this.pendingChat)
         return fail('REVISION_CONFLICT', 'A conversation turn is pending');
       if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
+      const previousDialogue = interrupts ? [] : this.dialogue;
+      const previousRedirectedTopics = interrupts
+        ? new Set<string>()
+        : new Set(this.redirectedTopics);
       this.cancelChat(false, speechOwner);
+      this.redirectedTopics = previousRedirectedTopics;
+      if (!interrupts)
+        this.dialogue = [
+          ...previousDialogue,
+          { role: 'user', content: input.text },
+          { role: 'assistant', content: fixed },
+        ].slice(-6) as ChatMessage[];
       let replyTurnId = input.commandId;
       if (interrupts) {
         const pause = () =>
@@ -823,6 +841,33 @@ export class SessionCoordinator {
             : this.approvedFacts,
     });
     if (!prepared.ok) return prepared;
+    const redirectSettings =
+      !session.teaching && !this.photoTalking() ? this.profile.conversationRedirects : undefined;
+    const redirectTopics =
+      redirectSettings?.awayFrom.filter(
+        (topic) => !this.redirectedTopics.has(topic) && mentionsTopic(input.text, [topic]),
+      ) ?? [];
+    const redirect = redirectInstructions(
+      input.text,
+      redirectSettings && {
+        ...redirectSettings,
+        awayFrom: redirectTopics,
+        toward: redirectSettings.toward.filter(
+          (topic) => !mentionsTopic(topic, redirectSettings.awayFrom),
+        ),
+      },
+    );
+    if (redirect) prepared.data.system += '\n' + redirect;
+    if (!redirect && redirectSettings && mentionsTopic(input.text, redirectSettings.awayFrom))
+      prepared.data.system +=
+        '\nA subject transition has already been offered for this subject. Respect the participant choosing to continue; do not push another redirect. Existing safety rules still apply.';
+    if (!session.teaching && !this.photoTalking() && !redirect)
+      prepared.data.system +=
+        '\nOpen conversation: the participant may introduce any everyday topic or change subjects freely. No topic selection or approved topic catalog is required.' +
+        '\nAnswer the current message directly before considering an optional follow-up. Follow a new subject without redirecting to profile interests or teaching.' +
+        '\nUse recent dialogue to understand references, but treat participant statements as transient self-reports, never verified biography. Ask one brief clarification only when needed.' +
+        '\nGeneral knowledge is allowed; acknowledge uncertainty about current events or facts you cannot verify. Never pretend to browse, check live information or start an activity. Activity availability is controlled by the application.' +
+        '\nAn acknowledgment or direct answer can stand alone. Do not end every response with a question, repeat introductions, or turn ordinary conversation into a quiz.';
     if (photo?.ok && photo.data.kind === 'conversation_context') {
       prepared.data.system +=
         '\n' +
@@ -904,18 +949,26 @@ export class SessionCoordinator {
             'Response left the reviewed teaching topic; choose another topic or finish',
           );
         else {
+          const redirectFallback =
+            !!redirect && mentionsTopic(response.data.text, redirectSettings!.awayFrom);
+          const replyText = redirectFallback
+            ? input.language === 'de'
+              ? 'Wir können uns einen ruhigen Moment Zeit nehmen.'
+              : 'We can take a quiet moment together.'
+            : response.data.text;
+          if (redirect) redirectTopics.forEach((topic) => this.redirectedTopics.add(topic));
           this.dialogue = [
             ...this.dialogue,
             { role: 'user', content: input.text },
-            { role: 'assistant', content: response.data.text },
+            { role: 'assistant', content: replyText },
           ].slice(-6) as ChatMessage[];
           result = ok({
             kind: 'reply',
             reply: {
               turnId: input.commandId,
-              text: response.data.text,
+              text: replyText,
               language: input.language,
-              source: this.mode === 'mock' ? 'scripted' : 'model',
+              source: redirectFallback ? 'fixed' : this.mode === 'mock' ? 'scripted' : 'model',
             },
             session: this.snapshot()!,
           });
@@ -1101,6 +1154,7 @@ export class SessionCoordinator {
           'avatarId',
           'interests',
           'sensitiveTopicGuidance',
+          'conversationRedirects',
         ].some(
           (key) =>
             JSON.stringify(input.profile[key]) !==

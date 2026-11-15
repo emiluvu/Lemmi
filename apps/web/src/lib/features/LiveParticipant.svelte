@@ -11,6 +11,10 @@
   import VoiceTeaching from './VoiceTeaching.svelte';
   import { mayPresentReply } from '#lib/participant-presentation.ts';
   import {
+    appendConversationTurn,
+    type ConversationTranscriptEntry,
+  } from '#lib/conversation-transcript.ts';
+  import {
     createParticipantSetup,
     ParticipantConnection,
     type ParticipantEndpoint,
@@ -37,6 +41,7 @@
   let newName = $state('');
   let text = $state('');
   let reply = $state('');
+  let transcript = $state<ConversationTranscriptEntry[]>([]);
   let textAvailable = $state(false);
   let speechAvailable = $state(false);
   let teachingAvailable = $state(false);
@@ -62,6 +67,27 @@
       : profiles.find((p) => p.id === requestedProfileId),
   );
   let ownsEndpoint = $derived(!!assignment && session?.activeEndpointId === assignment.deviceId);
+  let conversationStatus = $derived(
+    !connected
+      ? 'Conversation is disconnected.'
+      : !session
+        ? 'Start when you are ready.'
+        : session.phase === 'paused'
+          ? 'Paused. Microphone off.'
+          : session.phase === 'processing'
+            ? 'Lemmi is thinking.'
+            : speaking
+              ? 'Lemmi is speaking.'
+              : listening
+                ? 'Listening. Take your time.'
+                : session.phase === 'ended'
+                  ? 'This conversation has ended.'
+                  : 'You can speak or type a message.',
+  );
+  function clearConversation() {
+    reply = '';
+    transcript = [];
+  }
   function show<T>(result: Result<T>): T | null {
     if (result.ok) return result.data;
     message = result.error.message;
@@ -110,7 +136,7 @@
         next.phase === 'ended' ||
         (next.phase === 'paused' && session?.phase !== 'paused')
       )
-        reply = '';
+        clearConversation();
       session = next;
       if (!next || next.phase === 'ended') photo = null;
     }
@@ -118,8 +144,10 @@
       event.type === 'response.text' &&
       !replyBlocked &&
       mayPresentReply(event, session, assignment?.deviceId)
-    )
+    ) {
       reply = event.payload.text;
+      transcript = appendConversationTurn(transcript, { speaker: 'lemmi', text: reply });
+    }
     if (event.type === 'error') {
       message = event.payload.message;
       audio?.cancelInput();
@@ -136,7 +164,7 @@
   function control(type: string, payload: unknown = {}, independent = false) {
     if (type === 'input.mute') audio?.cancelInput();
     else audio?.cancel();
-    reply = '';
+    clearConversation();
     const requestsOutput =
       type.startsWith('input.teaching.') ||
       type === 'input.start' ||
@@ -156,6 +184,14 @@
     }
     if (!connection?.send(type, payload, independent))
       message = 'Connection unavailable. Reconnect when ready.';
+  }
+  function photoAction(action: ActivityAction) {
+    if (!photo) return;
+    control('input.photo.action', {
+      instanceId: photo.instanceId,
+      expectedRevision: photo.revision,
+      action,
+    });
   }
   function sessionNeedsStop() {
     return !!session && session.phase !== 'ended';
@@ -178,15 +214,8 @@
     connection = null;
     connected = false;
     session = null;
+    clearConversation();
     voiceTeaching = true;
-  }
-  function photoAction(action: ActivityAction) {
-    if (!photo) return;
-    control('input.photo.action', {
-      instanceId: photo.instanceId,
-      expectedRevision: photo.revision,
-      action,
-    });
   }
   function connect() {
     const epoch = ++connectionEpoch;
@@ -203,7 +232,7 @@
     photoAvailable = false;
     photo = null;
     session = null;
-    reply = '';
+    clearConversation();
     connection = new ParticipantConnection({
       origin: window.location.origin,
       onEvent: (event) => {
@@ -212,7 +241,7 @@
       onClose: () => {
         if (epoch === connectionEpoch) {
           connected = false;
-          reply = '';
+          clearConversation();
           text = '';
           outputBlocked = true;
           replyBlocked = true;
@@ -222,7 +251,7 @@
       onError: (value) => {
         if (epoch === connectionEpoch) {
           message = value;
-          reply = '';
+          clearConversation();
           outputBlocked = true;
           replyBlocked = true;
           audio?.cancel();
@@ -276,7 +305,7 @@
       connection?.close();
       connection = null;
       session = null;
-      reply = '';
+      clearConversation();
       text = '';
       connected = false;
       assignment = show(await setup.enroll(profileId));
@@ -302,7 +331,7 @@
       connection?.close();
       connection = null;
       session = null;
-      reply = '';
+      clearConversation();
       text = '';
       connected = false;
       const released = show(await setup.release());
@@ -334,6 +363,7 @@
     outputAfterGeneration = null;
     reply = '';
     if (connection?.send('input.text', { text: text.trim(), language: 'en' })) {
+      transcript = appendConversationTurn(transcript, { speaker: 'participant', text });
       text = '';
       message = '';
     }
@@ -478,17 +508,6 @@
               disabled={!connected}>Ask for help</button
             >
           </div>
-          {#if photoAvailable && (!photo || photo.phase === 'ended')}
-            <button
-              onclick={() => control('input.photo.start')}
-              disabled={!connected ||
-                !ownsEndpoint ||
-                !!session.teaching ||
-                !['ready', 'waiting'].includes(session.phase)}
-            >
-              Start Photo Story
-            </button>
-          {/if}
           {#if photo && photo.phase !== 'ended'}
             <section class="card public-photo" aria-labelledby="photo-story-title">
               <h2 id="photo-story-title">Photo Story</h2>
@@ -539,14 +558,38 @@
             </section>
           {/if}
           {#if !photo || photo.phase === 'ended'}
-            <button
-              onclick={startVoiceTeaching}
-              disabled={!connected ||
-                !ownsEndpoint ||
-                !teachingAvailable ||
-                !speechAvailable ||
-                !['ready', 'waiting'].includes(session.phase)}>Play Teach Lemmi</button
-            >
+            <section class="general-conversation" aria-labelledby="general-conversation-title">
+              <p class="eyebrow">General conversation</p>
+              <h2 id="general-conversation-title">Talk about what is on your mind</h2>
+              <p aria-live="polite">{conversationStatus}</p>
+              <p class="helper">
+                Lemmi asks one gentle question at a time. You can pause or stop at any time.
+              </p>
+            </section>
+            <section class="activity-invitations" aria-labelledby="activity-invitations-title">
+              <h2 id="activity-invitations-title">No topic needed</h2>
+              <p>Talk about your day, ask a question, or change the subject whenever you like.</p>
+              <details>
+                <summary>Other things to do</summary>
+                <p>
+                  Activities currently open with these controls. Voice requests are not connected
+                  yet.
+                </p>
+                {#if teachingAvailable && speechAvailable}<button
+                    onclick={startVoiceTeaching}
+                    disabled={!connected ||
+                      !ownsEndpoint ||
+                      !['ready', 'waiting'].includes(session.phase)}>Teach Lemmi</button
+                  >{/if}
+                {#if photoAvailable}<button
+                    onclick={() => control('input.photo.start')}
+                    disabled={!connected ||
+                      !ownsEndpoint ||
+                      !!session.teaching ||
+                      !['ready', 'waiting'].includes(session.phase)}>Photo Story</button
+                  >{/if}
+              </details>
+            </section>
           {/if}
           {#if speechAvailable && ownsEndpoint}
             {#if listening}<button onclick={() => audio?.finish()}>Finish speaking</button>
@@ -593,7 +636,24 @@
               {#if !textAvailable}<p>Conversation service is not configured.</p>{/if}
             </form>
           </details>
-          {#if reply}<section class="card" aria-live="polite">
+          {#if transcript.length}
+            <section
+              class="card conversation-turns"
+              aria-live="polite"
+              aria-label="This conversation"
+            >
+              <h2>This conversation</h2>
+              {#each transcript as turn}
+                <div
+                  class:participant-turn={turn.speaker === 'participant'}
+                  class="conversation-turn"
+                >
+                  <strong>{turn.speaker === 'participant' ? 'You' : 'Lemmi'}</strong>
+                  <p>{turn.text}</p>
+                </div>
+              {/each}
+            </section>
+          {:else if reply}<section class="card" aria-live="polite">
               <h2>Lemmi</h2>
               <p>{reply}</p>
             </section>{/if}
@@ -755,6 +815,50 @@
   }
   .type-instead {
     margin: 24px 0;
+  }
+  .general-conversation {
+    margin: 24px 0 16px;
+    padding: 20px;
+    border: 1px solid #bdc8aa;
+    border-radius: 24px;
+    background: #fffdf7e8;
+    text-align: center;
+  }
+  .general-conversation h2 {
+    margin: 4px 0 8px;
+    font-size: clamp(22px, 3vw, 28px);
+  }
+  .general-conversation p {
+    margin: 8px 0;
+  }
+  .activity-invitations {
+    margin: 16px 0 24px;
+    padding: 4px 12px;
+    text-align: left;
+  }
+  .activity-invitations h2 {
+    font-size: 20px;
+    text-align: center;
+  }
+  .conversation-turns {
+    display: grid;
+    gap: 12px;
+    text-align: left;
+  }
+  .conversation-turns h2 {
+    margin: 0;
+    text-align: center;
+  }
+  .conversation-turn {
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: #eff2e9;
+  }
+  .conversation-turn.participant-turn {
+    background: #f8ead0;
+  }
+  .conversation-turn p {
+    margin: 4px 0 0;
   }
   summary {
     min-height: 56px;

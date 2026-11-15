@@ -146,6 +146,36 @@ dbtest('migrations are repeatable, checksummed and only Alex is seeded', async (
     code: 'FORBIDDEN',
   });
 });
+dbtest('redirect settings persist privately with revision checks and caregiver scope', async () => {
+  await reset();
+  const settings = { awayFrom: ['old job'], toward: ['flowers'] };
+  const saved = await repo.update(
+    caregiver,
+    update(0, { conversationRedirects: settings }),
+    () => {},
+  );
+  expect(saved.conversationRedirects).toEqual(settings);
+  expect((await repo.approvedProfile(caregiver.subject)).conversationRedirects).toEqual(settings);
+  expect(JSON.stringify(await repo.profile(caregiver, caregiver.profileId))).not.toContain(
+    'old job',
+  );
+  await expect(
+    repo.update(
+      { ...caregiver, subject: 'foreign' },
+      update(1, { conversationRedirects: settings }),
+      () => {},
+    ),
+  ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  await expect(
+    repo.update(caregiver, update(0, { conversationRedirects: settings }), () => {}),
+  ).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+  const cleared = await repo.update(
+    caregiver,
+    update(1, { conversationRedirects: { awayFrom: [], toward: [] } }),
+    () => {},
+  );
+  expect(cleared.conversationRedirects?.awayFrom).toEqual([]);
+});
 dbtest(
   'profile transactions survive new connections, reject concurrent stale edits, and retain no old fact text',
   async () => {

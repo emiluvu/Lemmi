@@ -54,6 +54,32 @@ test('text chat uses the existing authority, stays capture-off and keeps only tr
   expect(JSON.stringify(coordinator)).not.toContain('We can take our time.');
 });
 
+test('open chat follows arbitrary subject changes and preserves context across an identity question', async () => {
+  const received: ChatInput[] = [];
+  const coordinator = new SessionCoordinator('live', {
+    async complete(input) {
+      received.push(structuredClone(input));
+      return ok({ text: 'We can talk about that.', language: input.language });
+    },
+  });
+  start(coordinator);
+  await text(coordinator, 'Tell me about Saturn');
+  await text(coordinator, 'Who are you?');
+  await text(coordinator, 'Why does it have rings?');
+  expect(received).toHaveLength(2);
+  expect(received[1]?.history.map((entry) => entry.content)).toContain('Tell me about Saturn');
+  expect(received[1]?.history.map((entry) => entry.content)).toContain(
+    "I'm Lemmi, an AI companion.",
+  );
+  await text(coordinator, 'Actually, let us talk about knitting');
+  expect(received[2]?.system).toContain('No topic selection');
+  expect(received[2]?.system).not.toContain('Teach Lemmi conversation mode');
+  expect(coordinator.snapshot()?.conversationMode).toBe('open');
+  expect(coordinator.snapshot()?.teaching).toBeNull();
+  control(coordinator, { type: 'pause' });
+  expect(JSON.stringify(coordinator)).not.toContain('Saturn');
+});
+
 test('duplicate pending/completed text IDs call the model once, and changed bodies conflict', async () => {
   let finish!: (result: any) => void;
   let calls = 0;

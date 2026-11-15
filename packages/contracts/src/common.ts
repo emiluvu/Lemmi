@@ -50,10 +50,16 @@ export const ParticipantProfileSchema = z.strictObject({
   communicationSupport: CommunicationSupportSchema,
 });
 export type ParticipantProfile = z.infer<typeof ParticipantProfileSchema>;
+export const ConversationRedirectsSchema = z.strictObject({
+  awayFrom: z.array(z.string().trim().min(2).max(80)).max(12),
+  toward: z.array(z.string().trim().min(2).max(80)).max(12),
+});
+export type ConversationRedirects = z.infer<typeof ConversationRedirectsSchema>;
 export const CaregiverProfileSchema = ParticipantProfileSchema.extend({
   source: z.literal('caregiver_provided'),
   interests: z.array(IdSchema).max(20),
   sensitiveTopicGuidance: z.string().max(1000),
+  conversationRedirects: ConversationRedirectsSchema.optional(),
   rememberingEnabled: z.boolean(),
   excerptSavingEnabled: z.boolean(),
 });

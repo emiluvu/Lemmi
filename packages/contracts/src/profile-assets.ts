@@ -3,6 +3,7 @@ import { SessionSnapshotSchema } from './session';
 import {
   AvatarIdSchema,
   CaregiverProfileSchema,
+  ConversationRedirectsSchema,
   CommunicationSupportSchema,
   IdSchema,
   RevisionSchema,
@@ -26,6 +27,7 @@ const ProfilePatchSchema = z
     communicationSupport: CommunicationSupportSchema.optional(),
     interests: z.array(IdSchema).max(20).optional(),
     sensitiveTopicGuidance: z.string().max(1000).optional(),
+    conversationRedirects: ConversationRedirectsSchema.optional(),
     approvedFacts: z.array(ApprovedFactSchema).max(10).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Provide an explicit profile change')
