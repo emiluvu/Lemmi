@@ -12,6 +12,8 @@
     "@echogarden/fvad-wasm": "0.2.0",
     "@lemmi/contracts": "workspace:*",
     "@lemmi/server": "workspace:*",
+    "@ricky0123/vad-web": "0.0.31",
+    "onnxruntime-web": "1.31.1",
     "svelte": "5.57.3"
   },
   "devDependencies": {

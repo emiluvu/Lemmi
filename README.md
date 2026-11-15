@@ -1,5 +1,10 @@
 # Lemmi
 
+**Browser noise endpointing candidate — not deployed:** the browser can remain
+on Listening when background sound is classified as speech. A browser-local
+neural detector passed an initial synthetic hum/noise/quiet-speech matrix; final
+production checks and rollout remain pending. [Current evidence and limits](docs/handoffs/browser-noise-endpointing.md).
+
 **Conversation reliability deployed — web/gateway/local speech `ea66280`:**
 Initial browser silence waits 30 seconds; post-speech ending uses 1.5 seconds.
 Fresh listening/Resume survives retired-output cancellation. Natural teaching

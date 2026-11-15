@@ -1,5 +1,5 @@
 export interface VoiceDetector {
-  process(pcm: Uint8Array): boolean;
+  process(pcm: Uint8Array): boolean | null;
   destroy(): void;
 }
 
@@ -56,11 +56,6 @@ export function voiceDetector(module: FvadModule): VoiceDetector {
 }
 
 export async function loadVoiceDetector(): Promise<VoiceDetector> {
-  // Vite emits the pinned WASM as a same-origin asset. No CDN/model/audio upload.
-  const [{ default: create }, { default: wasmUrl }] = await Promise.all([
-    import('@echogarden/fvad-wasm'),
-    import('@echogarden/fvad-wasm/fvad.wasm?url'),
-  ]);
-  const module = await create({ locateFile: () => wasmUrl, print() {}, printErr() {} });
-  return voiceDetector(module);
+  const { loadNoiseAwareDetector } = await import('./silero-vad');
+  return loadNoiseAwareDetector();
 }

@@ -296,7 +296,7 @@ test('a stalled detector falls back to manual control and its late result is des
       }),
   });
   try {
-    await f.audio.speak(); // Three-second bounded initialization, no open mic yet.
+    await f.audio.speak(); // Ten-second bounded initialization, no open mic yet.
     expect(f.errors[0]).toContain('Automatic turn ending is unavailable');
     expect(f.track.enabled).toBe(false);
     resolve(f.detector);
@@ -309,7 +309,7 @@ test('a stalled detector falls back to manual control and its late result is des
   } finally {
     f.restore();
   }
-});
+}, 12000);
 
 test('a detector error during speech preserves manual submission without restarting capture', async () => {
   let fail = false;

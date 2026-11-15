@@ -120,7 +120,7 @@ export class BrowserAudio {
               timer = setTimeout(() => {
                 expired = true;
                 resolve(null);
-              }, 3000);
+              }, 10000);
             }),
           ]);
           if (epoch !== this.epoch) {
@@ -145,7 +145,7 @@ export class BrowserAudio {
       }
       if (epoch !== this.epoch) return;
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true },
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
         video: false,
       });
       if (epoch !== this.epoch) {
@@ -213,8 +213,10 @@ export class BrowserAudio {
         const data = btoa(String.fromCharCode(...pcm));
         let decision: 'continue' | 'finished' | 'no_speech' = 'continue';
         try {
-          if (this.detector && this.turnEnd)
-            decision = this.turnEnd.push(this.detector.process(pcm));
+          if (this.detector && this.turnEnd) {
+            const voice = this.detector.process(pcm);
+            if (voice !== null) decision = this.turnEnd.push(voice);
+          }
         } catch {
           this.detector?.destroy();
           this.detector = null;

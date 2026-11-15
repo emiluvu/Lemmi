@@ -1,5 +1,38 @@
 # Lemmi backend integration reference
 
+## Browser noise endpointing prepared — November 15, 2026
+
+**Source candidate only; not deployed.** The current public runtime remains
+web/gateway/local speech `ea66280`. User reports 20–30 seconds while the browser
+still shows Listening. A public synthetic control reproduced a steady 120 Hz hum
+(peak 0.03) preventing automatic submission: manual Finish after eight seconds
+submitted the turn, then response start took 3,130 ms. Clean speech submitted
+1,425 ms after speech ended and response start followed in 2,088 ms. Independent
+single-job engine probes measured STT 363 ms and TTS 99 ms. These observations
+locate a reproduced delay in browser endpointing; they do not capture the user's
+actual room or rule out other delays.
+
+The candidate replaces the browser's WebRTC-only classification with local Silero
+v5 inference, pinned through `@ricky0123/vad-web` 0.0.31 and `onnxruntime-web`
+1.31.1. The 2.3 MB model and 14.8 MB WASM runtime load as same-origin application
+assets. It requests browser noise suppression, retains the configured 1,500 ms
+post-speech pause, and changes no server speech route, session authority, capture
+grant, provider, recording policy or firmware. Initialization has a ten-second
+bound before microphone authorization; detector failure/overload retains manual
+Finish speaking. Per-turn PCM/context/recurrent state is bounded and cleared;
+late inference cannot restore a destroyed detector.
+
+Observed candidate Chromium matrix: speech followed by hum (peak 0.03/0.1),
+broadband noise (0.03/0.1), voice-band noise (0.03), clean speech at 0.1 scale,
+and speech at 0.25 scale with 0.01 hum/broadband noise all detected speech and
+submitted 1,278–1,298 ms after the generated utterance ended. These are synthetic
+signal levels, not calibrated physical room-noise measurements. Automated release
+checks, full production-browser noise validation and public rollout are still
+pending. No general room, human microphone/speaker or hardware acceptance is
+claimed. Nearby competing voices are not target-speaker isolation.
+[Implementation, license sources and rollout handoff](handoffs/browser-noise-endpointing.md).
+
+
 ## Conversation reliability deployed — November 15, 2026
 
 **Web/gateway/local speech `ea66280`**, integrating reliability source `48686bf`;

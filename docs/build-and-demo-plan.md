@@ -1418,3 +1418,16 @@ root post-speech silence changed to 1500 ms. Rollback pointer
 [Evidence and limits](backend-status.md#conversation-reliability-deployed--november-15-2026).
 Thirty-human-turn, actual microphone/room/speaker and this release's K151 checks
 remain unrun; Kylie/Lukas/Emilia retain their counterpart rehearsal handoffs.
+
+
+## Prepared browser noise endpointing — November 15, 2026
+
+Source candidate only, not deployed. Reproduced the public browser staying on
+Listening under generated 120 Hz hum (peak 0.03); manual Finish after eight seconds
+was followed by response start in 3,130 ms. Clean control submitted after 1,425 ms
+and response start took another 2,088 ms. Local STT/TTS probes were 363/99 ms.
+Candidate Silero v5 browser classification passed eight synthetic noise/quiet-speech
+cases with 1,278–1,298 ms utterance-tail-to-submit. No user microphone media,
+transcripts or screenshots were retained. Final automated/production-browser and
+public rollout checks are pending. Human room testing, competing voices and K151
+remain separate acceptance. [Detailed handoff](handoffs/browser-noise-endpointing.md).
