@@ -1,5 +1,27 @@
 # Lemmi backend status
 
+## Temporary Stackchan transport diagnostics deployed — November 15, 2026
+
+**Gateway `2501847`**, reviewed `88bb7c7` integrated via `a54661c`. Exact-device
+diagnostics enabled for `stackchan-alex` with explicit live startup confirmation
+at **06:53:25.055767 UTC**. Web/speech `a779c70`, tunnel PID/start times and served
+web-build bytes retained. Two intentional gateway-only restarts (rollout, then
+content-free activation marker); zero automatic restarts. All other private
+configuration and existing profile/device/credential fingerprints preserved.
+No migrations, provider/firmware/protocol/buffer/deadline changes. Pre-rollout
+78 tests / 2,304 expectations, type/Svelte, formatting/whitespace and isolated
+production build passed. Actual public own-profile concurrent WSS Start/Pause/Stop,
+capture-off and existing-key checks passed; own test data alone removed.
+
+The robot has not been retested: this enables evidence collection, not a voice
+repair. Bounded 30-minute local TCP metadata sampler additionally runs without
+packet/payload capture; robot-facing TLS ACKs remain unmeasured. Protected
+source/config/build rollback pointer `.data/stackchan-uplink-rollback-path`;
+normal return uses `python3 .data/disable-stackchan-transport-diagnostics.py --apply`
+to remove only the selector and restart only gateway. Helper dry run checked;
+actual disablement awaits the controlled retest. No routine DB/media restore.
+[Emilia's test instructions, limits and rollback](handoffs/stackchan-uplink-backend-investigation.md#diagnostic-deployment--november-15-2026).
+
 ## Stackchan uplink investigation — November 15, 2026; diagnostic candidate only
 
 Investigated Emilia's voice 0.9 failure at **06:11:35 UTC** on the deployed host.

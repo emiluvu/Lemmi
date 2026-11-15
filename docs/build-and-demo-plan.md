@@ -1017,3 +1017,21 @@ all passed after sandbox LeakSanitizer tracing restrictions required an outside
 run. No SDK/full-sketch build, flash, serial, service change or hardware retest.
 Controlled instrumented UTC window, robot-side method and gateway diagnostic
 rollout remain pending; keep stopped voice0.9 and avoid uninstrumented repetition.
+
+### Authorized Stackchan diagnostic rollout — November 15, 2026
+
+User authorized gateway-only diagnostic deployment and requested a return path
+to normal behavior. Reviewed `88bb7c7` integrated via `a54661c`; gateway runtime
+`2501847` includes a content-free activation marker observed at 06:53:25 UTC.
+Selector enables only stackchan-alex. Two intentional gateway-only restarts,
+zero automatic restarts; web/speech/tunnel PID/start times and served web-build
+bytes unchanged. Existing profiles/device/credential fingerprints preserved.
+78 targeted tests / 2,304 expectations passed again; type/Svelte zero errors/warnings,
+format/whitespace and isolated production build passed (initial sandbox worker
+restriction resolved outside sandbox). Public own-profile concurrent HTTPS/WSS
+Start/Pause/Stop/capture-off and existing-key checks passed; own probe data cleaned.
+No hardware capture/provider turn/firmware or protocol change. A temporary local
+TCP metadata sampler is bounded to 30 minutes; it cannot measure robot-facing ACKs.
+Protected previous source/config/build and a dry-run-checked one-setting disable
+helper are prepared. Emilia's single UTC-marked local Speak/Stop attempt,
+correlation and later actual disablement remain pending. [Rollout/retest/rollback](handoffs/stackchan-uplink-backend-investigation.md#diagnostic-deployment--november-15-2026).

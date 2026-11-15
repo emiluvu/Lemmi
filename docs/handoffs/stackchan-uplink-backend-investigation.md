@@ -1,5 +1,75 @@
 # Stackchan microphone uplink: backend evidence and Emilia handoff
 
+## Diagnostic deployment — November 15, 2026
+
+**Enabled on the shared backend for `stackchan-alex` only.** Gateway runtime
+**`2501847`**, incorporating reviewed candidate `88bb7c7` via merge `a54661c`.
+Content-free live startup journal confirmed activation at **06:53:25.055767 UTC**.
+Web/speech remain `a779c70`; their PIDs/start times, tunnel PID/start time and
+served web-build bytes match the pre-rollout fingerprints. Two intentional
+gateway restarts were used: initial deployment, then an explicit content-free
+startup marker to verify Bun's in-process dotenv setting without opening Alex's
+socket. Zero automatic gateway restarts. Private configuration differs only by
+`LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE=stackchan-alex`; no schema/migration/provider,
+firmware, media protocol, buffer or deadline change.
+
+Pre-rollout rerun: **78 tests / 2,304 expectations passed**, zero failures;
+type/Svelte zero errors/warnings, formatting/whitespace and an isolated production
+build passed. The served web build was never replaced. Sandbox socket/build
+worker restrictions required outside-sandbox runs; a `/proc` environment-only
+activation check was inconclusive because Bun loads dotenv in-process, so the
+explicit startup marker provides the observed activation evidence. Public
+HTTPS/WSS checks using two disposable fictional profiles passed existing-key
+retention, concurrent isolated Start/Pause/Stop and capture-off behavior. Only
+those probes' profiles/endpoints were cleaned up. Existing profile rows/device
+assignments/credential fingerprints matched before/after. No robot microphone,
+physical speaker or live provider turn was initiated by this rollout.
+
+**Emilia's one controlled attempt:** keep installed voice 0.9; no flash or
+protocol change. Record UTC start and finish/failure times using her existing
+filtered observer. Reconnect, explicitly Start/Resume and Unmute as required,
+then explicitly Speak once with fictional/generic content. Use Finished if the
+capture succeeds, and end with local Stop. If it fails, keep it stopped; do not
+repeat. Return the UTC window and fixed numeric send/fault/close counters plus
+observed Stop/mute outcome, without audio, text, headers or credentials. The
+backend journal now records receive/acceptance counts and close causes.
+
+A temporary **30-minute** sampler is also collecting only kernel TCP metadata
+for local ports 3001/8080 at 500 ms intervals, under user service
+`lemmi-uplink-socket-metadata`; output is protected at
+`.data/stackchan-uplink-socket-metadata.jsonl`. It stops automatically. This does
+not capture packets/payloads or measure the separate robot-to-Cloudflare TLS
+connection. If a verified robot/AP-side metadata method is unavailable, the
+attempt is explicitly an **origin-only diagnostic**, not an ACK/retransmission
+measurement or proof of the eventual fix. Send the precise UTC window to Anay
+for correlation; arrange a new bounded sampler window if the test happens later.
+
+**Return to regular logging:** after collecting the one attempt and its logs,
+Anay runs the protected host helper:
+
+```sh
+python3 .data/disable-stackchan-transport-diagnostics.py --apply
+```
+
+It removes only the diagnostic setting, preserves all other current private
+configuration, restarts only the gateway and checks that it is active. Invoking
+it without `--apply` is a dry run (already checked); actual disablement remains
+pending the retest. The same code defaults to no transport diagnostics when
+unset. Reconnect and explicitly Start afterward. Stop the local metadata sampler
+early with `systemctl --user stop lemmi-uplink-socket-metadata` if it is still
+running. Neither operation restores a database, credential, profile, permission
+or media snapshot.
+
+For full source rollback, the protected pointer
+`.data/stackchan-uplink-rollback-path` identifies the pre-rollout source archive
+at `f3e3b41` (gateway behavior `264df22`), original private configuration,
+deployment metadata and served web-build archive. This is separate from the
+normal one-setting disable path. Restore prior gateway source through a reviewed
+commit on `backend-deploy` if necessary; preserve later configuration/data and
+do not switch this checkout or restore old database/media state as routine
+rollback. The deployment/retest record below is historical where it says the
+candidate is undeployed.
+
 Investigated November 15, 2026 on `mobrob-Precision-3680`, checkout
 `backend-deploy` at `f3e3b41`. Gateway runtime remains `264df22`; web/speech
 remain `a779c70`. **The diagnostic candidate below is not deployed or enabled.**

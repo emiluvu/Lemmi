@@ -1,5 +1,15 @@
 # Lemmi backend integration reference
 
+**Temporary diagnostic deployment — November 15, 2026:** gateway `2501847`
+has `LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE=stackchan-alex` enabled, confirmed by the
+content-free startup marker at 06:53:25 UTC. All other endpoints remain excluded.
+Reviewed diagnostic record fields below are unchanged; no API/schema/auth/media
+or rate/deadline/buffer changes. Web/speech/tunnel retained; actual public
+capture-off control checks and existing credential retention passed.
+Physical retest remains pending. Unset the selector and restart only gateway
+to return to normal logging; protected helper/previous release are ready.
+[Deployment, retest and rollback](handoffs/stackchan-uplink-backend-investigation.md#diagnostic-deployment--november-15-2026).
+
 **Stackchan uplink diagnostic candidate — November 15, 2026; not deployed:**
 Optional server-only `LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE=<exact enrolled device ID>`
 selects one endpoint for content-free gateway receive/close diagnostics. Empty/unset
