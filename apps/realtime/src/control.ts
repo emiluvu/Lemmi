@@ -15,6 +15,7 @@ import {
   type ServerEvent,
   type ErrorCode,
   type SpeechOutputStart,
+  type SessionSnapshot,
   type ProfileDetail,
 } from '@lemmi/contracts';
 import {
@@ -103,6 +104,30 @@ export function startControlGateway(options: Options) {
   const reservations = new Map<string, { id: string; at: number }>();
   const ownsEndpoint = (identity: DeviceIdentity) =>
     sessions.forProfile(identity.profileId).snapshot()?.activeEndpointId === identity.deviceId;
+  // Async failures belong to the authority that initiated their work. Emitting
+  // an obsolete failure with the *current* envelope cancels a newer browser turn.
+  function asyncScopeCurrent(ws: Bun.ServerWebSocket<SocketData>, token: SessionSnapshot | null) {
+    if (
+      !token ||
+      !sockets.has(ws) ||
+      !access.current(ws.data.identity) ||
+      !ownsEndpoint(ws.data.identity)
+    )
+      return false;
+    const latest = sessions.forProfile(ws.data.identity.profileId).snapshot();
+    return (
+      !!latest &&
+      [
+        'id',
+        'generation',
+        'leaseId',
+        'profileRevision',
+        'privacyRevision',
+        'policyRevision',
+        'activeEndpointId',
+      ].every((key) => latest[key as keyof SessionSnapshot] === token[key as keyof SessionSnapshot])
+    );
+  }
   function disconnect(identity: DeviceIdentity) {
     if (ownsEndpoint(identity)) sessions.forProfile(identity.profileId).disconnect();
   }
@@ -741,6 +766,12 @@ export function startControlGateway(options: Options) {
           void work
             .then((result) => {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
+              if (
+                !result.ok &&
+                result.error.code === 'REVISION_CONFLICT' &&
+                !asyncScopeCurrent(ws, selected)
+              )
+                return;
               const latest = coordinator.snapshot();
               if (
                 result.ok &&
@@ -757,12 +788,6 @@ export function startControlGateway(options: Options) {
                   latest.privacyRevision !== result.data.session.privacyRevision ||
                   latest.policyRevision !== result.data.session.policyRevision)
               ) {
-                error(
-                  ws,
-                  'REVISION_CONFLICT',
-                  'Discarded obsolete Photo Story output',
-                  event.event_id,
-                );
                 return;
               }
               if (!actionAccepted)
@@ -784,7 +809,7 @@ export function startControlGateway(options: Options) {
               broadcast();
             })
             .catch(() => {
-              if (sockets.has(ws))
+              if (asyncScopeCurrent(ws, selected))
                 error(ws, 'UNAVAILABLE', 'Photo Story conversation unavailable', event.event_id);
             });
           return;
@@ -869,6 +894,12 @@ export function startControlGateway(options: Options) {
           void work
             .then((result) => {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
+              if (
+                !result.ok &&
+                result.error.code === 'REVISION_CONFLICT' &&
+                !asyncScopeCurrent(ws, current)
+              )
+                return;
               const latest = coordinator.snapshot();
               if (
                 result.ok &&
@@ -884,12 +915,6 @@ export function startControlGateway(options: Options) {
                   latest.privacyRevision !== result.data.session.privacyRevision ||
                   latest.policyRevision !== result.data.session.policyRevision)
               ) {
-                error(
-                  ws,
-                  'REVISION_CONFLICT',
-                  'Discarded obsolete conversation output',
-                  event.event_id,
-                );
                 return;
               }
               emit(ws, 'command.ack', {
@@ -910,7 +935,7 @@ export function startControlGateway(options: Options) {
               broadcast();
             })
             .catch(() => {
-              if (sockets.has(ws))
+              if (asyncScopeCurrent(ws, current))
                 error(ws, 'UNAVAILABLE', 'Conversation service unavailable', event.event_id);
             });
           return;
@@ -990,6 +1015,12 @@ export function startControlGateway(options: Options) {
             .then((spoken) => {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
               if (
+                !spoken.ok &&
+                spoken.error.code === 'REVISION_CONFLICT' &&
+                !asyncScopeCurrent(ws, selected)
+              )
+                return;
+              if (
                 spoken.ok &&
                 spoken.data.kind === 'reply' &&
                 ownsEndpoint(ws.data.identity) &&
@@ -1001,7 +1032,7 @@ export function startControlGateway(options: Options) {
               broadcast();
             })
             .catch(() => {
-              if (sockets.has(ws))
+              if (asyncScopeCurrent(ws, selected))
                 error(ws, 'UNAVAILABLE', 'Prompt playback unavailable', event.event_id);
               broadcast();
             });
@@ -1032,12 +1063,12 @@ export function startControlGateway(options: Options) {
                 ws.data.outputWindow,
               )
               .then((spoken) => {
-                if (!spoken.ok && sockets.has(ws))
+                if (!spoken.ok && asyncScopeCurrent(ws, selected))
                   error(ws, spoken.error.code, spoken.error.message, event.event_id);
                 broadcast();
               })
               .catch(() => {
-                if (sockets.has(ws))
+                if (asyncScopeCurrent(ws, selected))
                   error(ws, 'UNAVAILABLE', 'Teaching prompt playback unavailable', event.event_id);
                 broadcast();
               });
