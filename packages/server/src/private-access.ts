@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { secretMatches } from './device-access';
 import { readBounded } from './adapters/types';
+import { privateAccessPage as page, privateAccessPagePolicy } from './private-access-page';
 
 const COOKIE = '__Host-lemmi_access';
 const TTL_SECONDS = 8 * 60 * 60;
@@ -47,13 +48,10 @@ export function hasPrivateAccess(request: Request, key: string | null, now = Dat
   );
 }
 
-const page = (message: string) =>
-  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Lemmi private access</title><main><h1>Lemmi private access</h1><p>${message}</p><form method="post" action="/access"><label>Access key <input name="key" type="password" required maxlength="256" autocomplete="off"></label><button type="submit">Unlock</button></form><p><a href="/caregiver">Open caregiver workspace</a></p><p><a href="/participant/conversation">Open participant</a></p><form method="post" action="/access/logout"><button type="submit">Lock this browser</button></form></main></html>`;
 const headers = {
   'Cache-Control': 'no-store',
   'Content-Type': 'text/html; charset=utf-8',
-  'Content-Security-Policy':
-    "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  'Content-Security-Policy': privateAccessPagePolicy,
   // Native form navigation needs its same-origin Origin header for the CSRF check.
   // no-referrer makes browsers serialize that header as null; never allow null instead.
   'Referrer-Policy': 'same-origin',
@@ -67,19 +65,14 @@ export function createPrivateAccessHandler() {
     if (!key) return new Response('Private access is not configured', { status: 503, headers });
     if (url.origin !== origin || url.search) return new Response(null, { status: 403, headers });
     if (request.method === 'GET' && url.pathname === '/access')
-      return new Response(
-        page(
-          hasPrivateAccess(request, key, now)
-            ? 'This browser is unlocked. Caregiver sign-in is still required for caregiver operations.'
-            : 'Enter the private demo access key. Caregiver sign-in is separate.',
-        ),
-        { headers },
-      );
+      return new Response(page(hasPrivateAccess(request, key, now) ? 'unlocked' : 'locked'), {
+        headers,
+      });
     if (request.method !== 'POST') return new Response(null, { status: 405, headers });
     if (request.headers.get('origin') !== origin)
       return new Response(null, { status: 403, headers });
     if (url.pathname === '/access/logout')
-      return new Response(page('This browser is locked.'), {
+      return new Response(page('signed-out'), {
         headers: {
           ...headers,
           'Set-Cookie': `${COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`,
@@ -91,7 +84,7 @@ export function createPrivateAccessHandler() {
       attempts = 0;
     }
     if (++attempts > 20)
-      return new Response('Try again later', {
+      return new Response(page('rate-limited'), {
         status: 429,
         headers: { ...headers, 'Retry-After': '60' },
       });
@@ -108,13 +101,10 @@ export function createPrivateAccessHandler() {
         submitted.length > 256 ||
         !secretMatches(submitted, key)
       )
-        return new Response(page('Access key not accepted.'), { status: 401, headers });
-      return new Response(
-        page(
-          'This browser is unlocked. Caregiver sign-in is still required for caregiver operations.',
-        ),
-        { headers: { ...headers, 'Set-Cookie': accessCookie(key, now) } },
-      );
+        return new Response(page('rejected'), { status: 401, headers });
+      return new Response(page('unlocked'), {
+        headers: { ...headers, 'Set-Cookie': accessCookie(key, now) },
+      });
     } catch {
       return new Response('Invalid access request', { status: 400, headers });
     }
