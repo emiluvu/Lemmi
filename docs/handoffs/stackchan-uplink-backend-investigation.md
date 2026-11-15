@@ -14,10 +14,15 @@ bytes=0`, `send_max_ms=112 capture_sent=4`; capture stopped before Finished and
 the device disconnected. Playback's negotiated 12-frame/240 ms window is
 separate from this microphone uplink.
 
-`docs/handoffs/stackchan-send-stall-investigation.md` was absent from this
+At the initial inspection, `docs/handoffs/stackchan-send-stall-investigation.md` was absent from this
 checkout and from the fetched `emilia/firmware-foundation` head `e4c4cb6`.
 The backend findings therefore use the pasted report; the exact voice 0.9 source
 and SDK meaning of reason/status codes have not been reviewed here.
+
+**Subsequent source review:** Emilia published exact voice 0.9 at
+[`d246217`](https://github.com/emiluvu/Lemmi/commit/d246217), branch
+`codex/stackchan-voice09-review`. The source and detailed handoff are now reviewed
+below. The initial missing-source limitation above describes the earlier pass.
 
 ## Answers from the deployed host
 
@@ -171,3 +176,70 @@ attempt remain pending; there is no complete/smooth physical voice acceptance.
   or lockfile changes; the existing pinned Bun installation was used.
 - No production restart, deployment, packet/payload capture, memory opt-in,
   contact send or new live endpoint/profile was performed.
+
+## Exact voice 0.9 counterpart review — subsequent November 15 update
+
+Reviewed `d246217` directly from Git without merging firmware into the deployment
+checkout. `lemmi_voice.ino` defines `LEMMI_VOICE` and includes the shared control
+sketch. The sketch advertises `lemmi-voice/0.9`, retains certificate verification,
+scoped credentials, TCP_NODELAY and checked disabled Wi-Fi sleep. The detailed
+[Emilia handoff](https://github.com/emiluvu/Lemmi/blob/d246217/docs/handoffs/stackchan-send-stall-investigation.md)
+records her review of backend candidate `9a7173e` as compatible with the wire
+contract; she did not independently repeat its tests or claim hardware acceptance.
+
+Source-confirmed findings:
+
+- `sendVoice` serializes each 640-byte PCM frame into the existing strict JSON
+  event. `WsFrameWriter` emits a complete freshly masked WS message.
+  `WsFrameBatch` concatenates up to four separate WS messages into at most
+  8,192 bytes; it does not change the application media envelope. Collection
+  opportunities occur at 60 ms or four queued messages, without waiting for
+  playback credit. Earlier queue-age and grant/revision checks still apply.
+- `flushVoiceBatch` gives `boundedWrite` a 100 ms budget. Each transport call
+  receives at most 20 ms remaining budget; zero and the explicit TLS WANT
+  statuses are retryable, with at most 128 attempts and cancellation checks
+  before each attempt. Partial progress advances the byte pointer. A failed or
+  partially cancelled batch closes the connection rather than continuing a
+  damaged stream. A cancelled batch with zero reported accepted bytes is
+  discarded so the control connection can deliver Stop/mute.
+- **Reason 6 is the sketch's bounded WS write-failure label, not an ESP-IDF
+  error code. Status 2 is `WriteResult::TimedOut`.** Thus `result=0 bytes=0`
+  identifies zero reported accepted bytes for that failed batch. It cannot
+  identify the SDK poll-versus-TLS zero-return site or prove no bytes were
+  internally buffered by TLS. `capture_sent=4` increments only after complete
+  successful writes; it proves neither gateway receipt nor TCP ACK progress.
+  `send_max_ms` covers collection/serialization/flush work, not network RTT.
+  The budget is cooperatively checked between calls; scheduling and transport
+  return timing mean an observed 112 ms duration is not a precise 100 ms cutoff.
+- The network worker performs writes and inbound reads sequentially. A bounded
+  write can delay its next inbound state/control read; that fact alone does
+  not establish the observed failure cause. UI-task local Stop immediately
+  latches/increments the epoch and cancels audio. Mute changes input epoch;
+  each batch retry checks the local epoch/input tokens. Remote revisions are
+  checked from the worker's latest parsed state, with backend authority still
+  rejecting stale work. In-flight TLS bytes cannot be recalled. Actual local
+  latency and firmware/SDK concurrency remain hardware acceptance tasks.
+
+No source finding establishes a new fix or warrants increasing queues, write
+budgets, TCP buffers or changing protocol now. Publication itself changes no
+running firmware or backend. Keep voice 0.9 stopped until the coordinated
+diagnostic rollout/window and supported robot/AP measurement method are agreed;
+do not repeat the same uninstrumented Speak sequence.
+
+Independently ran five native test programs from the exact review snapshot:
+`bounded_write`, `ws_frame_writer`, `ws_frame_reader`, `pcm_packetizer` and
+`control_policy`, compiled with C++11, warnings-as-errors, AddressSanitizer and
+UndefinedBehaviorSanitizer. All five passed outside the sandbox; initial
+LeakSanitizer execution was blocked by the sandbox tracing restriction. No
+ESP32 SDK/cJSON/driver/full-sketch build, hardware, flash, serial, network capture
+or live speech test was performed. These helper tests do not reproduce the
+precompiled SDK writable polling/TLS scheduler. Existing 78 backend tests remain
+the prior candidate's checks, not a physical retest.
+
+Next handoff remains Anay's reviewed gateway-only diagnostic rollout and Emilia's
+explicit local action within an agreed UTC window. Specify the robot/AP metadata
+method before capture. If only origin counters are available, label that attempt
+origin-only: it can narrow gateway behavior but cannot settle robot TCP ACKs.
+The eventual fix depends on that evidence and must be reviewed jointly before
+firmware/protocol/path changes. No service was deployed or restarted for this
+source review.

@@ -28,6 +28,15 @@ or payload capture. Emilia's detailed handoff is absent from this checkout and
 fetched firmware branch; paired retest and exact source/counterpart review are
 pending. [Evidence, diagnostic rollout and payload-free observation plan](handoffs/stackchan-uplink-backend-investigation.md).
 
+Subsequent exact-source review: Emilia published `d246217` on
+`codex/stackchan-voice09-review`; the missing handoff is now available and reviewed.
+Reason6 is firmware bounded-write failure, status2 is timeout; capture_sent counts
+completed local writes, not gateway receipt/ACKs. No confirmed repair follows.
+Emilia reviewed backend diagnostics `9a7173e` as wire-compatible. Five exact-source
+native helper programs passed with ASan/UBSan; ESP32 SDK/full sketch/hardware
+not independently built or tested here. Runtime/diagnostic deployment status
+unchanged; paired UTC window and robot-side measurement method remain pending.
+
 ## Stackchan twelve-frame output deployed — November14,2026
 
 **Gateway runtime `264df22`**, web/speech `a779c70` retained. Removed browser-only checks in gateway negotiation and all three speech-owner paths. Robot `playback.outputWindowChunks:12` can now negotiate12×20ms=240ms credit; omitted/explicit4 retains80ms fallback. Consumed-only refill and Stop owner cancellation/PCM wipe/late receipt rejection remain. No schema, migration, config/provider/model/UI/firmware change; gateway-only rollout. Final **413 tests /6,281 expectations**, no failures/skips on isolated databases; type/Svelte zero errors/warnings, pinned frozen Bun1.4.4, format/whitespace passed. Includes robot12/legacy4 credit and queued/playing Stop/short-tail tests. [Exact firmware handshake, short-reply behavior, Stop responsibilities and observed checks](handoffs/stackchan-playback-window.md).

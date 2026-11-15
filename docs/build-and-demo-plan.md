@@ -1007,3 +1007,13 @@ Emilia/Anay paired UTC-marked retest, exact voice-source review and robot/AP-sid
 payload-free ACK/window/retransmission observations remain pending. Backend
 loopback socket counters cannot measure robot-to-Cloudflare TCP. [Evidence and
 counterpart handoff](handoffs/stackchan-uplink-backend-investigation.md).
+
+Subsequent source review: fetched Emilia's exact voice 0.9 review snapshot
+`d246217`, including her wire-compatibility review of backend `9a7173e`.
+Confirmed reason6/status2 bounded-write timeout semantics and completed-write
+capture counter; no gateway-receipt/ACK inference or verified repair. Independently
+compiled/ran five native helper programs with warnings-as-errors and ASan/UBSan;
+all passed after sandbox LeakSanitizer tracing restrictions required an outside
+run. No SDK/full-sketch build, flash, serial, service change or hardware retest.
+Controlled instrumented UTC window, robot-side method and gateway diagnostic
+rollout remain pending; keep stopped voice0.9 and avoid uninstrumented repetition.
