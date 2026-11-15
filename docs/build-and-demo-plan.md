@@ -900,3 +900,12 @@ Observed: type/Svelte check passed with zero errors/warnings; production build a
 timing remain unverified; these are reply captions, not word-aligned STT subtitles.
 No backend or deployment changes in this increment. Kylie reviews responsive art/
 caption placement; Anay/Emilia retain session/playback authority.
+
+
+### UI/backend voice-mode integration deployed — November 14, 2026
+
+Runtime `95bdcef` merges `integration/frontend-backend/a664e7e` while preserving that branch. Reviewed database edits, optional decisions overlap, explicit mode routing, current capture/output/cancellation, caregiver exit and UI accessibility boundaries. Strengthened the demo-only check inside the write transaction; retained private fields/redirects and scoped durable retries; fixed maximum command IDs. Kept visible Pause/Stop/Get help despite the source modal-only layout, preserving the experience specification. No migration, reseed, existing credential/provider/speech change. Protected rollback pointer `.data/ui-voice-rollback-path`; private exit code provisioned without disclosure.
+
+Observed: 336 tests/5,382 expectations, no skips/failures, five isolated PostgreSQL databases; frozen Bun 1.4.4, type/Svelte zero errors/warnings, build/format/whitespace. Production participant/new exit and edit operations/activity transport, persistent data/media/support, TLS control/chat and long speech smokes passed. Local Chromium desktop/mobile keypad/Escape/safety-control checks passed. Actual public Chromium created/edited a fictional profile with database-confirmed revision, selected photo/teaching/return modes, verified no borrowed context, truthful unavailable music, Pause/Resume/Stop, mobile controls/no overflow, code verification and locked mutation denial. Actual synthetic ordinary speech passed 177 input frames/388 output chunks; actual recognized “Explore pictures” selected the reviewed scene and completed fixed TTS with 109 frames/235 chunks. Both used simulated receipts, no human mic/speaker. Public Photo Story scope/model/Skip/Stop, retained key and blocked internal/mock/preview/unlisted-static paths passed. Client secret scan: 54 text assets.
+
+All four services active; web/gateway/speech zero automatic restarts. Only rehearsal-created records removed. Decisions/CUDA remain disabled under prior failed gates. Human microphone/room quality, real audible playback, K151, full assistive technology/zoom and counterpart review remain pending. [Detailed source/review/handoff](handoffs/ui-voice-backend-review-2026-11-14.md).

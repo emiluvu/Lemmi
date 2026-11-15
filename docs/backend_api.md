@@ -1,6 +1,20 @@
 # Lemmi backend integration reference
 
-**Current deployment:** gateway/private speech `c594130`, web `12a1e47`; migration `005_conversation_redirects.sql` is applied. Speech/general chat/Kylie UI are installed. CPU STT/TTS have two independent workers each; HFC female medium is the shared server voice. Existing twelve/four-frame browser/robot credit and public Photo Story/teaching/access contracts remain intact. Open conversation browser endpointing defaults to 1,500 ms; the separate teaching client keeps its existing endpointing. Semantic decisions are compiled but **disabled** after failed live evaluation; CUDA is disabled after driver initialization failure. [Actual checks, limitations and rollback](backend-status.md#integrated-backend-release--november-14-2026), [detailed integration record](handoffs/backend-integration-2026-11-14.md).
+**Current deployment: web/gateway `95bdcef`.** UI branch `integration/frontend-backend/a664e7e` is merged and preserved. Private speech remains on its existing CPU 2+2/HFC setup; decisions remain off. All seven migrations are unchanged. [Observed review and public acceptance](backend-status.md#conversation-ui-and-spoken-modes-deployed--november-14-2026).
+
+New exact live demo HTTP operations (existing private gate, explicit demo enablement and same-origin checks; no generic live RPC):
+
+| Operation | Contract / boundary |
+| --- | --- |
+| `POST /v1/demo/profile-update` | `{profileId,expectedRevision,commandId,patch:{preferredName,avatarId}}`; only current assigned fictional profiles, rechecked inside the locked write transaction. Reuses profile update cancellation/revisions/durable receipts. Result is the five-field participant projection. Private fields are rejected; active affected profile pauses. |
+| `POST /v1/demo/conversation-lock` | Establishes this browser's HttpOnly/SameSite navigation cookie; does not grant identity or a session. |
+| `POST /v1/demo/conversation-exit` | Exactly `{password:string}`; transient verification against server-only four-digit configuration; wrong/malformed/missing-config/rate-limit errors are explicit. Correct POST clears only the navigation lock. |
+
+Typed `input.text` and granted recognized speech accept reviewed Teach Lemmi/Photo Story/Explore pictures and return-to-conversation commands before ordinary model generation. Commands reuse the existing reducer/coordinator and fresh generation-bound output; no new device event, active endpoint, capture authority or model-generated action. Photo Story needs a confirmed enabled browser. No-topic teaching and Just look allow explicit bounded capture for mode selection; ordinary ineligible discussion remains rejected. Unsupported games return unavailable. Exact command execution is independent of optional decisions; semantic classification is advisory only, and decision failure does not fall back to phrase detection.
+
+The single-screen UI preserves direct labeled safety controls, with controls also present inside typing/reply/exit dialogs. Browser mic capture still requires explicit Speak now and a current grant; unmute never captures. The separate navigation passcode is configured privately, has no live default, and does not replace caregiver/device authorization. See [review](handoffs/ui-voice-backend-review-2026-11-14.md) for transaction checks, 100-character command-ID fix, exact source preservation and remaining hardware/clinical limits.
+
+**Previous deployment:** gateway/private speech `c594130`, web `12a1e47`; migration `005_conversation_redirects.sql` is applied. Speech/general chat/Kylie UI are installed. CPU STT/TTS have two independent workers each; HFC female medium is the shared server voice. Existing twelve/four-frame browser/robot credit and public Photo Story/teaching/access contracts remain intact. Open conversation browser endpointing defaults to 1,500 ms; the separate teaching client keeps its existing endpointing. Semantic decisions are compiled but **disabled** after failed live evaluation; CUDA is disabled after driver initialization failure. [Actual checks, limitations and rollback](backend-status.md#integrated-backend-release--november-14-2026), [detailed integration record](handoffs/backend-integration-2026-11-14.md).
 
 Web `12a1e47` keeps Type instead open while typing and makes automatic hidden-tab Pause owner-only; explicit observer Pause/Stop remain available. Two actual browser contexts verified observer/owner background behavior. Existing Start conflict still has legacy mock wording, while enforcement is per profile. No new route or wire schema was introduced by these UI fixes.
 
@@ -594,7 +608,7 @@ Historical runtime `d067ac0` first deployed both features and both new migration
 
 `17a8522` is deployed with normal migrations `002_multi_profile_endpoints.sql` and `004_endpoint_revocations.sql` alongside the unchanged four previously applied files. The runtime preserves existing indefinite persistent keys, scopes current profile support reads/applies to their profile coordinator, and uses transactionally checked membership/gateway ownership for credential issuance. Existing shared credentials require no replacement. Ordinary demo browser/robot enrollment lasts 30 days; the legacy Python pairing helper still explicitly requests indefinite persistent keys by default. Finite enrollment now also survives normal restart until its expiry; all sessions/grants/output end. The combined suite passed 169 tests / 3,585 expectations; public new-profile/enrollment/concurrent-WSS tests passed with test-only cleanup. Frontend authentication/interaction, real-device local controls, browser voice permissions and Teach Lemmi integration remain distinct acceptance tasks.
 
-## Local candidate: fictional profile editing and spoken activity choice
+## Deployed fictional profile editing and spoken activity choice (`95bdcef`)
 
 Based on main `01b6ffb`; not a deployed API claim.
 
@@ -620,7 +634,7 @@ speech replacement; no new device event or capture permission is added.
 Stop/help/privacy routes retain priority. Incidental or negated mentions do not
 select activities. Music/guessing/matching requests explicitly report unavailable.
 
-### Voice-mode phrase refinements — local branch only
+### Voice-mode phrase refinements — deployed (`95bdcef`)
 
 The existing `input.text` / STT path also accepts reviewed English invitation
 prefixes such as “Let's play”, “Let us play”, “I'd like to play”, “Can we play” and
@@ -638,9 +652,9 @@ configuration fences. Ordinary unavailable/ineligible activity discussion is sti
 rejected after mode-control routing. This prevents an empty topic list from
 trapping someone in a mode; it is not permission to ignore content policy.
 Music, guessing and matching hosting is still unavailable and requests report that
-fact instead of entering an invented game. No new HTTP/device schema or deployment.
+fact instead of entering an invented game. No new device schema; deployment is recorded above.
 
-### Conversation exit passcode — local branch, not deployed
+### Conversation exit passcode — deployed (`95bdcef`)
 
 The conversation uses the restored four-digit number pad. `POST
 /v1/demo/conversation-lock` establishes an HttpOnly, SameSite=Strict session lock
@@ -659,6 +673,6 @@ Missing/invalid live configuration fails closed. Password data is transient and
 not echoed/logged. Five failed attempts per lock in a one-minute window block
 further attempts until expiry; bookkeeping is bounded. A successful POST expires
 only the conversation lock cookie, not endpoint credentials or the domain gate.
-The production proxy allowlist must include both exact operations on deployment.
+The production proxy allowlist includes both exact operations.
 No database migration. Cookie removal/browser administration is outside this
 navigation barrier; private caregiver authorization remains separate.

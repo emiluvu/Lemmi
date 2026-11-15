@@ -82,7 +82,7 @@ proxy needs only the three exact new names: `profile-update`, `conversation-lock
   restart/release. Persistent data/media/support and chat/control smokes passed.
   Two long speech fixture turns consumed 600 chunks with simulated receipts.
 - Actual Chromium inspected the local explicit mock preview at desktop and
-  390×844: safety controls in the viewport, five-avatar presentation, no horizontal
+  390×844: safety controls in the viewport, selected-avatar presentation, no horizontal
   overflow/runtime errors, keypad Stop, Escape, wrong-code rejection and successful
   mock exit. This is not live database/audio or physical microphone acceptance.
 
@@ -97,3 +97,9 @@ Remaining counterpart work: Kylie reviews the final compact layout/keyboard/zoom
 Lukas reviews reviewed mode/scene transitions, Emilia verifies real local controls,
 voice recognition and K151 behavior. Human microphone, room noise and actual audible
 playback remain unverified; no P0/clinical/unattended-care acceptance is implied.
+
+## Observed rollout
+
+Web/gateway `95bdcef` is installed; private speech was retained without restart/configuration change. The branch source remains `a664e7e`. No migration or reseed. Proxy syntax/reload and the three exact new demo routes passed. The live exit code was provisioned privately in the protected root `.env`, never printed or sent into model context. Rollback backup pointer `.data/ui-voice-rollback-path`.
+
+Actual public Chromium passed profile create/avatar/name edit with database-confirmed revision, safe result shape, typed mode switching, empty-profile/no-borrowed-context behavior, truthful unavailable music, Pause/Resume/Stop, mobile direct safety controls/no overflow, wrong/correct live exit and locked mutation denial. Actual ordinary local-STT/external-LLM/HFC-TTS rehearsal passed 177 input frames/388 chunks. Actual synthetic recognized Explore pictures activated the reviewed browser Photo Story scene without an LLM action, returned 235 TTS chunks from 109 input frames, remained capture-off, then stopped; the initial missing-Origin harness was rejected and the corrected run passed. All consumption was simulated. Scoped public Photo Story/model/media/Stop and the retained persistent credential passed. Secret scan passed 54 browser text assets; internal/mock/preview/unlisted static resources remain blocked. Four services active; no automatic restarts. Only each rehearsal's own profile/enrollment was removed. Human mic/speaker/K151 and counterpart acceptance remain unrun.

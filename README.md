@@ -1,5 +1,7 @@
 # Lemmi
 
+Current UI/backend release **`95bdcef`**: [reviewed spoken mode selection, caregiver name/avatar edits, single conversation screen and exit keypad](docs/handoffs/ui-voice-backend-review-2026-11-14.md). Unlock `/access`, create/select a fictional profile in `/caregiver`, then open Conversation and explicitly Start. Tap microphone status for Speak now or Type instead; reviewed phrases include “Start Teach Lemmi”, “Start Photo Story”, “Explore pictures” and “Back to conversation”. Pause/Stop/Get help remain visible. The live exit keypad code is stored privately as `LEMMI_CAREGIVER_EXIT_PASSWORD` in the protected host `.env`; local mock `1234` is not the live code. [Actual runtime, acceptance and remaining limits](docs/backend-status.md).
+
 Integrated release: [branch merges, tested CPU speech concurrency, HFC voice, browser turn ending and UI fixes](docs/handoffs/backend-integration-2026-11-14.md). Semantic decisions remain disabled after live evaluation; CUDA remains off after a driver initialization failure. See [current runtime and public acceptance](docs/backend-status.md).
 
 Public fictional demo: unlock [Lemmi](https://lemmi.chaoswarrior.dev/access), then open the [caregiver workspace](https://lemmi.chaoswarrior.dev/caregiver). `/` opens that workspace; its profile Conversation links open the designed [live companion screen](https://lemmi.chaoswarrior.dev/participant/conversation). Profile listing/creation and conversation/Teach Lemmi use the live backend; Photo Story is available with reviewed illustrations; other games are labeled previews, and camera/journals/private profile editing remain unavailable in this browser. The shared key does not authorize private caregiver APIs. See [current deployment and checks](docs/backend-status.md).
@@ -29,7 +31,7 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
-**Current deployment:** web/gateway `9ad7446` includes the `b27980a` Teach Lemmi voice UI and checkpoint recovery. Open `/participant/conversation`, select/enroll a fictional profile, Start conversation → Play Teach Lemmi → Start Teach Lemmi. Refresh/reconnect after the deployment. Browser enrollment stays scoped to the selected profile; no private local voice-proxy configuration is needed on the public site. See [backend status](docs/backend-status.md) for observed acceptance and remaining microphone/hardware checks.
+**Current deployment:** web/gateway `95bdcef`; follow the current flow above. No microphone starts from enrollment, Start, unmute or mode selection alone.
 
 
 **Teach Lemmi source increment (`codex/teach-lemmi`):** a playable scripted Alex text demo is available in the existing Participant page. Backend teaching handlers reuse the shared coordinator, OpenRouter and speech seams, with reviewed topics, session-only feedback and a fifteen-minute active-time limit. [Tester manual](docs/teach-lemmi-tester-manual.md) and [Anay/Kylie/Emilia handoff](docs/handoffs/lukas-teach-lemmi.md) cover launch and checks. Teach Lemmi and the integrated live participant shell are deployed as runtime `f5724a0`; start at `/access` → `/participant`. Public voice is enabled for fictional team tests; actual browser microphone/speaker, physical robot acceptance and durable teaching memory/journal observations remain pending.
