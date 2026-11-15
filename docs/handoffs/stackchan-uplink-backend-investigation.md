@@ -1,5 +1,18 @@
 # Stackchan microphone uplink: backend evidence and Emilia handoff
 
+## Diagnostics saved and disabled — November 15, 2026
+
+User requested return to regular operation before Photo Story integration.
+All allowlisted gateway records and existing socket/case evidence were preserved
+under the protected pointer `.data/stackchan-uplink-saved-evidence-path`. The
+selector was removed using the prepared helper; gateway-only restart passed and
+web/speech/tunnel retained their state at disablement. No firmware change or
+new capture. Current Photo Story web/gateway runtime is `c44f092`; transport
+diagnostics remain off. Earlier enabled-status paragraphs below are historical.
+The robot remains stopped, with uplink unresolved; future testing requires a
+new explicit measurement window. Previous source/config and experiment reviews
+are preserved in Git and protected rollback/evidence files.
+
 ## Send-capacity proposal review — 3c37f83
 
 November15,2026, Anay backend counterpart review. **Proceed with isolated

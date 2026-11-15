@@ -1,15 +1,11 @@
 # Lemmi
 
-**Temporary Stackchan diagnostics deployed — gateway `2501847`:** selected-endpoint
-receive/close counters remain enabled at user request. The latest instrumented
-attempt accepted29 frames without rejection; device polls stalled before TLS
-writing. Root cause remains unresolved; no repeat requested.
-Web/speech/tunnel retained. No voice fix or physical acceptance is claimed.
-[Test handoff and return to normal logging](docs/handoffs/stackchan-uplink-backend-investigation.md#diagnostic-deployment--november-15-2026).
+**Alex Photo Story deployed — web/gateway `c44f092`:** Alex now uses the five saved
+caregiver photos; Start/Resume speaks first and retains the current picture.
+Refresh/reconnect, select Alex and explicitly Start. [Checks and handoff](docs/handoffs/alex-photo-story-pack.md).
 
-**Alex photo album source candidate — not deployed:** `codex/alex-photo-story-pack` replaces Alex’s generic garden/park pack with saved, non-portrait caregiver photos and descriptions. The five approved Alex photos are saved in the hosted caregiver profile; using them in hosted Photo Story requires the web/gateway and nginx update. [Review, checks and rollout](docs/handoffs/alex-photo-story-pack.md).
-
-**Undeployed Photo Story Start/Resume candidate:** `codex/photo-story-start-resume` includes current main, opening-before-listening, English/German prompts and capture-off text recovery. [Deploy-agent handoff and combined checks](docs/handoffs/photo-story-start-resume-2026-11-14.md). Existing deployed behavior is recorded below.
+**Stackchan diagnostics saved and off:** regular logging restored; robot remains
+stopped with uplink unresolved. [Preserved evidence and experiment review](docs/handoffs/stackchan-uplink-backend-investigation.md).
 
 **Stackchan gateway update deployed (`264df22`):** [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.
 
