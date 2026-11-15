@@ -44,6 +44,7 @@
   let transcript = $state<ConversationTranscriptEntry[]>([]);
   let textAvailable = $state(false);
   let speechAvailable = $state(false);
+  let typeInsteadOpen = $state(true);
   let teachingAvailable = $state(false);
   let photoAvailable = $state(false);
   let photo = $state<Extract<ActivityView, { activityId: 'photo_album' }> | null>(null);
@@ -112,6 +113,7 @@
       connected = true;
       textAvailable = event.payload.textChat ?? false;
       speechAvailable = event.payload.audio !== false;
+      typeInsteadOpen = !speechAvailable;
       teachingAvailable = event.payload.teaching ?? false;
       photoAvailable = event.payload.photoStory ?? false;
     }
@@ -387,7 +389,9 @@
     });
     const background = () => {
       if (document.visibilityState === 'hidden') {
-        control('input.pause');
+        audio?.cancel();
+        if (connected && ownsEndpoint && session && session.phase !== 'ended')
+          control('input.pause');
       }
     };
     const leaving = () => {
@@ -610,7 +614,7 @@
                   !['ready', 'waiting'].includes(session.phase)}>Speak now</button
               >{/if}
           {/if}
-          <details class="type-instead" open={!speechAvailable}>
+          <details class="type-instead" bind:open={typeInsteadOpen}>
             <summary>Type instead</summary>
             <form onsubmit={sendText} class="card">
               <label for="participant-text">Message to Lemmi</label>
