@@ -1067,3 +1067,19 @@ unmeasured and playback-window causation is not established. No repeat needed.
 Diagnostics remain enabled, robot stopped; no backend change/restart/disablement.
 Bounded local metadata sampler ended automatically at07:23:54UTC.
 [Exact correlation and next handoff](handoffs/stackchan-uplink-backend-investigation.md#instrumented-diagnostic-result--0720-utc).
+
+
+### Send-capacity feasibility counterpart review — November15,2026
+
+Reviewed Emilia's send-capacity feasibility proposal `3c37f83`. Isolated
+5744/16384 paired build preparation is reasonable; hardware readiness remains
+pending exact linked artifacts and full overhead/reserve budget. Matched lwIP
+defaults also change writable byte threshold2873→8192, queue limit16→46 and
+queue threshold8→23 (MSS1436, absent overrides). These derived values must be
+recorded in both builds; capacity alone is not the entire writable comparison.
+10640-byte payload delta and nominal65348-byte remainder are correct arithmetic,
+not a worst-case RAM guarantee. Correct installed SDK identity is reported as
+IDFv5.5.4/735507283d, builder43a8f6d; earlier v5.5.1 source inspection was not an
+exact binary provenance check. No backend/protocol/configuration/service change,
+SDK build, flash or capture performed. Diagnostics remain enabled; robot stopped.
+[Counterpart review and Emilia's next build handoff](handoffs/stackchan-uplink-backend-investigation.md#send-capacity-proposal-review--3c37f83).

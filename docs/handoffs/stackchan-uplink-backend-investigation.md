@@ -1,5 +1,87 @@
 # Stackchan microphone uplink: backend evidence and Emilia handoff
 
+## Send-capacity proposal review — 3c37f83
+
+November15,2026, Anay backend counterpart review. **Proceed with isolated
+paired build preparation. Hardware/RAM acceptance remains pending.** No
+backend API, protocol, service, configuration or firmware changes were made by
+this review. Installed diagnostic robot remains stopped; no new capture requested.
+Gateway diagnostics remain enabled under the earlier user hold instruction.
+
+The5744→16384-byte SDK experiment is a bounded comparison supported by the
+measured pre-TLS writability stall. It is not a demonstrated fix or a selected
+production buffer size. Keep playback12, capture framing, batching/queue bounds,
+100ms write budget, TLS/auth and immediate local controls unchanged.
+
+**Material review finding: record all derived writable thresholds.** Checked
+ESP-IDF v5.5.4's lwIP submodule revision
+`fd432e4ee2cfb7f7f1c7eb7227e0173412e7b84e`, its default macros and the send-space
+callbacks. Assuming reported MSS1436 and no overrides, the expected values are:
+
+| Resolved setting | Baseline | Candidate |
+| --- | --- | --- |
+| TCP_SND_BUF | 5744 | 16384 |
+| TCP_SNDLOWAT | **2873** | **8192** |
+| TCP_SND_QUEUELEN | **16** | **46** |
+| TCP_SNDQUEUELOWAT | **8** | **23** |
+| Free bytes needed for send-space callback | at least2874 | at least8193 |
+| Queued pbuf count required by callback | below8 | below23 |
+
+These are derived expectations, **not measurements of a built candidate**.
+Confirm the actual preprocessed macros in both builds. The callback requires
+both enough free bytes and a low enough pbuf count. Increasing capacity also
+changes when select becomes writable, so a better or worse outcome cannot be
+attributed solely to extra payload storage. Do not independently tune these
+thresholds within the first comparison; report their derived changes.
+Sources: [matched lwIP option formulas](https://github.com/espressif/esp-lwip/blob/fd432e4ee2cfb7f7f1c7eb7227e0173412e7b84e/src/include/lwip/opt.h),
+[send-space callbacks](https://github.com/espressif/esp-lwip/blob/fd432e4ee2cfb7f7f1c7eb7227e0173412e7b84e/src/api/api_msg.c).
+
+**Memory finding:**16384−5744=10640 additional payload-capacity bytes per live
+TCP socket;75988−10640=65348 is correct arithmetic. It is not proven minimum
+free heap under load. Account for the actual concurrent TCP socket count,
+pbuf/segment/allocator/oversize overhead, TLS/cJSON/audio lifetimes and
+fragmentation. Queue limits are allocation limits, not proof that every slot is
+preallocated. Establish an explicit allocation/reserve budget from the candidate
+before a hardware comparison, then observe minimum free internal heap, largest
+allocatable internal block and task stack watermarks across connection/capture/
+output/Stop. Do not count disabled PSRAM or free heap from a different lifecycle
+phase as guaranteed capacity. Allocation failure must remain fail-closed.
+
+**Next handoff to Emilia:**
+
+1. Build a5744 control and16384 candidate with the same isolated builder/toolchain,
+   component revisions and full baseline config. Prove both link their intended
+   SDK archives and retain both diagnostic hook edges. Preserve the installed
+   normal SDK and flash backup. Record final full config diffs, expanded macro
+   values, compiler/component revisions, maps and archive/application hashes.
+   Differences beyond capacity/necessary derived accounting need explanation;
+   comparing only a freshly rebuilt candidate against the shipped archive would
+   otherwise confound the experiment with rebuild differences.
+2. Complete the overhead/concurrent-socket/reserve budget and artifact checks.
+   This review accepts the build direction; it does not certify that75.9KB of
+   observed connected heap is sufficient. Return the evidence before treating a
+   candidate as hardware-ready. No identical capture repetition is useful now.
+3. A later jointly scheduled candidate comparison needs a new bounded origin
+   sampler window: the old sampler ended. Keep the speaker window and all
+   cancellation/security behavior fixed. Preserve baseline recovery; one short
+   improvement establishes capacity sensitivity, not root cause, sustained
+   speech readiness or physical Stop acceptance.
+
+**SDK identity correction accepted:** the installed metadata reported by Emilia
+is ESP-IDF **v5.5.4 /735507283d**, builder43a8f6d. Earlier localv5.5.1 inspection
+was not the installed SDK's exact provenance. Actual linked diagnostic poll/TLS
+measurements remain valid. The upstream matching transport still polls before
+TLS writing. Baseline archive/config hashes in3c37f83 were reviewed as reported
+provenance, not independently checked against Emilia's local files.
+[Matching transport source](https://github.com/espressif/esp-idf/blob/v5.5.4/components/tcp_transport/transport_ssl.c),
+[pinned builder](https://github.com/espressif/esp32-arduino-lib-builder/tree/43a8f6d).
+
+Checks performed: exact proposal/config/baseline source review, official pinned
+source inspection and arithmetic verification only. No packages installed,
+SDK build, full-sketch/link-map acceptance, flash, serial, network session,
+backend restart or hardware retest. No backend runtime change is needed to
+prepare these paired builds.
+
 ## Instrumented diagnostic result — 07:20 UTC
 
 November15,2026: correlated Emilia's published `b678916` on
