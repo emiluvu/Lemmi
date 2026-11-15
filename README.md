@@ -16,7 +16,7 @@ Refresh/reconnect, select Alex and explicitly Start. [Checks and handoff](docs/h
 **Stackchan diagnostics saved and off:** regular logging restored; robot remains
 stopped with uplink unresolved. [Preserved evidence and experiment review](docs/handoffs/stackchan-uplink-backend-investigation.md).
 
-**Participant usability improvements — validated for rollout:** spoken conversation/activity greetings, spoken and visible eligible teaching-topic choices, stable captions, and a persistent **Finish activity** control. [Implementation, verification, and counterpart handoff](docs/handoffs/participant-greetings-exit.md).
+**Participant usability improvements deployed — web/gateway `5146030`:** spoken conversation/activity greetings, spoken and visible eligible teaching-topic choices, stable captions, and a persistent **Finish activity** control. [Implementation, verification, and counterpart handoff](docs/handoffs/participant-greetings-exit.md).
 
 **Stackchan gateway update deployed (`264df22`):** [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.
 

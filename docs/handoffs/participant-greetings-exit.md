@@ -52,3 +52,16 @@ captions. Final isolated checks: 462 tests / 6,784 expectations, zero failures o
 skips with five disposable PostgreSQL databases; type/build/format/whitespace,
 production HTTP/verified TLS/WSS and three-viewport Chromium checks passed.
 See backend status for actual rollout and remaining human/firmware acceptance.
+
+## Deployment acceptance — November 15, 2026
+
+Integrated and deployed as web/gateway `5146030` on `backend-deploy`; original
+branch and commit remain preserved. Both services restarted at 09:39:52 UTC,
+with speech/tunnel, private configuration and original profile/credential
+fingerprints retained. Public Chromium repeated the three-size fixture checks;
+public WSS plus real local TTS verified greeting once, eligible spoken menu,
+12-frame negotiation, Finish cancellation and stale-receipt denial. Receipts
+were simulated; no microphone/physical K151/human audio acceptance. Test-only
+profiles/enrollments removed. Protected rollback pointer:
+`.data/participant-greetings-rollback-path`. Refresh/reconnect and explicitly
+Start. Earlier unspecified user-reported bugs remain open; see backend status.

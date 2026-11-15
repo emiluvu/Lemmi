@@ -1,9 +1,11 @@
 # Lemmi — Build and demo plan
 
-## Participant greeting and teaching integration — validated candidate, November 15, 2026
+## Participant greetings, teaching choices and Finish deployed — November 15, 2026
 
 Reviewed handoff `1037fe1` against the newer deployed startup-recovery and
-saved-photo releases. Integrated in an isolated checkout; rollout pending.
+saved-photo releases. **Web/gateway runtime `5146030`**, integrating tested
+source `ded171f` and the concurrent documentation-only handoff `8f1453e`.
+Rolled out together at **09:39:52 UTC**; speech `a779c70` and tunnel retained.
 The direct merge would launch two Start speech jobs. Retained the existing
 revision-checked `speakSessionPrompt` path and browser opening/Resume state
 machine, with the requested short fixed English/German introduction. Kept
@@ -35,6 +37,30 @@ initial injected sequence zero correctly closed its connection; corrected the
 fixture to preserve monotonic sequences. Zero browser runtime errors; capture
 and playback disabled, no screenshots, microphone or recordings. Real human
 speech/speaker quality and physical K151 controls remain unrun.
+
+Actual public HTTPS Chromium repeated the same three-viewport checks on its
+own newly created/enrolled fictional profile: keyboard topic choice and Finish,
+paused Photo Story Finish, stable caption placement, initial 503 → Retry with
+zero Start/capture, photo failure Pause/retry and Stop passed. Zero runtime
+errors; no screenshots/audio retained. Actual public robot-protocol WSS with
+real local TTS passed short fixed Start greeting **once** despite duplicate Start,
+simulated consumed receipts, negotiated 12-frame output, eligible spoken topic
+menu, Finish cancellation and late-receipt denial. No microphone capture,
+external-model quality or physical K151 acceptance is implied.
+
+Source/build/private-configuration/database backup is recorded by protected
+`.data/participant-greetings-rollback-path`. No migration/proxy/configuration or
+provider change. Restarted only web/gateway; all four services active with zero
+automatic restarts. Speech/tunnel PID/start state and private configuration
+matched the baseline. After release/deletion of only the probes' own fixtures,
+all original profile rows, endpoint assignments and credential fingerprints
+matched the predeployment baseline; Alex's five saved photos remain intact.
+Retain current permissions/deletions/data during rollback; do not blindly restore
+the database snapshot. Transport diagnostics remain off; robot uplink remains
+unresolved. Refresh/reconnect and explicitly Start before participant testing.
+Prior unspecified user-reported bugs remain open; these checks do not establish
+complete user acceptance. Kylie/Lukas/Emilia still own actual-device UI/content,
+human audio and hardware rehearsal at their respective boundaries.
 
 ## November 14 Photo Story Start/Resume source acceptance
 
@@ -1234,7 +1260,7 @@ profiles/endpoints were cleaned. Transport diagnostics remain off/evidence saved
 Refresh before continuing testing. Human speech/K151 acceptance remains separate.
 
 
-## Current handoff — additional bugs unresolved
+## Earlier handoff — additional bugs unresolved
 
 November 15, 2026: user reports that bugs still remain after the conversation
 startup recovery rollout. Exact remaining symptoms/reproduction are not yet
