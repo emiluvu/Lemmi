@@ -6,6 +6,7 @@ import {
   SessionSnapshotSchema,
   SessionCommandSchema,
   ActivityTransitionSchema,
+  ApprovedPackSchema,
   validateActivityCommandContext,
   ConversationTextCommandSchema,
   SpeechStartCommandSchema,
@@ -91,6 +92,7 @@ export class SessionCoordinator {
     private readonly photoStory?: {
       localOnly?: true;
       publicDemo?: true;
+      profilePhotos?: boolean;
       profileId: string;
       pack: ApprovedPack;
       availableAssetIds: string[];
@@ -509,12 +511,38 @@ export class SessionCoordinator {
     return (
       this.language() === 'en' &&
       !!this.photoStory &&
+      (!this.photoStory.profilePhotos ||
+        (this.photoStory.pack.activityId === 'photo_album' &&
+          this.photoStory.pack.entries.length > 0)) &&
       this.photoStory.profileId === this.profile.id &&
       ((this.photoStory.publicDemo === true && this.publicPhotoAuthorized) ||
         (this.photoStory.localOnly === true && this.profile.id === DEMO_PROFILE_ID))
     );
   }
   private publicPhotoAuthorized = false;
+  // Registry-only update, never exposed as a participant operation. A changed
+  // saved album pauses/invalidate old work before replacing any scene context.
+  replaceProfilePhotoPack(profileId: string, raw: ApprovedPack) {
+    if (
+      !this.photoStory?.profilePhotos ||
+      profileId !== this.photoStory.profileId ||
+      profileId !== 'profile-alex'
+    )
+      throw new Error('Profile photo pack is not assigned');
+    const pack = ApprovedPackSchema.parse(raw);
+    if (
+      pack.activityId !== 'photo_album' ||
+      pack.id !== 'profile-alex-photos' ||
+      pack.entries.some(
+        (entry) => entry.entityIds.length !== 1 || entry.entityIds[0] !== 'profile:approved-photo',
+      )
+    )
+      throw new Error('Invalid profile photo pack');
+    if (JSON.stringify(pack) === JSON.stringify(this.photoStory.pack)) return;
+    this.interrupt({ type: 'system.pause', reason: 'config_change' });
+    this.photoStory.pack = pack;
+    this.photoStory.availableAssetIds = pack.entries.map((entry) => entry.assetId);
+  }
   authorizePublicPhotoDemo(enabled: boolean) {
     this.publicPhotoAuthorized = enabled;
   }
@@ -691,7 +719,9 @@ export class SessionCoordinator {
           ? {
               permittedEntityIds: this.photoStoryEnabled()
                 ? this.publicPhotoEnabled()
-                  ? ['scene:generic-nature']
+                  ? this.photoStory?.profilePhotos
+                    ? ['profile:approved-photo']
+                    : ['scene:generic-nature']
                   : this.profile.interests
                 : [],
               available:

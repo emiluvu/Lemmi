@@ -796,6 +796,22 @@ test('public Photo Story Stop cancels an in-flight opening and suppresses a late
   let signal: AbortSignal | undefined;
   const h = harness({
     demoEnrollment: true,
+    profiles: profiles.map((profile) =>
+      profile.id === 'profile-alex'
+        ? ProfileDetailSchema.parse({
+            ...profile,
+            context: {
+              photos: [
+                {
+                  assetId: 'f1000000-0000-4000-8000-000000000001',
+                  description: 'Alex tending a garden.',
+                  portrait: false,
+                },
+              ],
+            },
+          })
+        : profile,
+    ),
     chatAdapter: {
       complete(_input, currentSignal) {
         signal = currentSignal;

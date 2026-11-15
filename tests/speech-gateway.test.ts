@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { startControlGateway } from '../apps/realtime/src/control';
 import {
   DeviceEventSchema,
+  ProfileDetailSchema,
   ServerEventSchema,
   ok,
   fail,
@@ -9,6 +10,7 @@ import {
   type SessionSnapshot,
 } from '@lemmi/contracts';
 import type { ChatAdapter, SpeechAdapters } from '@lemmi/server';
+import { caregiverProfile } from '@lemmi/contracts/fixtures';
 
 async function device(
   options: {
@@ -53,6 +55,23 @@ async function device(
       ? {
           devices: [
             { profileId: 'profile-alex', deviceId: 'stackchan-alex', endpoint: 'browser' as const },
+          ],
+          profiles: [
+            ProfileDetailSchema.parse({
+              ...caregiverProfile,
+              privacyRevision: 0,
+              policyRevision: 0,
+              approvedFacts: [],
+              context: {
+                photos: [
+                  {
+                    assetId: 'f1000000-0000-4000-8000-000000000001',
+                    description: 'Alex tending roses in a garden.',
+                    portrait: false,
+                  },
+                ],
+              },
+            }),
           ],
         }
       : {}),
@@ -303,7 +322,7 @@ test('explicit Start speaks first, Photo Story introduces its scene, Resume repe
     if (scene?.type !== 'activity.changed' || scene.payload.activity?.activityId !== 'photo_album')
       throw new Error('Missing photo');
     const assetId = scene.payload.activity.currentAssetId;
-    expect(prompts[1]).toContain('Roses');
+    expect(prompts[1]).toContain('Alex tending roses');
     expect(prompts[1]).toContain('?');
     d.send('input.pause');
     await d.until(() => d.session().phase === 'paused');

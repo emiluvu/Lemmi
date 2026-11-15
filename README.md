@@ -1,5 +1,7 @@
 # Lemmi
 
+**Alex photo album source candidate — not deployed:** `codex/alex-photo-story-pack` replaces Alex’s generic garden/park pack with saved, non-portrait caregiver photos and descriptions. The five approved Alex photos are saved in the hosted caregiver profile; using them in hosted Photo Story requires the web/gateway and nginx update. [Review, checks and rollout](docs/handoffs/alex-photo-story-pack.md).
+
 **Undeployed Photo Story Start/Resume candidate:** `codex/photo-story-start-resume` includes current main, opening-before-listening, English/German prompts and capture-off text recovery. [Deploy-agent handoff and combined checks](docs/handoffs/photo-story-start-resume-2026-11-14.md). Existing deployed behavior is recorded below.
 
 **Stackchan gateway update deployed (`264df22`):** [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.

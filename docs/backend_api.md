@@ -1,5 +1,9 @@
 # Lemmi backend integration reference
 
+## Alex private photo album candidate — not deployed
+
+On `codex/alex-photo-story-pack`, existing `/v1/demo/photo-assets/:assetId` also accepts validated media UUIDs for Alex’s currently selected, saved non-portrait photo. It returns bounded private `image/png` (maximum5MiB); the original fixed generic IDs remain SVG for other existing fictional demo profiles. Gate, browser credential, same-origin, assignment, approval, attachment, active session/photo, profile/privacy/policy revision, gateway epoch and media policy checks remain mandatory. No caller-selected path/URL, new WSS operation, schema or migration. Host registry builds `profile-alex-photos` from approved saved caregiver descriptions; no image inference. Album changes invalidate old work, empty albums do not fall back to garden. Web/gateway plus nginx UUID allowlist must deploy together. [Status, evidence and rollout](handoffs/alex-photo-story-pack.md).
+
 ## Photo Story Start/Resume source candidate — not deployed
 
 Branch `codex/photo-story-start-resume`, updated against main `f3e3b41`, changes existing WSS behavior without new schemas/routes. Successful new `input.start` and explicit `input.resume` initiate one approved opening/reorientation in the server-resolved profile language (`en`/`de`). The gateway enters processing before its acknowledgment/state; the browser waits for opening playback consumption plus current waiting state, then explicitly unmutes/requests a new grant for Conversational/Guided. Quiet stays capture-off after the prompt. Raw Start/Resume/Unmute never grant capture. Missing adapters/playback or current failed synthesis returns the approved prompt as `response.text` and capture-off `waiting`; it emits no fake playback receipt. Text fallback ends the browser listening attempt. German games remain unavailable; no English voice fallback. Robot/browser 12-frame negotiation and four-frame fallback remain unchanged.

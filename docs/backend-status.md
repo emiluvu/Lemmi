@@ -454,3 +454,8 @@ final keypad/centering adjustment. Full-window screenshot was automatically
 rejected because unrelated browser tabs/metadata could be captured; no screenshot
 was taken. Final mobile pixel layout and actual voice/hardware remain unverified.
 No deployment or live credential/configuration change occurred.
+# Alex private photo album candidate — not deployed
+
+`codex/alex-photo-story-pack`, based on Anay’s `5efffcf`, selects saved Alex non-portrait photos instead of garden/park fixtures. Uploaded images remain private media; source contains no photos. The existing gated image route accepts UUIDs with locked profile/device/gateway/revision/policy checks and PNG-only bounded responses. Album edits cancel old work; an empty Alex album disables Photo Story. Other fictional profiles retain their existing neutral pack. No migration or new public command.
+
+The five user-approved photos and descriptions were saved through the hosted caregiver editor and confirmed after reopening; cooking and My Way excluded, Bunny/Guided and memory-off retained. This is a data update, not deployment of this source. Focused 78 tests/848 assertions passed. Full local run:395 pass,42 skip,4 environmental failures (two missing OpenSSL, Windows POSIX permission assertion, missing VAD WASM dependency). Windows dependency installation also fails SvelteKit lifecycle; complete check/build and PostgreSQL/hardware acceptance remain unverified. [Exact review and rollout handoff](handoffs/alex-photo-story-pack.md).

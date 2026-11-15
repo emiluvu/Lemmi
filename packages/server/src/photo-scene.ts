@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { fail, type SessionSnapshot } from '@lemmi/contracts';
+import { fail, AssetIdSchema, type SessionSnapshot } from '@lemmi/contracts';
 import { controlResponse } from './control-config';
 import type { PersistentData } from './data/service';
 import { DataError } from './data/repository';
@@ -8,7 +8,7 @@ import type { SessionRegistry } from './session-registry';
 type SceneInput = {
   operation: 'photo.scene.read';
   credential: string;
-  assetId: 'photo-story-garden' | 'photo-story-park';
+  assetId: string;
 };
 function sceneInput(raw: unknown): raw is SceneInput {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
@@ -18,7 +18,9 @@ function sceneInput(raw: unknown): raw is SceneInput {
     input.operation === 'photo.scene.read' &&
     typeof input.credential === 'string' &&
     /^[A-Za-z0-9_-]{40,100}$/.test(input.credential) &&
-    (input.assetId === 'photo-story-garden' || input.assetId === 'photo-story-park')
+    (input.assetId === 'photo-story-garden' ||
+      input.assetId === 'photo-story-park' ||
+      AssetIdSchema.safeParse(input.assetId).success)
   );
 }
 const scenes = {
@@ -70,6 +72,36 @@ export async function handlePhotoScene(
       credentialId: identity.credentialId,
       bootId: data.devices.bootId,
     };
+    if (AssetIdSchema.safeParse(input.assetId).success) {
+      if (identity.profileId !== 'profile-alex')
+        return controlResponse(fail('FORBIDDEN', 'Photo is not assigned'));
+      const current = () =>
+        data.devices.current(identity) &&
+        scope(before) === scope(coordinator.snapshot()) &&
+        coordinator.photoAssetAllowed(input.assetId);
+      // The repository holds profile/device/policy/gateway locks through the
+      // private read. Do not nest it in the illustration transaction below.
+      const asset = await data.repository.asset(principal, input.assetId, true, true, {
+        token: before,
+        current,
+      });
+      if (!current()) return controlResponse(fail('REVISION_CONFLICT', 'Photo context changed'));
+      if (
+        asset.metadata.profileId !== identity.profileId ||
+        asset.metadata.kind !== 'image' ||
+        asset.metadata.mediaType !== 'image/png' ||
+        !asset.bytes ||
+        asset.bytes.byteLength > 5 * 1024 * 1024
+      )
+        return controlResponse(fail('UNAVAILABLE', 'Photo scene is unavailable'));
+      return new Response(new Uint8Array(asset.bytes), {
+        headers: {
+          ...PHOTO_SCENE_HEADERS,
+          'Content-Type': 'image/png',
+          'Content-Length': String(asset.bytes.byteLength),
+        },
+      });
+    }
     // Reuse the resource authorization check; the following locks keep profile,
     // credential and gateway revisions current through the bounded local read.
     await data.repository.profile(principal, identity.profileId);
@@ -94,7 +126,7 @@ export async function handlePhotoScene(
         WHERE singleton AND boot_id=${data.devices.bootId}::uuid FOR SHARE`;
       if (!devices.length || !gateways.length || !data.devices.current(identity))
         return controlResponse(fail('UNAUTHORIZED', 'Endpoint access has ended'));
-      const bytes = await readFile(scenes[input.assetId]);
+      const bytes = await readFile(scenes[input.assetId as keyof typeof scenes]);
       if (bytes.byteLength > 65536)
         return controlResponse(fail('UNAVAILABLE', 'Photo scene is unavailable'));
       if (
