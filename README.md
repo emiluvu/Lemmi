@@ -1,8 +1,9 @@
 # Lemmi
 
 **Temporary Stackchan diagnostics deployed — gateway `2501847`:** selected-endpoint
-receive/close counters remain enabled at user request after Emilia's one controlled
-voice 0.9 attempt: 164 frames accepted, zero rejected events; failure unresolved.
+receive/close counters remain enabled at user request. The latest instrumented
+attempt accepted29 frames without rejection; device polls stalled before TLS
+writing. Root cause remains unresolved; no repeat requested.
 Web/speech/tunnel retained. No voice fix or physical acceptance is claimed.
 [Test handoff and return to normal logging](docs/handoffs/stackchan-uplink-backend-investigation.md#diagnostic-deployment--november-15-2026).
 

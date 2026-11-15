@@ -1,5 +1,72 @@
 # Stackchan microphone uplink: backend evidence and Emilia handoff
 
+## Instrumented diagnostic result — 07:20 UTC
+
+November15,2026: correlated Emilia's published `b678916` on
+`codex/stackchan-voice09-review` with the existing gateway and socket records.
+Installed target for this attempt was **lemmi-voice/0.9-diag1**, not the original
+uninstrumented voice0.9. No backend code/configuration/deployment change occurred.
+**Diagnostics remain enabled; robot remains stopped; no repeat is requested.**
+
+| Observation | UTC / result |
+| --- | --- |
+| Gateway connection opened | 07:18:58.400139 |
+| Gateway grant | 07:20:21.616570 |
+| Emilia's observed capture-on | 07:20:21.679905 |
+| Gateway final accepted frames | **29**, 18,560 PCM bytes / 580ms |
+| Last accepted frame | Approximately **07:20:22.445633**, inferred from monotonic frame age plus journal timestamp |
+| Maximum accepted-frame gap | **192.007ms** |
+| Maximum synchronous handler over connection | **0.888ms** |
+| Rejected events / last error | **0 / null** |
+| Complete application messages/bytes | 74 / 45,556 |
+| Emilia's send failure | **07:20:22.601708**, bounded-write timeout,113ms maximum send,33 completed frame writes |
+| Actual SDK poll/TLS probe | **5 polls,5 zero returns,0 poll errors; maximum21,090us;0 TLS writer calls** |
+| Emilia's observed disconnected | 07:20:23.208735 |
+| Only gateway close | **07:20:26.847291**, code1001, **Heartbeat timeout** |
+
+No capture-end record or reply occurred. The four-frame difference between33
+completed local writes and29 accepted messages is unlocalized, not evidence of
+four lost packets. Gateway counters only see complete messages; completed writes
+are not ACKs. Millisecond comparisons across machines remain qualified by
+unmeasured clock/serial-observer timing.
+
+The probe now distinguishes the failed batch's socket-writability polling from
+TLS writing: no TLS writer call occurred during that bounded write. Backend
+application rejection/close did not precede the failure in the available records.
+The reason for non-writability remains unknown: ACK delay/loss, peer flow control,
+SDK writable threshold and scheduling are not separated. **Nothing here proves
+the twelve-frame playback window caused the stall.** No capture-end means no
+reply generation was expected in this interrupted turn.
+
+Local socket correlation used21 successful500ms snapshots over07:20:18–07:20:28;
+the four relevant directions were present in17. All sampled Send-Q/Recv-Q values
+on those four sockets were0. Both proxy and gateway receiver counters reached
+46,839 TCP bytes by07:20:22.470 and stopped advancing; local forwarding ACK
+counters covered those bytes. No retransmission field was reported in those
+selected samples. No growing origin backlog is observed, but500ms samples can
+miss a shorter stall and do not observe robot-facing Cloudflare TCP ACK/window
+behavior. Web/speech/tunnel journals had no entries over07:20:15–07:20:30;
+four services remain active, zero automatic restarts.
+
+Static review of the published diagnostic wrappers confirms they forward each
+selected call once, with unchanged arguments/return, count only in the selected
+worker task, reset before the bounded write and print after failure. Hooks do
+not examine payloads. This is source review, not an independent SDK link-map,
+ESP32 build, flash or hardware acceptance. No new tests or robot operations were
+run for this backend correlation.
+
+**Next handoff:** retain the stopped diagnostic firmware and current guards.
+Use these findings to plan actual robot-facing ACK/receive-window/loss evidence
+or jointly review one isolated SDK/send-buffer feasibility experiment with a
+measured RAM budget before choosing a fix. Do not repeat capture, raise blocking
+timeouts, change media format or adjust playback capacity from this result alone.
+
+Protected evidence: `.data/investigations/stackchan-uplink-20261115T072021Z/`.
+The local metadata sampler completed its previously bounded run, last snapshot
+**07:23:54.177778UTC**; it was not manually disabled. Gateway diagnostics remain
+enabled under the user's earlier hold instruction. No restart/disable command
+was executed during this correlation.
+
 ## Controlled retest results
 
 November 15, 2026, **07:00:06–07:00:42 UTC**. Diagnostics remain enabled at

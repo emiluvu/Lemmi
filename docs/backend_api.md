@@ -1,5 +1,18 @@
 # Lemmi backend integration reference
 
+Instrumented Stackchan attempt correlated, November15 07:20:21–07:20:24UTC:
+Emilia's `b678916` reports installed voice0.9-diag1, five zero socket-writability
+polls and zero TLS writer calls in the failed batch;33 completed earlier writes.
+Gateway accepted **29 frames / zero rejections**, max gap192.007ms,
+max synchronous handler0.888ms. Last accepted approximately07:20:22.446;
+only gateway close1001/Heartbeat timeout at07:20:26.847 followed device failure.
+Sampled local proxy/gateway queues were0; no growing origin backlog observed.
+Four-frame discrepancy is unlocalized; robot-facing ACK/window/loss remain
+unmeasured and playback-window causation is not established. No repeat needed.
+Diagnostics remain enabled, robot stopped; no backend change/restart/disablement.
+Bounded local metadata sampler ended automatically at07:23:54UTC.
+[Exact correlation and next handoff](handoffs/stackchan-uplink-backend-investigation.md#instrumented-diagnostic-result--0720-utc).
+
 Controlled Stackchan attempt correlated, November15 07:00:06–07:00:42UTC:
 gateway accepted164 frames with zero rejected events, max frame gap121.281ms,
 max synchronous handler2.283ms. Firmware reported167 completed writes and109ms
