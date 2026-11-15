@@ -62,7 +62,11 @@
                 ? 'After Lemmi finishes a question, it will listen for your reply.'
                 : 'Use Speak now when you are ready to talk.'}
           </p>
-          <p>You can say “Different topic” or “Not sure”.</p>
+          <ul>
+            <li>“Different topic”</li>
+            <li>“Not sure”</li>
+            <li>“Finish teaching”</li>
+          </ul>
         </aside>
       {:else}
         <p>Voice is unavailable on this connection. You can use the shared Stop control.</p>
@@ -79,13 +83,7 @@
     <p class="helper">You can pause or stop whenever you like.</p>
   {:else}
     <p>Lemmi offers a topic. You can tell Lemmi about it, in your own words.</p>
-    <button
-      onclick={() => command('input.teaching.start')}
-      disabled={disabled ||
-        !available ||
-        !speechAvailable ||
-        !['ready', 'waiting'].includes(session.phase)}>Start Teach Lemmi</button
-    >
+    <ul class="spoken-choices"><li>Say “Let’s play Teach Lemmi”.</li></ul>
     {#if !available}<p class="helper">Teaching is not available on this server.</p>
     {:else if !speechAvailable}<p class="helper">Voice is not available on this connection.</p>{/if}
   {/if}

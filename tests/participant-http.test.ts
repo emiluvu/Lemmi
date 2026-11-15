@@ -150,3 +150,65 @@ test('participant setup client preserves explicit server errors and rejects malf
   );
   expect((await malformed.current()).ok).toBe(false);
 });
+
+test('fictional profile edit uses the private setup gate and rejects private fields or cross-origin writes', async () => {
+  const restore = config();
+  try {
+    const edit = {
+      profileId: 'profile-alex',
+      expectedRevision: 0,
+      commandId: 'profile-edit-fixture',
+      patch: { preferredName: 'Alexandra', avatarId: 'cat' },
+    };
+    const commands: unknown[] = [];
+    const fetcher: Fetcher = async (_url, init) => {
+      commands.push(JSON.parse(String(init?.body)));
+      return Response.json({
+        ok: true,
+        data: { ...profile, preferredName: 'Alexandra', avatarId: 'cat', revision: 1 },
+      });
+    };
+    const saved = await handleDemoHttp(
+      request('profile-update', 'POST', edit),
+      'profile-update',
+      fetcher,
+    );
+    expect(saved.status).toBe(200);
+    expect(commands).toEqual([{ operation: 'profile.update', input: edit }]);
+    expect(saved.headers.get('cache-control')).toContain('no-store');
+    const locked = new Request(origin + '/v1/demo/profile-update', {
+      method: 'POST',
+      headers: {
+        origin,
+        'content-type': 'application/json',
+        cookie: `__Host-lemmi_endpoint=${token}`,
+      },
+      body: JSON.stringify(edit),
+    });
+    expect((await handleDemoHttp(locked, 'profile-update', fetcher)).status).toBe(401);
+    for (const patch of [
+      { ...edit.patch, approvedFacts: [] },
+      { ...edit.patch, excerptSavingEnabled: true },
+      { ...edit.patch, preferredName: '' },
+    ]) {
+      expect(
+        (
+          await handleDemoHttp(
+            request('profile-update', 'POST', { ...edit, patch }),
+            'profile-update',
+            fetcher,
+          )
+        ).status,
+      ).toBe(400);
+    }
+    const foreign = new Request(origin + '/v1/demo/profile-update', {
+      method: 'POST',
+      headers: { origin: 'https://foreign.invalid', 'x-lemmi-access-key': key },
+      body: JSON.stringify(edit),
+    });
+    expect((await handleDemoHttp(foreign, 'profile-update', fetcher)).status).toBe(403);
+    expect(commands).toHaveLength(1);
+  } finally {
+    restore();
+  }
+});

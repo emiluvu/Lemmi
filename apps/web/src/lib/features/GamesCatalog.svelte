@@ -4,6 +4,7 @@
   import type { ActivityId } from '@lemmi/contracts';
   import AvatarArt from './AvatarArt.svelte';
 
+  type CatalogId = ActivityId | 'teach_lemmi' | 'place_scenes';
   const games = [
     {
       id: 'photo_album',
@@ -67,8 +68,39 @@
       opportunities:
         'Designed to invite visual attention and simple choices. Pictures stay visible; there is no naming requirement, score, or countdown.',
     },
+    {
+      id: 'teach_lemmi',
+      name: 'Teach Lemmi',
+      icon: '✦',
+      color: '#e7dcbd',
+      description: 'Share what you know about a familiar topic.',
+      concept: 'Lemmi offers a simple topic and invites you to explain it in your own words.',
+      steps: [
+        'Ask Lemmi to start Teach Lemmi.',
+        'Share as much or as little as you like.',
+        'Say Different topic, Not sure, or Stop whenever you want.',
+      ],
+      opportunities:
+        'A conversation led by what someone chooses to share, without correction or a naming test.',
+    },
+    {
+      id: 'place_scenes',
+      name: 'Explore pictures',
+      icon: '❀',
+      color: '#d8e4d3',
+      description: 'Spend time with a garden or park scene.',
+      concept:
+        'Explore reviewed scenes through Photo Story. Talk about what catches your eye, or simply look.',
+      steps: [
+        'Ask Lemmi to explore pictures.',
+        'Look at one reviewed picture at a time.',
+        'Say Next photo or Stop whenever you like.',
+      ],
+      opportunities:
+        'An invitation to notice and discuss a scene. No location knowledge or personal memory is required.',
+    },
   ] satisfies {
-    id: ActivityId;
+    id: CatalogId;
     name: string;
     icon: string;
     color: string;
@@ -78,7 +110,7 @@
     opportunities: string;
   }[];
   type Game = (typeof games)[number];
-  let visibleIds = $state<ActivityId[]>(['photo_album', 'twenty_questions']);
+  let visibleIds = $state<CatalogId[]>(['photo_album', 'twenty_questions']);
   let selected = $state<Game | null>(null);
   let adding = $state(false);
   let preview = $state(false);
@@ -87,7 +119,6 @@
   const guessing = activityScreenFixtures.find(
     (view) => view.activityId === 'twenty_questions' && view.phase === 'ready',
   );
-  const moreGames = $derived(games.filter((game) => !visibleIds.includes(game.id)));
   function open(game: Game | null) {
     selected = game;
     adding = game === null;
@@ -96,7 +127,7 @@
     dialog.showModal();
   }
   function add(game: Game) {
-    visibleIds = [...visibleIds, game.id];
+    if (!visibleIds.includes(game.id)) visibleIds = [...visibleIds, game.id];
     selected = game;
     adding = false;
   }
@@ -151,10 +182,18 @@
   </header>
   {#if adding}
     <p>Add an existing activity to this tab. Your choices last until you leave this page.</p>
-    {#each moreGames as game}<button class="catalog-option" onclick={() => add(game)}
-        ><strong>{game.name}</strong><span>{game.description}</span><span>Add +</span></button
+    {#each games as game}<button
+        class="catalog-option"
+        disabled={visibleIds.includes(game.id)}
+        onclick={() => add(game)}
+        ><strong>{game.name}</strong><span>{game.description}</span><span
+          >{visibleIds.includes(game.id) ? 'Already added' : 'Add +'}</span
+        ></button
       >{/each}
-    {#if !moreGames.length}<p>All available activities are on your Games tab.</p>{/if}
+    <p class="catalog-note">
+      Teach Lemmi is a conversation mode; Explore pictures uses Photo Story. Music, 20 questions and
+      picture matching are previews while their live hosting is completed.
+    </p>
     <p class="catalog-note">New custom games are not available yet.</p>
   {:else if selected}
     {#if preview}
@@ -162,7 +201,7 @@
       <p class="catalog-note">Visual preview · no session, microphone, or saved results</p>
       <section class="game-preview" aria-label={`${selected.name} visual preview`}>
         <div class="preview-mascot"><AvatarArt avatarId="lemming" /></div>
-        {#if selected.id === 'photo_album'}
+        {#if selected.id === 'photo_album' || selected.id === 'place_scenes'}
           <div class="preview-photo">
             <img
               src="/images/photo-story-bubbles.png"
@@ -183,6 +222,9 @@
                 >{choice.label}</button
               >{/each}
           </div>
+        {:else if selected.id === 'teach_lemmi'}
+          <h3>Tell me about a garden.</h3>
+          <p>Share whatever you like. You can say “Different topic” or “Not sure”.</p>
         {:else}
           <h3>{selected.name}</h3>
           <p>{selected.concept}</p>

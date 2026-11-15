@@ -115,8 +115,20 @@ export const ProfileCreateSchema = z.strictObject({
   preferredName: z.string().trim().min(1).max(80),
   avatarId: AvatarIdSchema.default('lemming'),
 });
+// Fictional setup may edit public identity only; private caregiver fields stay protected.
+export const DemoProfileUpdateSchema = z.strictObject({
+  profileId: IdSchema,
+  expectedRevision: RevisionSchema,
+  commandId: IdSchema,
+  patch: z.strictObject({
+    preferredName: z.string().trim().min(1).max(80),
+    avatarId: AvatarIdSchema,
+  }),
+});
+export type DemoProfileUpdate = z.infer<typeof DemoProfileUpdateSchema>;
 export const DemoSetupRequestSchema = z.discriminatedUnion('operation', [
   z.strictObject({ operation: z.literal('profile.list') }),
+  z.strictObject({ operation: z.literal('profile.update'), input: DemoProfileUpdateSchema }),
   z.strictObject({
     operation: z.literal('endpoint.current'),
     endpoint: z.enum(['browser', 'robot']).optional(),

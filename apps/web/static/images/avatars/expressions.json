@@ -1,0 +1,149 @@
+{
+  "purpose": "Lemmi web avatar expressions",
+  "source": "User-supplied Untitled_Message folder; existing user-supplied base artwork",
+  "permission": "User requested Lemmi project use; creator and broader license unspecified",
+  "encoding": "PNG RGBA",
+  "cellSize": 724,
+  "frames": [
+    "base",
+    "open_mouth",
+    "thinking"
+  ],
+  "avatars": {
+    "dog": {
+      "file": "dog-strip.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 866216,
+      "sources": [
+        {
+          "file": "dog.png",
+          "sha256": "4f3e8926b8dfc4fdb0b363a76859fc5af237f2482bc37ea1c365f46a71efdd51",
+          "width": 1448,
+          "height": 1086
+        },
+        {
+          "file": "IMG_3322.png",
+          "sha256": "065d3911dbf4b379bdb7fd5f476ca45e350cab84c8af9c13dcd2100c6c37faee",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3315.png",
+          "sha256": "4be9b51e5360f0e71b3d2cab7e00e9da538b5f0619d0eeb3da71f9674a1041b5",
+          "width": 1448,
+          "height": 1086
+        }
+      ],
+      "alt": "Lemmi dog: base, open mouth, and thinking with dots"
+    },
+    "cat": {
+      "file": "cat-strip.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 709185,
+      "sources": [
+        {
+          "file": "cat.png",
+          "sha256": "427a5911c9ca56ed5611508f1d9cf3c2e85888b7fcb33a13198c77bb9901e310",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3320.png",
+          "sha256": "368bf0cbe199d8ff2156f8996ac9ad554f51887f2151ee2b04f08c66ea5f4535",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3313.png",
+          "sha256": "1f14ce0c57eaf57b4a26787aa406213486cbdb6f92cecd1ffa3c89ffefc14082",
+          "width": 1312,
+          "height": 1199
+        }
+      ],
+      "alt": "Lemmi cat: base, open mouth, and thinking with dots"
+    },
+    "bunny": {
+      "file": "bunny-strip.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 882703,
+      "sources": [
+        {
+          "file": "bunny.png",
+          "sha256": "1a94240e0e1b4ecaa3c564c11f47cf614d13f125d181e3dfdcf3cb8380a53682",
+          "width": 1278,
+          "height": 1230
+        },
+        {
+          "file": "IMG_3319.png",
+          "sha256": "36e60187f6eba744055f1c70d3d2506c3108762362d9a928121291f0ff186f59",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3314.png",
+          "sha256": "6fd985813eb03a3ef1e72afba00e9c41fb60c2431fa71775fd48956f9b40897b",
+          "width": 1278,
+          "height": 1230
+        }
+      ],
+      "alt": "Lemmi bunny: base, open mouth, and thinking with dots"
+    },
+    "bird": {
+      "file": "bird-strip.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 638568,
+      "sources": [
+        {
+          "file": "bird.png",
+          "sha256": "6043d03957439c78e68decc3dadc1f6322466381c3df46c156dde1d1a9ce4c4b",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3321.png",
+          "sha256": "85ebb87970982fce31c781b627df2b5443126fb157721ce5dc6fb48335f39e44",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3316.png",
+          "sha256": "388badcdb42b208b9311494e6895885075c14cfe094258bcba29774fa42b477b",
+          "width": 1312,
+          "height": 1199
+        }
+      ],
+      "alt": "Lemmi bird: base, open mouth, and thinking with dots"
+    },
+    "lemming": {
+      "file": "lemming-strip.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 659441,
+      "sources": [
+        {
+          "file": "lemming.png",
+          "sha256": "5759c83f926c6ba1d30591c1f7c21878ec666dfe00535e250429b0a3df81024c",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3318.png",
+          "sha256": "cba41d2c708291748d7dfa8a8f15d227ef346f33f7a5e5c47d9a7b90c3713b72",
+          "width": 1312,
+          "height": 1199
+        },
+        {
+          "file": "IMG_3317.png",
+          "sha256": "9c5091489588f74cb9aeac8daa90a0a0415ed569965e8cc2ad127de9bac613b4",
+          "width": 1312,
+          "height": 1199
+        }
+      ],
+      "alt": "Lemmi lemming: base, open mouth, and thinking with dots"
+    }
+  }
+}

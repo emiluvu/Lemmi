@@ -2646,3 +2646,21 @@ body:has(.participant-shell) .demo-pill {
 .profile-dialog .summary-section {
   border-top-width: 1px;
 }
+
+/* Keep modal actions in view while the profile body scrolls. */
+.profile-panel-top {
+  position: sticky;
+  top: -24px;
+  z-index: 5;
+  background: #fffdf7;
+  padding: 12px 0;
+  box-shadow: 0 6px 10px #fffdf7;
+}
+.profile-panel-top .controls {
+  margin-left: auto;
+}
+@media (max-width: 900px) {
+  .profile-panel-top {
+    top: -20px;
+  }
+}

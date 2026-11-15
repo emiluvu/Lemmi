@@ -1,6 +1,12 @@
 import type { SQL } from 'bun';
 import { createHash } from 'node:crypto';
-import { fail, ok, type Result } from '@lemmi/contracts';
+import {
+  fail,
+  ok,
+  ParticipantProfileSchema,
+  ProfileDetailSchema,
+  type Result,
+} from '@lemmi/contracts';
 import { DataRequestSchema, DemoSetupRequestSchema } from '../../../contracts/src/profile-assets';
 import { DataRepository, DataError, type DataPrincipal } from './repository';
 import { DatabaseDeviceAuthority } from './device-authority';
@@ -175,6 +181,24 @@ export class PersistentData {
         (await this.repository.listProfiles(this.subject, true)).find(
           (value) => value.id === profile.id,
         )!,
+      );
+    }
+    if (request.operation === 'profile.update') {
+      const profiles = await this.repository.listProfiles(this.subject, true);
+      if (!profiles.some((profile) => profile.id === request.input.profileId))
+        throw new DataError('FORBIDDEN', 'Fictional demo profile is not assigned');
+      // Reuse serialized revision checks and cancellation; never return caregiver fields.
+      const result = await this.handle(request, this.subject, undefined);
+      if (!result.ok) return result;
+      const profile = ProfileDetailSchema.parse(result.data);
+      return ok(
+        ParticipantProfileSchema.parse({
+          id: profile.id,
+          preferredName: profile.preferredName,
+          avatarId: profile.avatarId,
+          revision: profile.revision,
+          communicationSupport: profile.communicationSupport,
+        }),
       );
     }
     const profiles = await this.repository.listProfiles(this.subject, true);

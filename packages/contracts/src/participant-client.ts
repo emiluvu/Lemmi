@@ -6,7 +6,7 @@ import {
   type ParticipantProfile,
   type Result,
 } from './common';
-import { ProfileCreateSchema } from './profile-assets';
+import { type DemoProfileUpdate, ProfileCreateSchema } from './profile-assets';
 import type { SessionSnapshot } from './session';
 import type { Fetcher } from './services';
 
@@ -60,8 +60,9 @@ export function createParticipantSetup(fetcher: Fetcher = fetch) {
   }
   return {
     profiles: () => call('profiles', ParticipantProfilesSchema),
-    create: (preferredName: string) =>
-      call('profiles', ParticipantProfileSchema, { preferredName }),
+    create: (preferredName: string, avatarId: ParticipantProfile['avatarId'] = 'lemming') =>
+      call('profiles', ParticipantProfileSchema, { preferredName, avatarId }),
+    update: (input: DemoProfileUpdate) => call('profile-update', ParticipantProfileSchema, input),
     current: () => call('current', ParticipantEndpointSchema),
     enroll: (profileId: string) =>
       call('enroll', ParticipantEndpointSchema, { profileId, endpoint: 'browser' }),

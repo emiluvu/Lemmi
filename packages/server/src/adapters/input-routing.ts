@@ -153,3 +153,33 @@ export function fixedInputReply(route: InputRoute, language: 'en' | 'de'): strin
       : "Conversation excerpts aren't being saved. We can leave this topic. Earlier processing cannot be undone.";
   return null;
 }
+
+// Explicit invitations only; incidental mentions, negation and quoted examples stay conversation.
+export function normalizeVoiceCommand(text: string): string {
+  return text
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[.!?…]+$/u, '')
+    .replace(/\s+/g, ' ');
+}
+export function requestedActivity(text: string): 'photo' | 'teaching' | 'unavailable' | null {
+  const value = normalizeVoiceCommand(text);
+  const invitation =
+    /^(?:please )?(?:(?:start|play|open|do|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|can we) (?:play|start|do|open)) (?:the )?/;
+  const name = value.replace(invitation, '').replace(/ please$/, '');
+  if (
+    /^(?:photo stor(?:y|ies)|photo album(?: talk)?|explore pictures|look at pictures)$/.test(name)
+  )
+    return 'photo';
+  if (name === 'teach lemmi') return 'teaching';
+  if (/^(?:music|20 questions|twenty questions|picture matching|object matching)$/.test(name))
+    return 'unavailable';
+  return null;
+}
+export function requestsOpenConversation(text: string): boolean {
+  return /^(?:back to (?:the )?conversation|(?:finish|end) (?:teach(?:ing)? lemmi|teaching|photo story|explor(?:e|ing) pictures)|let's just talk|let us just talk)$/.test(
+    normalizeVoiceCommand(text),
+  );
+}
