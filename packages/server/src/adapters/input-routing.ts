@@ -173,8 +173,23 @@ export function normalizeVoiceCommand(text: string): string {
 }
 export function requestedActivity(text: string): 'photo' | 'teaching' | 'unavailable' | null {
   const value = normalizeVoiceCommand(text);
+  // Match complete requests: never extract an activity from a negation, quotation or story.
+  const request =
+    "(?:(?:please )?(?:can|could|may) (?:we|i|you)|(?:i want to|i would like to|i'd like to|let's|let us))";
+  if (
+    new RegExp(
+      `^(?:${request} |please )?teach (?:lemmi|lemmy|lemme|lemi|you)(?: game)?(?:,? please)?$`,
+    ).test(value)
+  )
+    return 'teaching';
+  if (
+    new RegExp(
+      `^(?:${request} |please )?(?:look (?:at|through)|explore) (?:some |the )?(?:pictures|photos)(?: please)?$`,
+    ).test(value)
+  )
+    return 'photo';
   const invitation =
-    /^(?:please )?(?:(?:start|play|open|do|try|begin|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|can we|could we) (?:play|start|do|open|try)) (?:the )?/;
+    /^(?:please )?(?:(?:start|play|open|do|try|begin|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|(?:can|could|may) (?:we|i|you)) (?:play|start|do|open|try|switch to)) (?:the )?/;
   const name = value.replace(invitation, '').replace(/,? please$/, '');
   if (
     /^(?:photo stor(?:y|ies)|photo album(?: talk)?|explore pictures|look at pictures)$/.test(name)
@@ -185,6 +200,12 @@ export function requestedActivity(text: string): 'photo' | 'teaching' | 'unavail
   if (/^(?:music|20 questions|twenty questions|picture matching|object matching)$/.test(name))
     return 'unavailable';
   return null;
+}
+
+export function confirmsActivityOffer(text: string): boolean {
+  return /^(?:yes(?:,? please)?|please do|okay|ok|sure|let's do (?:it|that)|let us do (?:it|that))$/.test(
+    normalizeVoiceCommand(text),
+  );
 }
 export function requestsOpenConversation(text: string): boolean {
   return /^(?:back to (?:the )?conversation|(?:finish|end) (?:teach(?:ing)? (?:lemmi|lemmy|lemme|lemi)(?: game)?|teaching|photo story|explor(?:e|ing) pictures)|let's just talk|let us just talk)$/.test(

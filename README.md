@@ -1,5 +1,7 @@
 # Lemmi
 
+Local routing repair candidate: [natural activity requests, semantic confirmation, measured Jev activity-only evaluation and enablement handoff](docs/handoffs/conversation-routing-repair.md). Integration review pending; live configuration unchanged.
+
 **Deployed response/profile-entry update — web/gateway `3c5033e`:** caregiver Conversation selects/enrolls its profile before opening the participant screen. Browser silence defaults to 1 second; reviewed speech-recognition variants such as “Teach Lemmy” select Teach Lemmi. Family replies offer warmer grounded support. [Measured latency, current rollout and limitations](docs/handoffs/voice-response-and-profile-entry.md).
 
 **Earlier browser microphone release:** web `d6d2ff6`. Refresh, select a fictional profile, and click **Start conversation**; allow microphone access. Listening starts without separate Unmute/Speak clicks and returns after each normal reply. **Mute microphone**, **Type instead**, Pause/Stop/Get help are visible. Quiet waits after its first turn; silence pauses after 15 seconds and Resume restarts listening. Reconnect never restores recording automatically. The gateway and speech service were retained during this web-only update. [Current acceptance and limits](docs/backend-status.md), [microphone/Stackchan handoff](docs/handoffs/browser-default-listening.md).

@@ -56,6 +56,7 @@ import {
   routeParticipantText,
   requestedActivity,
   requestsOpenConversation,
+  confirmsActivityOffer,
 } from './adapters/input-routing';
 import { permittedModelReply } from './adapters/reply-policy';
 import { mentionsTopic, redirectInstructions } from './adapters/conversation-redirects';
@@ -111,6 +112,7 @@ export class SessionCoordinator {
           ) {
             this.lastChat = null;
             this.dialogue = [];
+            this.activityOffer = null;
           }
         },
         photoStory?.localOnly === true,
@@ -397,6 +399,7 @@ export class SessionCoordinator {
     return this.speech?.sweep() ?? false;
   }
   private dialogue: ChatMessage[] = [];
+  private activityOffer: 'photo' | 'teaching' | null = null;
   private redirectedTopics = new Set<string>();
   private lastRedirectedMessage: string | null = null;
   private chatIds = new Map<string, string>();
@@ -593,6 +596,7 @@ export class SessionCoordinator {
     this.pendingChat?.controller.abort();
     this.pendingChat = null;
     this.dialogue = [];
+    this.activityOffer = null;
     this.redirectedTopics.clear();
     this.lastRedirectedMessage = null;
     this.lastChat = null;
@@ -637,6 +641,8 @@ export class SessionCoordinator {
       );
     }
     const route = routeParticipantText(input.text);
+    const activityOffer = this.activityOffer;
+    this.activityOffer = null;
     const repeated =
       input.purpose === 'photo_repeat' &&
       this.photoTalking() &&
@@ -688,7 +694,7 @@ export class SessionCoordinator {
     const fixed =
       route === 'recap' &&
       input.language === 'en' &&
-      (!this.decisions || !!session.teaching || this.photoTalking())
+      (!this.semanticConversationDecisions() || !!session.teaching || this.photoTalking())
         ? conversationRecap(
             this.dialogue,
             this.profile.conversationRedirects?.awayFrom ?? [],
@@ -752,7 +758,8 @@ export class SessionCoordinator {
     const activityChoice =
       !input.purpose && input.language === 'en' && route === 'ordinary'
         ? (requestedActivity(input.text) ??
-          (requestsOpenConversation(input.text) ? ('conversation' as const) : null))
+          (requestsOpenConversation(input.text) ? ('conversation' as const) : null) ??
+          (activityOffer && confirmsActivityOffer(input.text) ? activityOffer : null))
         : null;
     if (activityChoice) {
       if (this.chatIds.size >= 256)
@@ -990,7 +997,7 @@ export class SessionCoordinator {
       redirectSettings?.awayFrom.filter(
         (topic) => !this.redirectedTopics.has(topic) && mentionsTopic(input.text, [topic]),
       ) ?? [];
-    let redirect = this.decisions
+    let redirect = this.semanticConversationDecisions()
       ? ''
       : redirectInstructions(
           input.text,
@@ -1004,14 +1011,19 @@ export class SessionCoordinator {
         );
     if (redirect) prepared.data.system += '\n' + redirect;
     if (
-      !this.decisions &&
+      !this.semanticConversationDecisions() &&
       !redirect &&
       redirectSettings &&
       mentionsTopic(input.text, redirectSettings.awayFrom)
     )
       prepared.data.system +=
         '\nA subject transition has already been offered for this subject. Respect the participant choosing to continue; do not push another redirect. Existing safety rules still apply.';
-    if (!session.teaching && !this.photoTalking() && !redirect && !this.decisions)
+    if (
+      !session.teaching &&
+      !this.photoTalking() &&
+      !redirect &&
+      !this.semanticConversationDecisions()
+    )
       prepared.data.system += openConversationInstructions;
     if (photo?.ok && photo.data.kind === 'conversation_context') {
       prepared.data.system +=
@@ -1056,6 +1068,7 @@ export class SessionCoordinator {
     pending.promise = (async () => {
       let result: Result<ConversationTextResult>;
       let fixedDecisionReply = false;
+      let proposedActivity: 'photo' | 'teaching' | null = null;
       try {
         const response = await new Promise<Awaited<ReturnType<ChatAdapter['complete']>>>(
           (resolve, reject) => {
@@ -1099,7 +1112,7 @@ export class SessionCoordinator {
                   )
                     return fail('UNAVAILABLE', 'Invalid conversation decision');
                   // A reminder has precedence over an optional topic offer or activity classification.
-                  if (decision.data.recap) {
+                  if (this.semanticConversationDecisions() && decision.data.recap) {
                     fixedDecisionReply = true;
                     return ok({
                       text: conversationRecap(
@@ -1111,37 +1124,60 @@ export class SessionCoordinator {
                       language: input.language,
                     });
                   }
-                  redirectTopics = topics
-                    .filter(
-                      (topic) =>
-                        !topic.offered && decision.data.redirectTopicIds.includes(topic.id),
-                    )
-                    .map((topic) => topic.label);
-                  if (decision.data.declinesRedirect) {
-                    topics
-                      .filter((topic) => topic.offered)
-                      .forEach((topic) => this.redirectedTopics.add(topic.label));
-                    prepared.data.system +=
-                      '\nThe participant declined a subject change. Respect their choice and do not offer another redirect.';
-                  } else if (redirectTopics.length && redirectSettings) {
-                    redirect = redirectInstructions(
-                      input.text,
-                      {
-                        ...redirectSettings,
-                        awayFrom: redirectTopics,
-                        toward: redirectSettings.toward.filter(
-                          (topic) => !mentionsTopic(topic, redirectSettings.awayFrom),
-                        ),
-                      },
-                      true,
-                    );
-                    prepared.data.system += '\n' + redirect;
+                  if (decision.data.activity !== 'none' && input.language === 'en') {
+                    redirect = '';
+                    redirectTopics = [];
+                    fixedDecisionReply = true;
+                    proposedActivity =
+                      decision.data.activity === 'teach_lemmi'
+                        ? 'teaching'
+                        : decision.data.activity === 'photo_album' &&
+                            this.publicPhotoEnabled() &&
+                            session.endpoint === 'browser'
+                          ? 'photo'
+                          : null;
+                    return ok({
+                      text:
+                        proposedActivity === 'teaching'
+                          ? session.communicationSupport.preset === 'quiet'
+                            ? 'To start Teach Lemmi, say yes.'
+                            : 'Would you like to start Teach Lemmi?'
+                          : proposedActivity === 'photo'
+                            ? session.communicationSupport.preset === 'quiet'
+                              ? 'To start Photo Story, say yes.'
+                              : 'Would you like to start Photo Story?'
+                            : 'That activity is not available here yet. You can ask for Teach Lemmi.',
+                      language: input.language,
+                    });
                   }
-                  if (decision.data.activity !== 'none')
-                    prepared.data.system +=
-                      '\nRequested activity ID: ' +
-                      decision.data.activity +
-                      '. This classification is advisory and has not started an activity. Only explicit reviewed phrases can select a mode: Start Teach Lemmi, Start Photo Story, Explore pictures, or Back to conversation. Other games remain unavailable. Never claim an activity started from this classification.';
+                  if (this.semanticConversationDecisions()) {
+                    redirectTopics = topics
+                      .filter(
+                        (topic) =>
+                          !topic.offered && decision.data.redirectTopicIds.includes(topic.id),
+                      )
+                      .map((topic) => topic.label);
+                    if (decision.data.declinesRedirect) {
+                      topics
+                        .filter((topic) => topic.offered)
+                        .forEach((topic) => this.redirectedTopics.add(topic.label));
+                      prepared.data.system +=
+                        '\nThe participant declined a subject change. Respect their choice and do not offer another redirect.';
+                    } else if (redirectTopics.length && redirectSettings) {
+                      redirect = redirectInstructions(
+                        input.text,
+                        {
+                          ...redirectSettings,
+                          awayFrom: redirectTopics,
+                          toward: redirectSettings.toward.filter(
+                            (topic) => !mentionsTopic(topic, redirectSettings.awayFrom),
+                          ),
+                        },
+                        true,
+                      );
+                      prepared.data.system += '\n' + redirect;
+                    }
+                  }
                   if (!redirect) prepared.data.system += openConversationInstructions;
                 }
                 signal.throwIfAborted();
@@ -1179,6 +1215,7 @@ export class SessionCoordinator {
             'Response left the reviewed teaching topic; choose another topic or finish',
           );
         else {
+          this.activityOffer = proposedActivity;
           const redirectFallback =
             !!redirect && mentionsTopic(response.data.text, redirectSettings!.awayFrom);
           const replyText = redirectFallback
@@ -1226,6 +1263,9 @@ export class SessionCoordinator {
       return structuredClone(result);
     })();
     return pending.promise;
+  }
+  private semanticConversationDecisions(): boolean {
+    return !!this.decisions && this.decisions.scope !== 'activities';
   }
   private participant() {
     return ParticipantProfileSchema.parse({
