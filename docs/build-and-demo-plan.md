@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+### Lemmi branding candidate — November 15, 2026 (not deployed)
+
+`codex/lemmi-branding` uses the user-supplied `lemmi.png` unchanged for a reusable header/welcome logo and self-contained SVG favicon, adds browser/mobile identity metadata, and updates the default/UI title and product description. The reverse-proxy template and existing smoke script allow exactly the two public brand asset paths. Observed on Bun 1.4.4: frozen install, type/Svelte checks (0 errors/warnings), production build, formatting, **371 tests passed / 42 database checks skipped / 0 failed**, exact image-byte/allowlist checks, and desktop/mobile Chromium logo/favicon/title/keyboard inspection. No gateway, migration, dependency, credentials, participant avatar or firmware changes. Actual Nginx syntax/host rollout remains Anay’s handoff; Kylie reviews branding. [Deployment steps and evidence](handoffs/lemmi-branding.md).
+
 ### Activity routing repair — November 14, 2026 (local, not deployed)
 
 Candidate `fix/conversation-activity-routing` from main/backend-deploy `0f299c4` fixes natural reviewed teaching/photo commands and connects optional semantic requests to an application-owned confirmation using existing session/speech transitions. Activity-only scope separates this from the broader failing recap/redirect gate. Actual Jev 1.14 activity-only evaluation: **71/71 matched, zero unavailable/false activity positives, p50/p95 169/248 ms**, unchanged 0.85 threshold and strict provider privacy flags. Final unseen 20-case verification independently passed 20/20 (156/270 ms). Full-conversation evaluation still missed two of 51; do not enable that scope.

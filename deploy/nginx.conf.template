@@ -53,7 +53,7 @@ server {
 
     # Reviewed generic UI artwork/fonts only, never participant/private media.
     # Static resources contain no credentials or profile data; no broad /images alias.
-    location ~ ^/(fonts/nunito-latin-variable\.ttf|images/(avatars/(dog|cat|bunny|bird|lemming)(-strip)?\.png|surfaces/(cream-paper-v1|conversation-meadow-v1)\.png|(photo-story-bubbles|lemmings-wildflowers|lemmings-wildflowers-banner-v2)\.png))$ {
+    location ~ ^/(favicon\.svg|fonts/nunito-latin-variable\.ttf|images/(brand/lemmi\.png|avatars/(dog|cat|bunny|bird|lemming)(-strip)?\.png|surfaces/(cream-paper-v1|conversation-meadow-v1)\.png|(photo-story-bubbles|lemmings-wildflowers|lemmings-wildflowers-banner-v2)\.png))$ {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;

@@ -90,7 +90,7 @@ try {
         }
       }
       if (
-        !/^\/(access(?:\/logout)?|participant|caregiver|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|profile-update|conversation-lock|conversation-exit|enroll|current|release|photo-assets\/(?:photo-story-garden|photo-story-park)))$/.test(
+        !/^\/(access(?:\/logout)?|participant|caregiver|_app\/.*|favicon\.svg|fonts\/nunito-latin-variable\.ttf|images\/(?:brand\/lemmi\.png|avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|profile-update|conversation-lock|conversation-exit|enroll|current|release|photo-assets\/(?:photo-story-garden|photo-story-park)))$/.test(
           path,
         )
       )
@@ -199,6 +199,8 @@ try {
   );
   for (const [path, mime] of [
     ['/fonts/nunito-latin-variable.ttf', 'font/ttf'],
+    ['/favicon.svg', 'image/svg+xml'],
+    ['/images/brand/lemmi.png', 'image/png'],
     ['/images/avatars/lemming.png', 'image/png'],
     ['/images/surfaces/cream-paper-v1.png', 'image/png'],
   ]) {
