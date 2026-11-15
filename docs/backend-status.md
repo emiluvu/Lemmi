@@ -1,8 +1,12 @@
 # Lemmi backend status
 
-## Stackchan twelve-frame output — reviewed, rollout pending
+## Stackchan twelve-frame output deployed — November14,2026
 
-Removed browser-only checks in gateway negotiation and all three speech-owner paths. Robot `playback.outputWindowChunks:12` can now negotiate12×20ms=240ms credit; omitted/explicit4 retains80ms fallback. Consumed-only refill and Stop owner cancellation/PCM wipe/late receipt rejection remain. No schema, migration, config/provider/model/UI/firmware change; gateway-only rollout. Final **413 tests /6,281 expectations**, no failures/skips on isolated databases; type/Svelte zero errors/warnings, pinned frozen Bun1.4.4, format/whitespace passed. Includes robot12/legacy4 credit and queued/playing Stop/short-tail tests. [Exact firmware handshake, short-reply behavior, Stop responsibilities and observed checks](handoffs/stackchan-playback-window.md).
+**Gateway runtime `264df22`**, web/speech `a779c70` retained. Removed browser-only checks in gateway negotiation and all three speech-owner paths. Robot `playback.outputWindowChunks:12` can now negotiate12×20ms=240ms credit; omitted/explicit4 retains80ms fallback. Consumed-only refill and Stop owner cancellation/PCM wipe/late receipt rejection remain. No schema, migration, config/provider/model/UI/firmware change; gateway-only rollout. Final **413 tests /6,281 expectations**, no failures/skips on isolated databases; type/Svelte zero errors/warnings, pinned frozen Bun1.4.4, format/whitespace passed. Includes robot12/legacy4 credit and queued/playing Stop/short-tail tests. [Exact firmware handshake, short-reply behavior, Stop responsibilities and observed checks](handoffs/stackchan-playback-window.md).
+
+Actual public authenticated robot WSS on its own fictional profile passed **12 frames initially → started0 adds no credit → consumed2 permits14 total → Stop ends/cancels without more chunks → late progress receipt rejected**. Separate robot enrollment with the field omitted advertised4. Real local speech plus configured external chat were used; consumed receipts were simulated, and no physical device/speaker/jitter result is claimed. Only the probe's own profile/enrollments were removed; Alex/Stackchan credentials and assignments were untouched.
+
+Gateway-only restart after protected source/build/config/database/media backup at `.data/stackchan-window-rollback-path`. Web/speech PID/start timestamps byte-matched before/after; config, migrations/data and provider/endpoint credentials unchanged. Four services active, gateway zero automatic restarts. Firmware must request12, honor actual ready4/12, bound its own queue and immediately flush local ring/DMA audio on Stop, including late stream callbacks; short replies can end before12frames. Emilia's actual hardware/underrun/Stop checks remain pending.
 
 ## Profile context/memory and German deployed — November 14, 2026
 

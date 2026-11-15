@@ -1,6 +1,6 @@
 # Lemmi
 
-Stackchan playback update: [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.
+**Stackchan gateway update deployed (`264df22`):** [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.
 
 **Profile context/memory + German deployed — runtime `a779c70`:** rich caregiver create/edit/photos, separately opted-in background memory (default off), and Tilda’s exact-ID German pilot are installed. English and German public synthetic speech checks passed; human voice/startup/hardware testing remains. Refresh/reconnect and explicitly Start. [Acceptance, permission behavior and three-integration test reminder](docs/handoffs/profile-german-backend-integration.md).
 
