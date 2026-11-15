@@ -342,3 +342,18 @@ for urgent reports, and `concern` for all other categories. No new client action
 HTTP route, device command or provider-selected destination is introduced.
 Safeguarding priority and safe-alternate-only routing remain intact. Follow-up
 acceptance is pending; earlier contact checks do not verify these new triggers.
+
+
+### Telegram deployed integration — `da95cc2`, November 15
+
+Manual `input.help` is available before Start on the scoped endpoint and never
+needs a model. `help.changed` carries only bounded status/profile/request IDs;
+neutral trusted-contact wording supports safe-alternate routing. Obsolete async
+contact errors cannot borrow newer session authority. Pre-send invalidation
+cancels future work truthfully; known-unsent supervisor stop leaves durable work
+pending. GET cannot acknowledge; caregiver status/ack/cancel/resolve require the
+existing outer gate, managed identity and profile authorization. Migrations 007/008
+and Nginx exact paths are installed. Telegram acceptance is separate from delivery,
+authenticated acknowledgment and resolution. Only fictional Alex/one opted-in
+primary recipient are enabled here; no safe alternate means no safeguarding send.
+[Observed tests/real receipt confirmation](backend-status.md#telegram-caregiver-contact-deployed--november-15-2026).

@@ -1498,3 +1498,26 @@ No production deployment or hardware result is claimed for this extension.
 
 
 Observed follow-up acceptance: **513 Bun tests passed / 19 skipped / 0 failed; 13,127 expectations**, with isolated PostgreSQL 14.24 and fixture Telegram responses. Type/Svelte checks, production build, formatting and whitespace passed. Fifteen contact-database tests cover additive migration008, new categories/source attribution, policy, privacy and durable delivery. Eleven coordinator follow-up tests include positive copy, long-output bounds, refusal and cancellation. Five adapter/gate tests cover reviewed phrasing/validated decisions. Six actual Jev checks passed for named contact request, departure plan, past-trip exclusion, trusted-support recommendation, safeguarding precedence and ordinary family-mention exclusion, without sending another Telegram message. Existing null-snapshot timing in one speech Stop test was guarded without weakening the ended-state assertion. Live deployment, real microphone/speaker/device and human semantic review remain separate.
+
+
+## Deployed Telegram contact acceptance — November 15, 2026
+
+Web/gateway `da95cc2` deployed at 19:04:31 UTC. Migrations 007/008 applied and exact
+proxy paths validated/reloaded; speech/tunnel retained. All 545 tests / 13,380
+expectations passed without skips/failures on seven disposable databases. Type,
+build, formatting/whitespace, production browser/TLS/WSS/managed-auth contact API
+fixtures and six live Jev classification cases passed. Review repaired Help
+before Start, public route hooks, safe status wording, stale failure cancellation
+and pre-send/stop durability races.
+
+The primary recipient was verified and opted in; two fictional tests were explicitly
+authorized: manual Help without a session in an isolated database, and the deployed
+public Jev→outbox path. Telegram accepted both; the user confirmed both arrived.
+The tests' future attempts were canceled and only their fixtures removed. Original
+profiles, credentials and Alex's photos were preserved. Alex only; automatic alerts
+enabled, no backup/safe alternate, and no ordinary-caregiver fallback for safeguarding.
+Portal request-detail/acknowledgment UI remains Kylie's handoff; protected APIs passed.
+No microphone/hardware/emergency-readiness claim. The postdeployment noisy conversation
+passed at 1,385 ms end→submit and 2,189 ms submit→reply, with mute/Stop. The checkpoint
+tag remains; `.data/telegram-contact-rollback-path` holds protected backups.
+[Actual evidence and limits](backend-status.md#telegram-caregiver-contact-deployed--november-15-2026).

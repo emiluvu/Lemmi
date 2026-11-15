@@ -1,29 +1,27 @@
 # Telegram caregiver contact
 
-## Backend-server integration review — ready candidate, not deployed
+## Backend-server integration and deployment — completed
 
-November 15: source through `af7ef12` was merged with working checkpoint `a15e9cf`.
-The `lemmi-working-conversation-2026-11-15` tag and browser noise behavior are
-preserved. **545 tests / 13,380 expectations passed with zero skips/failures** on
-seven dedicated disposable PostgreSQL databases. Frozen Bun1.4.4 install,
-type/Svelte, build, formatting and whitespace passed; three preexisting photo-alt
-warnings remain. Six live Jev classification cases passed without a Telegram send.
+**Web/gateway `da95cc2` deployed at 19:04:31 UTC, November 15.** Integrated `af7ef12`
+with working checkpoint `a15e9cf`; retained the checkpoint tag and noise fix.
+545 tests/13,380 expectations passed without skips/failures on seven databases,
+plus type/build/format, production browser/API fixtures and six real Jev cases.
+Reviewed fixes cover pre-session Help, public route hooks, safe status wording,
+stale contact errors and known-unsent/authority outbox races. Migrations 007/008 and
+the exact proxy additions are installed. Speech/tunnel/models retained.
 
-Review fixed no-session Get help, live HTTP hook coverage, neutral trusted-contact
-copy for safe routing, stale contact-save error delivery, final pre-send authority
-cancellation including backup, and safe release of known-unsent work when the
-service stops. Conversation Stop retains already initiated contact requests.
-Production Chromium/TLS/WSS and managed-auth HTTP fixtures passed keyboard help
-before Start, deduplication, truthful sending/acceptance/failure, scoped actions,
-GET non-acknowledgment and access denials with zero capture/browser errors.
+Private configuration enables Alex only, primary recipient only, automatic alerts
+on. The user explicitly confirmed recipient opt-in and authorized two fictional
+sends. Isolated no-session manual Help and actual deployed public Jev/outbox each
+reached Telegram acceptance; **the user confirmed both arrived**. Only test-owned
+future attempts/fixtures were cleaned. Original profiles/credentials/photos are
+preserved. Backup/safe alternate are not configured; safeguarding never falls
+back to primary. Public contact paths enforce managed auth. The Telegram portal
+link still opens the existing dashboard, not a new request/acknowledgment UI.
+[Full observed evidence, scope and coordinated rollback](../backend-status.md#telegram-caregiver-contact-deployed--november-15-2026).
 
-The prepared Nginx configuration passes syntax validation but is not installed.
-Migrations007/008 and the matching web/gateway rollout still need the protected
-host release procedure. This server has no Telegram credentials yet; the user
-chose secure configuration and confirmation of an opted-in teammate recipient.
-Two fictional real-send checks remain required after that configuration. Earlier
-real-send statements below describe the source workstation, not this server.
-[Complete reviewed-candidate record](../backend-status.md#telegram-caregiver-contact-reviewed--candidate-ready-not-deployed).
+Original source-workstation instructions and historical verification follow.
+They do not supersede the deployed record above.
 
 Branch: `feat/telegram-caregiver-contact`. Persistent worktree:
 `/home/chaos/projects/Lemmi/.worktrees/telegram-caregiver-contact`.

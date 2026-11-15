@@ -1,5 +1,13 @@
 # Backend deployment branch
 
+Latest Telegram contact rollout: **web/gateway `da95cc2`**, November 15, 19:04:31 UTC.
+Migrations 007/008 applied; exact Help proxy resources validated/reloaded. Privately
+configured primary recipient and automatic alerts enabled for fictional Alex only;
+no backup/safe alternate. Speech `ea66280`/tunnel retained. Both authorized real
+tests arrived, confirmed by the user. Protected rollback pointer
+`.data/telegram-contact-rollback-path`; preserve contact/job data and uncertain
+sends during rollback. [Actual verification and remaining UI limits](backend-status.md#telegram-caregiver-contact-deployed--november-15-2026).
+
 Latest browser endpointing rollout: **web `405f5a3`**, November 15, 17:20:20 UTC.
 Gateway/local speech `ea66280`, tunnel, private settings and database retained.
 Pinned local Silero/ONNX dependencies added; no proxy/route/schema change.

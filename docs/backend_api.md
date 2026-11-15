@@ -1,51 +1,68 @@
 # Lemmi backend integration reference
 
-## Telegram caregiver contact reviewed — candidate ready, not deployed
+## Telegram caregiver contact deployed — November 15, 2026
 
-November 15, 2026. Integrated source `feat/telegram-caregiver-contact/af7ef12`
-with working browser release record `a15e9cf`; the existing
-`lemmi-working-conversation-2026-11-15` checkpoint tag is preserved. This reviewed
-candidate has **not** changed the running deployment. The independently authorized
-isolated manual-help rehearsal reached Telegram acceptance on this host. The browser noise fix remains included.
+**Web/gateway `da95cc2`**, integrating `feat/telegram-caregiver-contact/af7ef12`
+with working checkpoint `a15e9cf`; deployed at **19:04:31 UTC**. The original
+`lemmi-working-conversation-2026-11-15` tag is preserved, including local Silero
+noise endpointing. Speech `ea66280` and tunnel PIDs/start times retained; database
+and private media preserved. Applied additive migrations **007** and **008** and
+validated/reloaded only the exact Help resource additions in the installed Nginx
+allowlist. No reseed, dependency/model replacement, speech restart or firmware
+change. Protected source/build/private-config/database/media/identity backup:
+`.data/telegram-contact-rollback-path`.
 
-Independent host verification: **545 tests passed, zero skips/failures, 13,380
-expectations**, using seven dedicated disposable PostgreSQL databases. Bun 1.4.4
-frozen install, type/Svelte, production build, formatting and whitespace passed;
-three existing generic-photo-alt warnings remain. Six actual Jev classification
-cases passed with **zero Telegram messages**. Earlier source-workstation real
-manual/Jev sends are historical evidence, not acceptance of this server.
+The operator privately configured Telegram credentials, explicitly confirmed the
+recipient's opt-in, and authorized two fictional alerts. Configuration is enabled
+for **`profile-alex` only**, with automatic alerts on, one primary recipient, no
+backup and no safe alternate. Safeguarding cannot fall back to the ordinary
+recipient when a safe alternate is unavailable. Other profiles need explicit
+trusted enrollment/configuration; preview cards remain ineligible. Configuration
+and contact destinations are server-only and are not included here.
 
-Integration review fixed the primary Get help button before Start, the web
-security hook's new protected help routes, and neutral trusted-contact status
-wording for safe-alternate routing. Delayed contact-save failures are fenced from
-newer conversation authority. Invalid authority at the final pre-send check now
-cancels the request and future backup work. Stopping the service before known
-unsent network I/O releases that attempt to pending rather than inventing unknown
-delivery. Conversation Stop still does not cancel an initiated contact request.
+Both authorized real tests reached Telegram acceptance and **the user confirmed
+both arrived**: (1) manual Help with no conversation, through coordinator→durable
+request→sender in a disposable database; (2) the deployed public WSS→actual Jev
+classification→durable outbox→Telegram path on fictional Alex. The latter persisted
+`source=model`/`category=help_request` and left capture paused. Only those tests'
+future attempts were canceled; the public probe's own request and temporary
+enrollment were removed. No unrelated profile/contact/credential record changed;
+Alex's five saved photos and existing remembering setting matched the baseline.
+This external receipt confirmation does not set application acknowledgment or
+resolution, and Telegram acceptance alone still does not imply delivery/reading.
 
-Actual production Chromium over isolated TLS/WSS and managed-identity fixture
-HTTP passed: keyboard Get help without a conversation, duplicate coalescing,
-durable sending, honest accepted/failure wording, explicit authenticated POST
-acknowledgment/resolution, GET/link-preview non-acknowledgment, and missing outer
-gate/invalid identity/foreign caregiver/cross-profile denial. No capture or Start
-was requested, with zero browser errors or mobile overflow. Telegram responses
-were fixtures; no real notification was sent. Test-owned databases were cleaned.
+Independent host gate: **545 tests / 13,380 expectations, zero failures/skips**
+on seven new disposable PostgreSQL databases. Pinned Bun1.4.4 frozen install,
+type/Svelte, production build, formatting and whitespace passed; three preexisting
+generic-photo-alt warnings remain. Six live Jev positive/negative/classification
+checks passed without sends. Production Chromium with fixture Telegram and full
+TLS/WSS/managed-auth HTTP passed keyboard Help before Start, duplicate coalescing,
+durable sending, honest accepted/failure states, authorized POST acknowledgment/
+resolution, GET non-acknowledgment and missing-gate/invalid/foreign/cross-profile
+denials. Zero capture/Start requests, browser errors or mobile overflow. All test
+databases were removed. Actual public Help routes reach managed-auth denial401;
+internal/mock/private paths remain404. The postdeployment public noisy-browser
+check passed **1,385 ms end→submit**, **2,189 ms submit→real STT/model/TTS reply**,
+cold Start4,495 ms, one-origin model/runtime loads, continuation/mute/Stop and zero
+browser errors. Its unlisted fictional profile could not send notifications.
 
-Rollout requires additive migrations **007** and **008**, protected backups,
-matching web/gateway deployment, and the prepared Nginx help-route allowlist.
-Nginx syntax validation passed; its prepared configuration is not installed.
-Private Telegram credentials are configured. The user explicitly confirmed the
-opted-in teammate recipient and authorized two fictional test alerts. The first
-isolated real manual-help smoke reached Telegram acceptance; human receipt remains
-unconfirmed. Deployment and the second public Jev alert are still pending. The two
-fictional real-send checks and actual rollout remain pending that configuration;
-no missing credential or failed live request may become fixture success.
+Integration review also fixed: disabled pre-session Help, missing web-hook route
+coverage, safeguarding-safe trusted-contact wording, late contact-save errors
+canceling newer listening, invalid pre-send authority remaining falsely sending,
+and supervisor stop losing known-unsent work. Regressions cover these along with
+bounded429 retry, uncertain delivery without blind resend, recipient revocation,
+backup/safe routing, acknowledgment/cancel/expiry, restart and deletion races.
+Conversation Stop remains separate from canceling future contact attempts.
 
-Provider acceptance is separate from delivery, reading, acknowledgment and human
-arrival. Request-detail/acknowledgment UI remains a frontend handoff; the protected
-API exists. Safeguarding uses only the separately verified safe alternate and
-never falls back to the ordinary caregiver. No real-person, physical-device or
-unattended-care acceptance follows. [Handoff and remaining rollout steps](handoffs/telegram-caregiver-contact.md).
+Refresh/reconnect participant tabs and explicitly Start/Resume after restart.
+The Telegram link opens the caregiver dashboard; request-detail/acknowledgment UI
+is still a frontend handoff, while protected POST APIs work. Classification can
+miss/misclassify concerns; no emergency-monitoring/arrival guarantee or physical
+K151/human-microphone acceptance is claimed. Rollback must preserve current
+permissions, deletions, contacts and durable request data; disable sending and
+review pending/in-flight work before reverting application code, rather than
+blindly restoring an old database or replaying uncertain sends.
+[Exact configuration/contracts and handoff](handoffs/telegram-caregiver-contact.md).
 
 ## Browser noise endpointing deployed — November 15, 2026
 
