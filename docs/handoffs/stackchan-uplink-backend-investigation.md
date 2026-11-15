@@ -1,5 +1,67 @@
 # Stackchan microphone uplink: backend evidence and Emilia handoff
 
+## Controlled retest results
+
+November 15, 2026, **07:00:06–07:00:42 UTC**. Diagnostics remain enabled at
+user request. No disable, restart, reflash or further capture was performed.
+Robot remains stopped. **Do not repeat the identical attempt yet.**
+
+| Observation | Result |
+| --- | --- |
+| Gateway capture grant | 07:00:30.757396 UTC |
+| Emilia's capture interval | 07:00:30.899–07:00:34.315 UTC |
+| Accepted frames at 07:00:31.364 / 32.365 / 33.365 / 34.366 | 24 / 73 / 120 / 164 |
+| Final accepted frames | **164**, 104,960 PCM bytes / 3.28 seconds |
+| Last accepted frame | Approximately 07:00:34.170 UTC, inferred from monotonic frame age and journal timestamp |
+| Maximum accepted-frame gap | **121.281 ms** |
+| Maximum synchronous handler duration over connection | **2.283 ms** |
+| Rejected events / last error | **0 / null** |
+| Final received complete application messages/bytes | 181 / 207,088 |
+| Only gateway close | **07:00:38.371418 UTC**, code1001, **Heartbeat timeout** |
+
+Emilia reported `reason=6 status=2 result=0 bytes=0 send_max_ms=109
+capture_sent=167`, disconnect07:00:34.519, Wi-Fi status3/reason0,
+local Stop07:00:38.370 and no reply frames. The later gateway heartbeat close
+cannot explain the earlier reported device send failure. Its near coincidence
+with local Stop does not prove Stop caused it; no input.stop reached the
+connection. No rate-limit, validation, revision or application-backpressure
+rejection was recorded. No capture-end arrived, so there was no accepted
+Finished to start recognition/reply generation. Absence of replies is consistent
+with the interrupted capture.
+
+The **three-frame difference** between167 completed firmware writes and164
+accepted frames is unlocalized. A completed write is not a TCP ACK; gateway
+counts require complete WS messages. Unpropagated/incomplete TLS/WS/tunnel data
+cannot be distinguished here. Do not call this three lost packets. Cross-host
+clock synchronization/serial-observer latency was not independently measured.
+
+Socket evidence:73 successful snapshots cover the window; the four correlated
+socket directions appear in64 snapshots. Proxy/gateway receiving sockets had
+Recv-Q0/Send-Q0 throughout their samples. Forwarding sockets briefly showed
+Send-Q3,744/3,747 bytes around07:00:32.178/32.687 while ACK counters advanced,
+then drained to0. Both receivers reached209,227 TCP bytes by07:00:34.221 and
+stayed there until the later close. No retransmission field was reported in
+these selected samples. **No growing local origin backlog was observed**;
+500ms sampling can miss shorter stalls, including109ms, and these loopback
+sockets do not measure robot-to-Cloudflare RTT/ACK delay/loss. Other
+web/speech/tunnel journals had no entries in the attempt window. Four services
+remained active; gateway zero automatic restarts.
+
+**Next step:** first arrange payload-free observation of the actual robot-facing
+flow at the router/AP, or supported device counters separating socket writability
+from TLS retry behavior. Then agree one new UTC-marked attempt. Preserve TLS,
+auth, immediate Stop/mute and revisions. Do not change buffer/time limits or
+media format from this origin-only result. If that observation is unavailable,
+a synthetic sender on Emilia's same network, using its own explicitly enrolled
+fictional profile/endpoint, can provide a comparative baseline; it cannot prove
+ESP32 behavior and must not take over Alex. No further test was initiated.
+
+The local metadata sampler retains its original automatic end around07:23:55UTC;
+gateway diagnostics remain enabled. Protected content-free evidence is under
+`.data/investigations/stackchan-uplink-20261115T070006Z/` (allowlisted gateway
+records, socket window and numeric summary). No packet/audio/header capture.
+This correlation is not new software or successful physical voice acceptance.
+
 ## Diagnostic deployment — November 15, 2026
 
 **Enabled on the shared backend for `stackchan-alex` only.** Gateway runtime

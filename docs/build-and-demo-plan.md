@@ -1035,3 +1035,19 @@ TCP metadata sampler is bounded to 30 minutes; it cannot measure robot-facing AC
 Protected previous source/config/build and a dry-run-checked one-setting disable
 helper are prepared. Emilia's single UTC-marked local Speak/Stop attempt,
 correlation and later actual disablement remain pending. [Rollout/retest/rollback](handoffs/stackchan-uplink-backend-investigation.md#diagnostic-deployment--november-15-2026).
+
+
+### Stackchan controlled attempt correlation — November 15, 2026
+
+Controlled Stackchan attempt correlated, November15 07:00:06–07:00:42UTC:
+gateway accepted164 frames with zero rejected events, max frame gap121.281ms,
+max synchronous handler2.283ms. Firmware reported167 completed writes and109ms
+bounded-write timeout; the difference is unlocalized, not proof of packet loss.
+Only gateway close was1001/Heartbeat timeout at07:00:38.371UTC, after device
+failure/disconnect. No capture-end or reply. Sampled local receive queues were
+empty; small forwarding queues drained while ACK counters advanced. No growing
+origin backlog observed, but500ms samples cannot exclude short stalls or measure
+robot-facing TLS ACKs. Four services active, gateway zero automatic restarts.
+**User explicitly requested diagnostics stay enabled**; no disable, restart,
+reflash or further capture. Do not repeat the same test without new robot/AP
+TCP/TLS evidence. [Exact correlation and next diagnostic decision](handoffs/stackchan-uplink-backend-investigation.md#controlled-retest-results).
