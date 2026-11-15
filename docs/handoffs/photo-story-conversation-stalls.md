@@ -1,7 +1,7 @@
 # Photo Story and conversation stall fixes
 
 November 15, 2026. Source branch: `fix/photo-story-conversation-stalls`.
-**Completion status: implementation complete; combined verification in progress.**
+**Completion status: complete, verified locally and published; not deployed.**
 This is a source handoff for the backend-server agent. This session has not deployed,
 restarted or reconfigured the backend host.
 
@@ -59,16 +59,23 @@ worker counts, German mapping, credentials, saved photos, memory permissions and
 notification behavior require no changes. Retain existing Nginx UUID-photo and
 branding allowlists; this branch adds no proxy requirement beyond its merged base.
 
-## Verification status
+## Verification results
 
-Before the latest upstream integration: pinned Bun 1.4.4 frozen install; **461 tests,
-6,787 expectations, zero failures/skips**, using five disposable PostgreSQL databases.
-The suite includes a 30-turn paced gateway/browser-controller fixture crossing spoken
-Photo Story entry and exit, canceled recognition/model/synthesis, honest model-photo
-offers, Quiet/unavailable boundaries, and current-failure visibility. Production
-HTTP/certificate-verified TLS/WSS/private-PNG participant smoke passed on a separate
-sixth disposable database. Type/Svelte, build, formatting and whitespace passed.
-Python speech boundaries: **15 passed**, with fake engines.
+Final combined source through integration `0bcc44d`, including upstream
+`backend-deploy/435b73a`, passed with pinned Bun **1.4.4**:
+
+- `bun install --frozen-lockfile`; manifests and Bun lockfile unchanged.
+- `bun run check`: zero Svelte errors/warnings and no TypeScript errors.
+- `bun run test`: **473 passed, zero failed/skipped, 6,867 expectations in 58 files**,
+  using five new disposable PostgreSQL databases. The suite includes a 30-turn
+  paced gateway/browser-controller fixture crossing spoken Photo Story entry/exit,
+  canceled recognition/model/synthesis, honest model-photo offers, Quiet/unavailable
+  boundaries and current-failure visibility.
+- `bun run build`, `bun run format:check`, and `git diff --check` passed.
+- `bun run smoke:participant`: production HTTP/certificate-verified TLS/WSS,
+  private-PNG authorization, opening/Stop and retained branding checks passed on a
+  separate sixth disposable database.
+- Python speech boundaries: **15 passed**, with fake engines.
 
 Chromium rendered landscape/portrait fixtures at 1280×900, 390×844 and 390×650;
 image containment, failed image → Pause, and keyboard retry without Resume/capture
@@ -77,7 +84,14 @@ passed, with no runtime errors. The reusable fixture harness is
 and images. The endurance test uses the real gateway/controller with fixture speech
 and consumed receipts; it does not exercise a physical microphone/speaker.
 
-Combined verification after `0bcc44d`: **in progress; update this section before release**.
+The temporary database cluster was stopped after verification. Early sandbox runs
+could not open fixture sockets or write build-worker output; allowed reruns passed.
+The synthesis-cancellation fixture was corrected to release its simulated engine
+slot before Resume, preserving the scheduler's bounded concurrency contract.
+No production configuration or data was used. Local logs are
+`/tmp/lemmi-backend-issues-verify-41dffslv/{tests,smoke}.log` and
+`/tmp/lemmi-backend-issues-merged-{check,build,format,python,ui}.log`.
+These are local evidence paths, not deployment prerequisites.
 
 ## Backend-server agent instructions
 
