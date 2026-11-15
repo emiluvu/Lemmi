@@ -1,5 +1,122 @@
 # Lemmi backend integration reference
 
+## Lemmi branding deployed — November 15, 2026
+
+**Web runtime `f3f5199`**, gateway `5146030`, speech/tunnel retained.
+Integrated `e1a5bf9` with the current participant release while retaining scoped
+saved-photo smoke checks. Changes are supplied logo/favicon, route titles and
+metadata, plus exactly `/favicon.svg` and `/images/brand/lemmi.png` in the static
+proxy allowlist. PNG SHA-256 and embedded favicon bytes match the documented
+source; no artwork regeneration, avatar, gateway, schema or dependency change.
+
+Bun 1.4.4 frozen install, type/Svelte, build, formatting and whitespace passed.
+Existing page/access/exit/presentation tests: **16 passed / 159 expectations**.
+Production HTTP/verified TLS/WSS/private-photo and branding-asset MIME smoke
+passed on one disposable PostgreSQL database, removed afterward. The preceding
+backend release's 462-test suite was not rerun for this UI/static-only slice.
+Chromium with the candidate production build passed desktop/mobile logo bounds,
+route titles/metadata, menu keyboard/Escape, no overflow or runtime errors, and
+32px favicon decode with 626 opaque pixels. These used a separate mock browser;
+its navigation lock was isolated between page inspections. No profile/session
+writes, microphone, screenshots or hardware tests.
+
+Web-only rollout at **10:05:17 UTC**; Nginx `-t` passed and the installed proxy
+reloaded with only the two exact static additions. Gateway/speech/tunnel PID and
+start state and private `.env` hash were unchanged. All four services active,
+zero automatic restarts. Protected prior source/build/proxy/runtime record:
+`.data/branding-rollback-path`. No database migration or profile/credential write.
+
+Actual public HTTPS Chromium at desktop/mobile passed byte-exact PNG, expected
+PNG/SVG MIME, a painted 32px favicon (626 opaque pixels), caregiver/settings
+titles and global metadata, keyboard menu/Escape and no overflow/runtime errors.
+The unassigned participant entry correctly redirected to caregiver setup; no
+profile was enrolled to bypass that behavior. Tests waited for hydration and
+isolated only their disposable browser's navigation cookie between pages.
+Unlisted brand files/README, favicon suffixes, `.env`, internal and mock paths
+remained 404. No public screenshots, microphone, profile/session writes or
+hardware acceptance. Reload/reopen the tab if the favicon is cached.
+
+The reviewed source and this acceptance record are synchronized to `main` and
+`backend-deploy` by fast-forward; the deployment checkout stays `backend-deploy`.
+Earlier unspecified bugs and physical K151/audio acceptance remain open.
+
+## Participant greetings, teaching choices and Finish deployed — November 15, 2026
+
+Reviewed handoff `1037fe1` against the newer deployed startup-recovery and
+saved-photo releases. **Web/gateway runtime `5146030`**, integrating tested
+source `ded171f` and the concurrent documentation-only handoff `8f1453e`.
+Rolled out together at **09:39:52 UTC**; speech `a779c70` and tunnel retained.
+The direct merge would launch two Start speech jobs. Retained the existing
+revision-checked `speakSessionPrompt` path and browser opening/Resume state
+machine, with the requested short fixed English/German introduction. Kept
+failed-profile Retry, exact profile language, saved-photo scope and same-picture
+Resume. Added typed eligible teaching choices, deliberate selection and visible
+Finish; a paused Photo Story can finish without releasing its pause.
+
+Review also bounded unselected-menu text receipts at the existing 256-turn limit
+(Stop still bypasses capacity), and reserved mobile status space after Chromium
+measured a five-pixel caption shift. No migration, dependency, provider/model,
+private configuration, notification, firmware or credential replacement.
+
+Pinned Bun 1.4.4 frozen install, type/Svelte, formatting/whitespace and isolated
+production build passed. **462 tests / 6,784 expectations, zero failures/skips**
+used five newly created disposable PostgreSQL databases, removed after testing.
+Production HTTP/certificate-verified TLS/WSS participant/private-photo smoke
+passed on another disposable database. Initial saved test URLs pointed to a
+retired listener; rerun used the current database server with new test databases.
+Sandbox socket/build-worker restrictions required escalation, not code fallback.
+
+Actual Chromium with the candidate production build and isolated gateway/database
+passed desktop 1280×900, mobile 390×844 and 390×650: mounted captions stable
+through synthetic speaking/waiting changes, keyboard teaching selection/Finish,
+visible 48px Finish, no horizontal overflow, paused photo Finish, failed startup
+Retry without Start/capture, contained photos, image failure Pause and retry
+without Resume/capture, and Stop. Fresh profiles correctly had no eligible topics;
+only the test's own fictional profile received reviewed topic IDs. The harness's
+initial injected sequence zero correctly closed its connection; corrected the
+fixture to preserve monotonic sequences. Zero browser runtime errors; capture
+and playback disabled, no screenshots, microphone or recordings. Real human
+speech/speaker quality and physical K151 controls remain unrun.
+
+Actual public HTTPS Chromium repeated the same three-viewport checks on its
+own newly created/enrolled fictional profile: keyboard topic choice and Finish,
+paused Photo Story Finish, stable caption placement, initial 503 → Retry with
+zero Start/capture, photo failure Pause/retry and Stop passed. Zero runtime
+errors; no screenshots/audio retained. Actual public robot-protocol WSS with
+real local TTS passed short fixed Start greeting **once** despite duplicate Start,
+simulated consumed receipts, negotiated 12-frame output, eligible spoken topic
+menu, Finish cancellation and late-receipt denial. No microphone capture,
+external-model quality or physical K151 acceptance is implied.
+
+Source/build/private-configuration/database backup is recorded by protected
+`.data/participant-greetings-rollback-path`. No migration/proxy/configuration or
+provider change. Restarted only web/gateway; all four services active with zero
+automatic restarts. Speech/tunnel PID/start state and private configuration
+matched the baseline. After release/deletion of only the probes' own fixtures,
+all original profile rows, endpoint assignments and credential fingerprints
+matched the predeployment baseline; Alex's five saved photos remain intact.
+Retain current permissions/deletions/data during rollback; do not blindly restore
+the database snapshot. Transport diagnostics remain off; robot uplink remains
+unresolved. Refresh/reconnect and explicitly Start before participant testing.
+Prior unspecified user-reported bugs remain open; these checks do not establish
+complete user acceptance. Kylie/Lukas/Emilia still own actual-device UI/content,
+human audio and hardware rehearsal at their respective boundaries.
+
+## Earlier handoff — additional bugs unresolved
+
+November 15, 2026: user reports that bugs still remain after the conversation
+startup recovery rollout. Exact remaining symptoms/reproduction are not yet
+specified; defer investigation to the user's next debugging session. Do not
+treat the successful fixture/browser checks below as complete user acceptance
+or claim the original incident is fully resolved.
+
+Current deployed revisions: **web `9b218b9`, gateway `c44f092`, speech `a779c70`**.
+Recovery source and earlier deployment records were pushed in `2d15004`.
+Stackchan transport diagnostics are off; evidence and rollback pointers remain
+saved. No further code change, deployment, restart or test was performed for
+this final handoff. Next session should reproduce the user's remaining bugs
+against these exact revisions before choosing another fix.
+
 ## Conversation startup recovery deployed — November 15, 2026
 
 **Web runtime `9b218b9`**, gateway `c44f092` and speech/tunnel retained.
@@ -880,3 +997,7 @@ only the conversation lock cookie, not endpoint credentials or the domain gate.
 The production proxy allowlist includes both exact operations.
 No database migration. Cookie removal/browser administration is outside this
 navigation barrier; private caregiver authorization remains separate.
+
+## Participant greeting/topic-choice contract — deployed in `5146030`
+
+The shared device contract adds `input.teaching.select` with `{entityId}`. Teaching snapshots optionally include up to three server-filtered `choices` and `choosingTopic`; public teaching starts first offer a spoken/visible menu. Existing session generations, owner/profile scope, policy checks and cancellation apply. New voice sessions play an application-owned greeting before browser capture; pause/resume/reconnect do not replay it. No route or migration changes. `activity.leave` can close a paused Photo Story while preserving the pause. [Exact behavior, compatibility and validation](handoffs/participant-greetings-exit.md).

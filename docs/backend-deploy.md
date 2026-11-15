@@ -1,5 +1,17 @@
 # Backend deployment branch
 
+Latest branding rollout: **web `f3f5199`**, gateway `5146030`, November 15,
+10:05:17 UTC. Web-only restart; installed Nginx `-t` and reload passed for exactly
+`/favicon.svg` and `/images/brand/lemmi.png`. Gateway/speech/tunnel retained.
+[Public asset/browser acceptance and rollback](backend-status.md).
+
+Latest reviewed participant release: **web/gateway `5146030`**, November 15,
+09:39:52 UTC. Eligible spoken/visible teaching choices, Finish, stable mobile
+captions and short English/German Start greeting reuse the deployed opening and
+Resume authority. No migration/configuration/proxy change; only web/gateway
+restarted. [Actual checks, prior open issues and rollback](backend-status.md).
+Earlier runtime descriptions below are historical checkpoints.
+
 Latest UI/backend runtime **`95bdcef`** adds reviewed spoken mode selection, fictional name/avatar updates, and the exit keypad. Keep a private independent four-digit `LEMMI_CAREGIVER_EXIT_PASSWORD`; no live default. Exact proxy routes `profile-update`, `conversation-lock`, `conversation-exit` are installed. No new migration or existing key change; speech remains CPU 2+2/HFC and decisions off. [Latest release and rollback](backend-status.md#conversation-ui-and-spoken-modes-deployed--november-14-2026).
 
 Current host: gateway/private speech `c594130`, web `12a1e47`. Migration `005_conversation_redirects.sql` is applied. CPU speech uses two STT/two TTS workers and HFC female medium; match gateway/wrapper worker counts. Semantic decisions and CUDA remain disabled after observed evaluation/initialization failures. Keep the shared checkout on `backend-deploy`. [Latest acceptance/configuration/rollback](backend-status.md#integrated-backend-release--november-14-2026), [integration handoff](handoffs/backend-integration-2026-11-14.md). Earlier deployment snapshots below retain historical limitations.

@@ -363,7 +363,7 @@ for (const preset of ['guided', 'quiet'] as const)
         expect(result.data.reply.text).toContain(
           resume ? 'Wir sind wieder' : 'Hallo, ich bin Lemmi',
         );
-        expect(result.data.reply.text.includes('?')).toBe(preset !== 'quiet');
+        expect(result.data.reply.text.includes('?')).toBe(resume && preset !== 'quiet');
         expect(f.de.snapshot()?.phase).toBe('waiting');
         expect(f.de.snapshot()?.captureGrant).toBeNull();
         expect(JSON.stringify(f.de.persistenceSnapshot())).not.toContain(result.data.reply.text);

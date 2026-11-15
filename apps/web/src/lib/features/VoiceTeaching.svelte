@@ -125,9 +125,9 @@
       client.command('start');
     }
   }
-  function control(type: string) {
+  function control(type: string, payload?: Record<string, unknown>) {
     startup = null;
-    client.command(type.replace(/^input\./, ''));
+    client.command(type.replace(/^input\./, ''), payload);
   }
 </script>
 
@@ -144,7 +144,7 @@
       thinking={voice.session?.phase === 'processing'}
     />
   </div>
-  {#if voice.playing && voice.reply}<SpeechBubble text={voice.reply} />{/if}
+  <div class="voice-caption" class:empty={!voice.reply}><SpeechBubble text={voice.reply} /></div>
   <p class="disclosure">
     {wording('Fictional', 'Fiktives Profil')}
     {profile?.preferredName ?? 'Alex'} · {wording('English voice demo', 'Deutsches Gespräch')} · {wording(
@@ -238,6 +238,12 @@
 </section>
 
 <style>
+  .voice-caption {
+    min-height: 112px;
+  }
+  .voice-caption.empty {
+    visibility: hidden;
+  }
   .voice-teaching {
     max-width: 760px;
     margin: auto;

@@ -29,6 +29,11 @@ export const TeachingSnapshotSchema = z.strictObject({
   revision: RevisionSchema,
   policyRevision: RevisionSchema,
   phase: z.enum(['ready', 'listening', 'processing', 'paused', 'unavailable']),
+  choices: z
+    .array(z.strictObject({ entityId: IdSchema, label: z.string().max(80) }))
+    .max(3)
+    .optional(),
+  choosingTopic: z.boolean().optional(),
 });
 export const SessionSnapshotSchema = z
   .strictObject({
@@ -67,7 +72,6 @@ export const SessionActionSchema = z.discriminatedUnion('type', [
       'stop',
       'speak',
       'turn_end',
-      'teaching.start',
       'teaching.next',
       'teaching.not_sure',
       'teaching.finish',
@@ -75,6 +79,8 @@ export const SessionActionSchema = z.discriminatedUnion('type', [
       'teaching.avoid',
     ]),
   }),
+  z.strictObject({ type: z.literal('teaching.start'), offerChoices: z.boolean().optional() }),
+  z.strictObject({ type: z.literal('teaching.select'), entityId: IdSchema }),
   z.strictObject({ type: z.literal('mute'), muted: z.boolean() }),
   z.strictObject({ type: z.literal('handoff'), endpoint: EndpointSchema }),
 ]);

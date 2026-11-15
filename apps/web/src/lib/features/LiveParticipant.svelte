@@ -64,8 +64,11 @@
   let outputAfterGeneration: number | null = null;
   let listening = $state(false);
   let speaking = $state(false);
+  const visibleReply = $derived(reply || session?.teaching?.prompt || '');
+  const activityActive = $derived(!!session?.teaching || (!!photo && photo.phase !== 'ended'));
   let conversationEnabled = $state(false);
-  let audio: BrowserAudio | null = null;
+  let audio = $state<BrowserAudio | null>(null);
+  const avatarTalking = $derived(speaking || (session?.phase === 'speaking' && !!audio?.hasOutput));
   let conversation: BrowserConversation | null = null;
   let connectionEpoch = 0;
   let connection: ParticipantConnection | null = null;
@@ -228,7 +231,13 @@
     const preserveCaption = type === 'input.mute' && (speaking || !!audio?.hasOutput);
     if (!preserveCaption) clearConversation();
     const requestsOutput =
-      type.startsWith('input.teaching.') ||
+      [
+        'input.teaching.start',
+        'input.teaching.select',
+        'input.teaching.next',
+        'input.teaching.not_sure',
+        'input.teaching.avoid',
+      ].includes(type) ||
       type === 'input.start' ||
       type === 'input.resume' ||
       type === 'input.photo.start' ||
@@ -260,6 +269,10 @@
       expectedRevision: photo.revision,
       action,
     });
+  }
+  function finishActivity() {
+    if (session?.teaching) control('input.teaching.finish');
+    else photoAction({ type: 'activity.leave' });
   }
   function connect() {
     const epoch = ++connectionEpoch;
@@ -580,7 +593,7 @@
   lang={language}
   class="conversation-screen"
   class:photo-story={!!photo && photo.phase !== 'ended'}
-  class:captioning={speaking && !!(reply || session?.teaching?.prompt)}
+  class:has-activity={activityActive}
   aria-labelledby="conversation-title"
 >
   <h1 id="conversation-title" class="sr-only">
@@ -618,7 +631,7 @@
           <AvatarArt
             avatarId={currentProfile.avatarId}
             animated
-            talking={speaking}
+            talking={avatarTalking}
             thinking={session?.phase === 'processing'}
           />
         {:else}<p role="status">
@@ -630,17 +643,11 @@
                 )}
           </p>{/if}
       </div>
-      <div class="caption-anchor">
-        {#if (speaking || (photo && photo.phase !== 'ended')) && (reply || session?.teaching?.prompt)}
-          <SpeechBubble
-            text={reply || session?.teaching?.prompt || ''}
-            side
-            readFull={() => replyDialog.showModal()}
-          />
-        {/if}
+      <div class="caption-anchor" class:empty={!visibleReply}>
+        <SpeechBubble text={visibleReply} side readFull={() => replyDialog.showModal()} />
       </div>
     </div>
-    <h2 class:sr-only={speaking}>
+    <h2>
       {german && listening
         ? 'Ich höre zu'
         : german && session?.phase === 'processing'
@@ -702,7 +709,7 @@
       </div>
     {/if}
   </div>
-  <div class="conversation-panel" class:has-reply={!!(reply || session?.teaching?.prompt)}>
+  <div class="conversation-panel">
     {#if assignment}
       {#if !connected && !preview}<p role="status">
           {wording('Connection unavailable.', 'Die Verbindung ist nicht verfügbar.')}
@@ -727,31 +734,39 @@
             Wir können auf Deutsch miteinander sprechen. Aktivitäten auf Deutsch sind noch nicht
             verfügbar.
           </p>
-        {:else}<ActivityVoicePhrases
+        {:else if !activityActive}<ActivityVoicePhrases
             teaching={teachingAvailable}
             photos={photoAvailable}
             voice={!preview && speechAvailable}
             compact
           />{/if}
         {#if session.teaching}<p class="active-mode">
-            Teach Lemmi · {session.teaching.topicLabel ?? 'No eligible topics'}
-          </p>{/if}
+            Teach Lemmi · {session.teaching.choosingTopic
+              ? 'Choose a topic'
+              : (session.teaching.topicLabel ?? 'No eligible topics')}
+          </p>
+          <div class="topic-choices" aria-label="Teaching topics">
+            {#each session.teaching.choices ?? [] as choice (choice.entityId)}
+              <button
+                onclick={() => control('input.teaching.select', { entityId: choice.entityId })}
+                disabled={!connected ||
+                  session.phase === 'paused' ||
+                  session.teaching.phase === 'unavailable'}
+                aria-pressed={session.teaching.entityId === choice.entityId}>{choice.label}</button
+              >
+            {/each}
+          </div>
+        {/if}
         {#if photo && photo.phase !== 'ended'}<p class="active-mode">
             Photo Story · Say “Next photo” or “Back to conversation”.
           </p>{/if}
-        {@const visibleReply = reply || session.teaching?.prompt || ''}
-        {#if visibleReply && !speaking && (!photo || photo.phase === 'ended')}<p
-            class="reply"
-            aria-live="polite"
+        {#if activityActive}<button
+            class="finish-activity"
+            onclick={finishActivity}
+            disabled={!connected}
           >
-            {visibleReply.length > 120 ? visibleReply.slice(0, 120) + '…' : visibleReply}
-          </p>
-          {#if visibleReply.length > 70}<button
-              class="text-button"
-              onclick={() => replyDialog.showModal()}
-              >{wording('Read full reply', 'Ganze Antwort lesen')}</button
-            >{/if}
-        {/if}
+            {wording('Finish activity', 'Aktivität beenden')}
+          </button>{/if}
       {/if}
     {:else if demoEnrollment}
       {#if setupState === 'loading'}
@@ -957,11 +972,11 @@
     z-index: 10;
     height: 100dvh;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: safe center;
     gap: 12px;
     padding: 52px 20px 16px;
     background:
@@ -970,6 +985,7 @@
     color: #22331f;
   }
   .companion-scene {
+    flex: none;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -986,6 +1002,38 @@
     top: 8%;
     width: min(320px, 30vw);
     z-index: 1;
+  }
+  .caption-anchor.empty {
+    visibility: hidden;
+  }
+  .topic-choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .topic-choices button,
+  .finish-activity {
+    min-height: 48px;
+    margin: 0;
+    padding: 10px 18px;
+    font-size: 20px;
+  }
+  .finish-activity {
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    width: max-content;
+    max-width: calc(100vw - 40px);
+    border: 2px solid #526b43;
+    background: #fffdf7;
+    color: #22331f;
+    box-shadow: 0 4px 16px #263b2126;
+  }
+  .conversation-screen.has-activity {
+    padding-bottom: 84px;
   }
   .scene-art {
     width: min(360px, 68vw, 40dvh);
@@ -1008,6 +1056,7 @@
     text-align: center;
   }
   .conversation-panel {
+    flex: none;
     width: min(620px, 100%);
     min-height: 0;
     display: flex;
@@ -1031,23 +1080,9 @@
     font-size: 16px;
     font-weight: 700;
   }
-  .reply {
-    font-size: 19px;
-    line-height: 1.35;
-    display: -webkit-box;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
   .connection-message {
     font-size: 12px;
     line-height: 1.3;
-  }
-  .text-button {
-    min-height: 44px;
-    padding: 8px;
-    background: #fffdf7;
   }
   .conversation-controls {
     display: grid;
@@ -1093,10 +1128,6 @@
     margin: 12px 0;
     font: inherit;
   }
-  .has-reply :global(.activity-phrases h2),
-  .has-reply :global(.activity-phrases .helper) {
-    display: none;
-  }
   .photo-story {
     justify-content: flex-start;
     padding-top: 80px;
@@ -1124,6 +1155,14 @@
     overflow: auto;
   }
   @media (max-width: 800px) {
+    .capture-state {
+      min-height: 72px;
+      line-height: 20px;
+    }
+    .topic-choices button {
+      font-size: 18px;
+      padding: 8px 12px;
+    }
     .scene-portrait {
       display: flex;
       flex-direction: column;
@@ -1137,10 +1176,11 @@
       width: min(440px, calc(100vw - 40px));
       height: 130px;
       overflow: auto;
+      min-height: 112px;
     }
-    .captioning .conversation-panel :global(.activity-phrases h2),
-    .captioning .conversation-panel :global(.activity-phrases .helper) {
-      display: none;
+    .scene-portrait .scene-art {
+      width: min(220px, 52vw, 24dvh);
+      height: min(220px, 52vw, 24dvh);
     }
   }
   @media (max-height: 700px) {
@@ -1162,9 +1202,6 @@
     }
     .conversation-panel :global(.activity-phrases h2) {
       font-size: 20px;
-    }
-    .reply {
-      font-size: 17px;
     }
   }
   @media (max-height: 500px) {
@@ -1189,7 +1226,7 @@
       display: none;
     }
     .capture-state {
-      min-height: 36px;
+      min-height: 72px;
       padding: 4px;
     }
   }

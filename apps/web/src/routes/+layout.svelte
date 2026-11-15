@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../styles.css';
   import UIIcon from '#lib/features/UIIcon.svelte';
+  import BrandLogo from '#lib/features/BrandLogo.svelte';
   import { page } from '$app/state';
   import { caregiverAppearanceKey, type CaregiverAppearance } from '#lib/caregiver-appearance.ts';
   import { setContext, onDestroy } from 'svelte';
@@ -115,16 +116,21 @@
 
 <svelte:head
   ><title
-    >{page.url.pathname.startsWith('/participant')
+    >{conversationScreen
       ? 'Lemmi — your companion'
-      : 'Lemmi — caregiver workspace'}</title
+      : page.url.pathname.startsWith('/caregiver')
+        ? 'Lemmi — caregiver workspace'
+        : 'Lemmi — a little company'}</title
   ><link
     rel="preload"
     href="/fonts/nunito-latin-variable.ttf"
     as="font"
     type="font/ttf"
     crossorigin="anonymous"
-  /><meta name="description" content="Lemmi local mock development starter" /></svelte:head
+  /><meta
+    name="description"
+    content="Lemmi — a companion for familiar conversation, enjoyable activities, and caregiver continuity."
+  /></svelte:head
 >
 {#if data.photoStoryRehearsal && !conversationScreen}<p class="notice">
     LOCAL PHOTO STORY REHEARSAL · Explicit microphone capture · No saved speech or real
@@ -145,26 +151,7 @@
       <UIIcon name={drawerOpen ? 'close' : 'menu'} /><span class="menu-label">Menu</span>
     </button>
     <div class="app-wordmark" aria-label="Lemmi">
-      <svg aria-hidden="true" width="30" height="32" viewBox="0 0 30 32" fill="none">
-        <path
-          d="M15 25C4 24 2 16 3 10c10 0 16 6 12 15Z"
-          fill="#d3dcba"
-          stroke="#697e4d"
-          stroke-width="1.5"
-        />
-        <path
-          d="M16 21C12 10 18 3 27 2c2 10-2 17-11 19Z"
-          fill="#b9cb93"
-          stroke="#697e4d"
-          stroke-width="1.5"
-        />
-        <path
-          d="m8 16 12 14m-4-10 7-12"
-          stroke="#697e4d"
-          stroke-width="1.5"
-          stroke-linecap="round"
-        />
-      </svg>
+      <BrandLogo />
       <span>Lemmi</span>
     </div>
     <span class="workspace-label">A little company.<br /><strong>A familiar rhythm.</strong></span>
