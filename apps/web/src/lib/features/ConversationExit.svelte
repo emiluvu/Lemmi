@@ -33,6 +33,9 @@
     if (!dialog.open) dialog.showModal();
     input?.focus();
   }
+  export function isOpen() {
+    return !!dialog?.open;
+  }
   function updatePasscode(value: string) {
     if (busy) return;
     password = value.replace(/\D/g, '').slice(0, 4);

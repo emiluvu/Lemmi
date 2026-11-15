@@ -14,6 +14,8 @@ export interface BrowserAudioOptions {
   loadDetector?: () => Promise<VoiceDetector>;
   now?: () => number;
   onTiming?: (timing: BrowserSpeechTiming) => void;
+  onSubmitted?: (session: SessionSnapshot) => void;
+  onPlaybackCompleted?: (session: SessionSnapshot) => void;
 }
 
 // Transient browser PCM only. Every capture begins with a user gesture and a server grant.
@@ -78,6 +80,20 @@ export class BrowserAudio {
     try {
       this.options.onTiming?.(timing);
     } catch {}
+  }
+  get hasOutput() {
+    return this.output !== null;
+  }
+  async prepare(): Promise<boolean> {
+    try {
+      this.context ??= new AudioContext();
+      const context = this.context;
+      await context.resume();
+      return this.context === context && context.state === 'running';
+    } catch {
+      this.error('Browser sound is unavailable. Check permissions or choose Type instead.');
+      return false;
+    }
   }
   async speak() {
     this.cancelInput();
@@ -241,10 +257,12 @@ export class BrowserAudio {
   }
   finish(reason: 'manual' | 'silence' | 'limit' = 'manual') {
     const grant = this.grant;
+    const token = this.captureToken;
     const count = this.chunks;
     const durationMs = Math.max(0, Math.round(this.now() - this.captureBegan));
     this.cancelInput();
     if (grant && count) {
+      if (token) this.options.onSubmitted?.(token);
       const sent = this.connection.send(
         'audio.end',
         { leaseId: grant.leaseId, streamId: grant.streamId, chunkCount: count },
@@ -326,6 +344,7 @@ export class BrowserAudio {
       if (this.playbackTimer) clearInterval(this.playbackTimer);
       this.playbackTimer = null;
       this.syncPlayback();
+      this.options.onPlaybackCompleted?.(output.token);
     }
   }
   private sameAuthority(token: SessionSnapshot, session: SessionSnapshot) {
