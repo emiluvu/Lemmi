@@ -8,9 +8,15 @@ import {
   type SessionSnapshot,
 } from '@lemmi/contracts';
 import type { ChatAdapter, SpeechAdapters } from '@lemmi/server';
+import type { TransportDiagnostic } from '../apps/realtime/src/transport-diagnostics';
 
 async function device(
-  options: { speech?: SpeechAdapters; chat?: ChatAdapter; negotiate?: boolean } = {},
+  options: {
+    speech?: SpeechAdapters;
+    chat?: ChatAdapter;
+    negotiate?: boolean;
+    transportDiagnostics?: { deviceId: string; emit: (observation: TransportDiagnostic) => void };
+  } = {},
 ) {
   const internal = crypto.randomUUID(),
     accessKey = crypto.randomUUID();
@@ -20,6 +26,7 @@ async function device(
     internalToken: internal,
     accessKey,
     port: 0,
+    transportDiagnostics: options.transportDiagnostics,
     chatAdapter: options.chat ?? {
       async complete() {
         return ok({ text: 'We can enjoy the garden.', language: 'en' });
@@ -641,6 +648,165 @@ test('an explicit pause flushes already approved fixed output and rejects its ob
     );
     expect(d.session().phase).toBe('paused');
     expect(d.session().captureGrant).toBeNull();
+  } finally {
+    d.close();
+  }
+});
+
+test('selected transport diagnostics observe accepted uplink, mute cancellation and peer close without content', async () => {
+  const observations: TransportDiagnostic[] = [];
+  const d = await device({
+    transportDiagnostics: { deviceId: 'stackchan-alex', emit: (o) => observations.push(o) },
+  });
+  try {
+    const input = await d.capture();
+    await d.until(() =>
+      d.events.some((e) => e.type === 'state.changed' && e.payload.session?.phase === 'listening'),
+    );
+    await Bun.sleep(30);
+    d.send('input.mute', { muted: true });
+    await d.until(() => d.session().micMuted);
+    input.finish();
+    await d.until(() =>
+      d.events.some((e) => e.type === 'error' && e.payload.code === 'REVISION_CONFLICT'),
+    );
+    expect(d.session().captureGrant).toBeNull();
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
+    d.ws.close(1000, 'PRIVATE_PEER_CLOSE_TEXT');
+    await d.until(() => observations.some((o) => o.event === 'close'));
+    const closed = observations.find((o) => o.event === 'close')!;
+    expect(closed.acceptedCaptureFrames).toBe(2);
+    expect(closed.receivedBytes).toBeGreaterThan(1700);
+    expect(closed.lastErrorCode).toBe('REVISION_CONFLICT');
+    expect(closed.rejectedEvents).toBeGreaterThan(0);
+    expect(closed.closeCode).toBe(1000);
+    expect(closed.localCloseReason).toBeNull();
+    const serialized = JSON.stringify(observations);
+    for (const secret of [
+      'PRIVATE_PEER_CLOSE_TEXT',
+      'profile-alex',
+      'stackchan-alex',
+      input.grant.turnId,
+      input.grant.streamId,
+      input.grant.leaseId,
+      Buffer.alloc(640, 1).toString('base64'),
+      'fictional-audio-fixture',
+    ])
+      expect(serialized).not.toContain(secret);
+  } finally {
+    d.close();
+  }
+});
+
+test('transport diagnostics identify local capture rate-limit closure', async () => {
+  const observations: TransportDiagnostic[] = [];
+  const d = await device({
+    transportDiagnostics: { deviceId: 'stackchan-alex', emit: (o) => observations.push(o) },
+  });
+  try {
+    d.send('input.speak', { language: 'en' });
+    await d.until(() => d.session().phase === 'listening');
+    const grant = d.session().captureGrant!;
+    for (let chunkIndex = 0; chunkIndex < 61; chunkIndex++)
+      d.send(
+        'audio.chunk',
+        {
+          leaseId: grant.leaseId,
+          streamId: grant.streamId,
+          chunkIndex,
+          encoding: 'pcm_s16le',
+          data: Buffer.alloc(640, 1).toString('base64'),
+        },
+        grant.turnId,
+      );
+    await d.until(() => observations.some((o) => o.event === 'close'));
+    const closed = observations.find((o) => o.event === 'close')!;
+    expect(closed.localCloseReason).toBe('Capture rate limit');
+    expect(closed.closeCode).toBe(1008);
+  } finally {
+    d.close();
+  }
+});
+
+test('transport diagnostics stay silent for an unselected endpoint', async () => {
+  const observations: TransportDiagnostic[] = [];
+  const d = await device({
+    transportDiagnostics: {
+      deviceId: 'another-enrolled-device',
+      emit: (o) => observations.push(o),
+    },
+  });
+  try {
+    const input = await d.capture();
+    input.finish();
+    await d.until(() => d.events.some((e) => e.type === 'response.start'));
+    d.ws.close();
+    await d.until(() => d.ws.readyState === WebSocket.CLOSED);
+    expect(observations).toEqual([]);
+  } finally {
+    d.close();
+  }
+});
+
+test('a failing transport diagnostic sink cannot prevent Stop or mute', async () => {
+  const d = await device({
+    transportDiagnostics: {
+      deviceId: 'stackchan-alex',
+      emit: () => {
+        throw new Error('fixture sink unavailable');
+      },
+    },
+  });
+  try {
+    await d.capture();
+    d.send('input.mute', { muted: true });
+    await d.until(() => d.session().micMuted);
+    expect(d.session().captureGrant).toBeNull();
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
+  } finally {
+    d.close();
+  }
+});
+
+test('paced 50-fps uplink is accepted with bounded aggregate diagnostics and no per-frame replies', async () => {
+  const observations: TransportDiagnostic[] = [];
+  const d = await device({
+    transportDiagnostics: { deviceId: 'stackchan-alex', emit: (o) => observations.push(o) },
+  });
+  try {
+    d.send('input.speak', { language: 'en' });
+    await d.until(() => d.session().phase === 'listening');
+    const grant = d.session().captureGrant!;
+    const eventCount = d.events.length;
+    for (let chunkIndex = 0; chunkIndex < 75; chunkIndex++) {
+      d.send(
+        'audio.chunk',
+        {
+          leaseId: grant.leaseId,
+          streamId: grant.streamId,
+          chunkIndex,
+          encoding: 'pcm_s16le',
+          data: Buffer.alloc(640, 1).toString('base64'),
+        },
+        grant.turnId,
+      );
+      await Bun.sleep(20);
+    }
+    expect(d.events.slice(eventCount).filter((e) => e.type !== 'heartbeat')).toEqual([]);
+    d.send(
+      'audio.end',
+      { leaseId: grant.leaseId, streamId: grant.streamId, chunkCount: 75 },
+      grant.turnId,
+    );
+    await d.until(() => d.events.some((e) => e.type === 'response.start'));
+    expect(observations.find((o) => o.event === 'capture_end')?.acceptedCaptureFrames).toBe(75);
+    expect(observations.filter((o) => o.event === 'sample').length).toBeGreaterThan(0);
+    expect(observations.length).toBeLessThan(8);
+    expect(d.events.filter((e) => e.type === 'error')).toEqual([]);
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
   } finally {
     d.close();
   }
