@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { goto, beforeNavigate } from '$app/navigation';
   import { clients } from '#lib/clients.ts';
   import { BrowserAudio } from './browser-audio.ts';
@@ -44,6 +44,10 @@
   let session = $state<SessionSnapshot | null>(null);
   let connected = $state(false);
   let busy = $state(false);
+  let setupState = $state<'loading' | 'ready' | 'unavailable'>('loading');
+  let setupMounted = $state(false);
+  let setupDisposed = false;
+  let setupEpoch = 0;
   let message = $state('');
   let text = $state('');
   let reply = $state('');
@@ -86,20 +90,79 @@
       : result.error.message;
     return null;
   }
-  async function run(work: () => Promise<void>) {
+  async function loadAssignedProfile() {
+    if (preview || setupDisposed) return;
+    const epoch = ++setupEpoch;
+    const requested = requestedProfileId;
+    const current = () =>
+      !setupDisposed && epoch === setupEpoch && requested === requestedProfileId;
+    // Setup recovery never enrolls an endpoint or restores listening intent.
+    connectionEpoch++;
+    conversation?.stop();
+    audio?.close();
+    connection?.close();
+    conversation = null;
+    audio = null;
+    connection = null;
+    assignment = null;
+    profiles = [];
+    session = null;
+    photo = null;
+    connected = false;
+    connectionLanguage = null;
+    clearConversation();
+    setupState = 'loading';
     busy = true;
     message = '';
     try {
-      await work();
+      if (!demoEnrollment) throw new Error('Setup disabled');
+      const result = await setup.current();
+      if (!current()) return;
+      if (!result.ok) {
+        message =
+          result.error.code === 'UNAUTHORIZED' || result.error.code === 'FORBIDDEN'
+            ? wording(
+                'Use the caregiver exit to choose this browser’s profile, then try again.',
+                'Wähle über den Pflegebereich das Profil dieses Browsers aus und versuche es erneut.',
+              )
+            : wording(
+                'Profile connection unavailable. Try again.',
+                'Profilverbindung nicht verfügbar. Bitte versuche es erneut.',
+              );
+        setupState = 'unavailable';
+        return;
+      }
+      const endpoint = result.data;
+      if (endpoint.endpoint !== 'browser' || (requested && requested !== endpoint.profileId))
+        throw new Error('Assigned profile mismatch');
+      let profile = endpoint.profile;
+      if (!profile) {
+        const available = await setup.profiles();
+        if (!current()) return;
+        if (!available.ok) throw new Error('Profile unavailable');
+        profile = available.data.find((item) => item.id === endpoint.profileId);
+      }
+      if (!profile || profile.id !== endpoint.profileId) throw new Error('Profile unavailable');
+      assignment = { ...endpoint, profile };
+      profiles = [profile];
+      setupState = 'ready';
+      connect();
     } catch {
+      if (!current()) return;
+      setupState = 'unavailable';
       message = wording(
-        'Request unavailable. Try again.',
-        'Die Anfrage ist nicht verfügbar. Bitte versuche es erneut.',
+        'Profile connection unavailable. Check the selected profile in the caregiver workspace, then try again.',
+        'Profilverbindung nicht verfügbar. Prüfe das ausgewählte Profil im Pflegebereich und versuche es erneut.',
       );
     } finally {
-      busy = false;
+      if (current()) busy = false;
     }
   }
+  $effect(() => {
+    requestedProfileId;
+    if (setupMounted && !preview) untrack(() => void loadAssignedProfile());
+  });
+
   function received(event: ServerEvent) {
     if (event.type === 'device.ready') {
       connectionLanguage = event.payload.language ?? 'en';
@@ -456,24 +519,8 @@
         disposed = true;
       };
     }
-    let disposed = false;
-    void run(async () => {
-      if (!demoEnrollment) {
-        message = 'Participant setup is not enabled on this server.';
-        return;
-      }
-      const current = await setup.current();
-      if (disposed) return;
-      if (current.ok && (!requestedProfileId || requestedProfileId === current.data.profileId)) {
-        assignment = current.data;
-        profiles = current.data.profile ? [current.data.profile] : [];
-        connect();
-      } else if (!current.ok && current.error.code !== 'UNAUTHORIZED')
-        message = current.error.message;
-      else
-        message =
-          'Choose this browser’s profile in the caregiver workspace before opening Conversation.';
-    });
+    setupDisposed = false;
+    setupMounted = true;
     const background = () => {
       if (document.visibilityState === 'hidden') {
         conversation?.stop();
@@ -490,7 +537,9 @@
     document.addEventListener('visibilitychange', background);
     window.addEventListener('pagehide', leaving);
     return () => {
-      disposed = true;
+      setupDisposed = true;
+      setupMounted = false;
+      setupEpoch++;
       conversation?.stop();
       document.removeEventListener('visibilitychange', background);
       window.removeEventListener('pagehide', leaving);
@@ -572,7 +621,14 @@
             talking={speaking}
             thinking={session?.phase === 'processing'}
           />
-        {:else}<p>{wording('Loading your companion…', 'Lemmi wird geladen…')}</p>{/if}
+        {:else}<p role="status">
+            {setupState === 'loading'
+              ? wording('Loading your companion…', 'Lemmi wird geladen…')
+              : wording(
+                  'Your companion is unavailable. Try the profile connection again.',
+                  'Lemmi ist nicht verfügbar. Versuche die Profilverbindung erneut.',
+                )}
+          </p>{/if}
       </div>
       <div class="caption-anchor">
         {#if (speaking || (photo && photo.phase !== 'ended')) && (reply || session?.teaching?.prompt)}
@@ -698,11 +754,13 @@
         {/if}
       {/if}
     {:else if demoEnrollment}
-      <p>
-        {busy
-          ? 'Opening your conversation…'
-          : 'Use the caregiver exit to choose a profile in the caregiver workspace.'}
-      </p>
+      {#if setupState === 'loading'}
+        <p role="status">{wording('Opening your conversation…', 'Dein Gespräch wird geöffnet…')}</p>
+      {:else}
+        <button onclick={() => void loadAssignedProfile()} disabled={busy}>
+          {wording('Retry profile connection', 'Profilverbindung erneut versuchen')}
+        </button>
+      {/if}
     {/if}
     {#if photoLoadError}<p role="alert">
         The picture is unavailable. Pause or choose another activity.
