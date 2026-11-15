@@ -10,7 +10,7 @@ import {
   SPEECH_CAPTURE_MS,
   SPEECH_FRAME_BYTES,
   SPEECH_OUTPUT_WINDOW,
-  SPEECH_BROWSER_OUTPUT_WINDOW,
+  SPEECH_EXTENDED_OUTPUT_WINDOW,
   type SpeechOutputWindow,
   type SessionSnapshot,
   type ConversationTextResult,
@@ -313,8 +313,8 @@ export class SpeechTurns {
       commandId: input.commandId,
       rates: [...rates],
       outputWindow:
-        s.endpoint === 'browser' && outputWindow === SPEECH_BROWSER_OUTPUT_WINDOW
-          ? SPEECH_BROWSER_OUTPUT_WINDOW
+        outputWindow === SPEECH_EXTENDED_OUTPUT_WINDOW
+          ? SPEECH_EXTENDED_OUTPUT_WINDOW
           : SPEECH_OUTPUT_WINDOW,
       began: this.now(),
       deadline: this.now() + SPEECH_CAPTURE_MS,
@@ -374,8 +374,8 @@ export class SpeechTurns {
       commandId: input.commandId,
       rates: [...rates],
       outputWindow:
-        s.endpoint === 'browser' && outputWindow === SPEECH_BROWSER_OUTPUT_WINDOW
-          ? SPEECH_BROWSER_OUTPUT_WINDOW
+        outputWindow === SPEECH_EXTENDED_OUTPUT_WINDOW
+          ? SPEECH_EXTENDED_OUTPUT_WINDOW
           : SPEECH_OUTPUT_WINDOW,
       began: this.now(),
       deadline: this.now() + 20_000,
@@ -432,8 +432,8 @@ export class SpeechTurns {
       language: input.language,
       rates: [...rates],
       outputWindow:
-        s.endpoint === 'browser' && outputWindow === SPEECH_BROWSER_OUTPUT_WINDOW
-          ? SPEECH_BROWSER_OUTPUT_WINDOW
+        outputWindow === SPEECH_EXTENDED_OUTPUT_WINDOW
+          ? SPEECH_EXTENDED_OUTPUT_WINDOW
           : SPEECH_OUTPUT_WINDOW,
       began: this.now(),
       deadline: this.now() + 60000,

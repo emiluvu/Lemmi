@@ -541,11 +541,7 @@ export function startControlGateway(options: Options) {
             event.payload.playback
               ? [...event.payload.playback.sampleRates]
               : [];
-          ws.data.outputWindow =
-            ws.data.identity.endpoint === 'browser' &&
-            event.payload.playback?.outputWindowChunks === 12
-              ? 12
-              : 4;
+          ws.data.outputWindow = event.payload.playback?.outputWindowChunks === 12 ? 12 : 4;
           emit(ws, 'device.ready', {
             mode: 'live',
             deviceId: ws.data.identity.deviceId,

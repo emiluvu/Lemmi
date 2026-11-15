@@ -1,5 +1,9 @@
 # Lemmi backend status
 
+## Stackchan twelve-frame output — reviewed, rollout pending
+
+Removed browser-only checks in gateway negotiation and all three speech-owner paths. Robot `playback.outputWindowChunks:12` can now negotiate12×20ms=240ms credit; omitted/explicit4 retains80ms fallback. Consumed-only refill and Stop owner cancellation/PCM wipe/late receipt rejection remain. No schema, migration, config/provider/model/UI/firmware change; gateway-only rollout. Final **413 tests /6,281 expectations**, no failures/skips on isolated databases; type/Svelte zero errors/warnings, pinned frozen Bun1.4.4, format/whitespace passed. Includes robot12/legacy4 credit and queued/playing Stop/short-tail tests. [Exact firmware handshake, short-reply behavior, Stop responsibilities and observed checks](handoffs/stackchan-playback-window.md).
+
 ## Profile context/memory and German deployed — November 14, 2026
 
 **Web/gateway/speech runtime `a779c70`.** Merged source `cd68663` then German `2ca3fba`, preserving branches and deployed Jev/profile/microphone behavior. Rich context/private pictures, separate default-off summary permission and exact-ID German pilot are ready. Review fixed blocking summarization (now bounded background), stale-refusal/re-enable races, copied/contact-bearing summary retention, upload admission, prompt budgeting and German unused-Jev overhead. **407 tests /6,244 expectations**, zero failures/skips; type/Svelte zero errors/warnings, build/format, production participant TLS/WSS smoke, disposable Chromium profile/photo/permission checks and nine Python checks passed. Isolated actual German STT/TTS and external model→German voice passed with fixed synthetic input. Existing Tilda reused; no copied Alex context or bulk backfill. [Full review, actual staging evidence, migration/media backup and human test reminder](handoffs/profile-german-backend-integration.md).
