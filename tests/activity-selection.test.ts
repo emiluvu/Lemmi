@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import {
+  fail,
   ok,
   type ConversationTextResult,
   type Result,
@@ -12,7 +13,10 @@ import {
   type SpeechAdapters,
   type ConversationDecisionAdapter,
 } from '@lemmi/server';
-import { requestedActivity } from '../packages/server/src/adapters/input-routing';
+import {
+  confirmsActivityOffer,
+  requestedActivity,
+} from '../packages/server/src/adapters/input-routing';
 
 function value<T>(result: Result<unknown>): T {
   if (!result.ok) throw new Error(result.error.message);
@@ -166,7 +170,7 @@ test('explicit mode commands have priority over optional decisions and remain id
   expect(f.calls()).toBe(0);
 });
 
-test('semantic activity classification stays advisory when no reviewed command was spoken', async () => {
+test('semantic activity request asks for confirmation, then uses the existing mode transition', async () => {
   const f = fixture(undefined, undefined, {
     async classify() {
       return ok({
@@ -177,12 +181,193 @@ test('semantic activity classification stays advisory when no reviewed command w
       });
     },
   });
-  expect((await f.say('Could I explain a little about the flowers?')).ok).toBe(true);
+  const question = value<ConversationTextResult>(
+    await f.say('Could I explain a little about the flowers?'),
+  );
+  expect(question.kind === 'reply' && question.reply.text).toBe(
+    'Would you like to start Teach Lemmi?',
+  );
   expect(f.c.snapshot()?.teaching).toBeNull();
   expect(f.c.photoView()).toBeNull();
-  expect(f.calls()).toBe(1);
-  expect(f.prompts[0]).toContain('classification is advisory');
-  expect(f.prompts[0]).toContain('Start Teach Lemmi');
+  expect(f.calls()).toBe(0);
+  value(await f.say('Yes please'));
+  expect(f.c.snapshot()?.conversationMode).toBe('teach_lemmi');
+  expect(f.c.snapshot()?.captureGrant).toBeNull();
+  expect(f.calls()).toBe(0);
+});
+
+const noDecision = {
+  recap: false,
+  declinesRedirect: false,
+  redirectTopicIds: [],
+  activity: 'none' as const,
+};
+function semanticFixture(
+  activity: 'teach_lemmi' | 'photo_album' = 'teach_lemmi',
+  tts?: SpeechAdapters['tts'],
+) {
+  let calls = 0;
+  const f = fixture('Yes please', tts, {
+    async classify(input) {
+      calls++;
+      return ok({
+        ...noDecision,
+        activity: input.text === 'A natural activity request' ? activity : 'none',
+      });
+    },
+  });
+  return { ...f, classifications: () => calls };
+}
+
+test('semantic photo confirmation deduplicates the question and does not retain it in checkpoints', async () => {
+  const f = semanticFixture('photo_album');
+  const id = crypto.randomUUID();
+  const question = value<any>(await f.say('A natural activity request', id));
+  expect(question.reply.text).toBe('Would you like to start Photo Story?');
+  expect(f.c.photoView()).toBeNull();
+  expect(value<any>(await f.say('A natural activity request', id))).toEqual(question);
+  expect(f.classifications()).toBe(1);
+  expect(JSON.stringify(f.c.persistenceSnapshot())).not.toContain('A natural activity request');
+  value(await f.say('Sure'));
+  expect(f.c.photoView()).toMatchObject({ activityId: 'photo_album', viewingMode: 'talk' });
+  expect(f.classifications()).toBe(1);
+  expect(f.calls()).toBe(0);
+});
+
+test('an activity confirmation belongs only to the immediate next turn', async () => {
+  for (const answer of ['No thank you', 'The sky is blue', 'Who are you?']) {
+    const f = semanticFixture();
+    value(await f.say('A natural activity request'));
+    value(await f.say(answer));
+    value(await f.say('Yes please'));
+    expect(f.c.snapshot()?.teaching).toBeNull();
+  }
+  const f = semanticFixture();
+  value(await f.say('Yes please'));
+  expect(f.c.snapshot()?.teaching).toBeNull();
+});
+
+test('Pause, mute, Stop, disconnect and profile changes clear pending activity confirmation', async () => {
+  for (const interrupt of ['pause', 'mute', 'stop', 'disconnect', 'profile']) {
+    const f = semanticFixture();
+    value(await f.say('A natural activity request'));
+    const command = (action: Record<string, unknown>) =>
+      value(
+        f.c.handle('session.command', {
+          sessionId: f.c.snapshot()!.id,
+          expectedGeneration: f.c.snapshot()!.generation,
+          commandId: crypto.randomUUID(),
+          action,
+        }),
+      );
+    if (interrupt === 'profile') {
+      f.c.pauseForProfileUpdate({ preferredName: 'Alex' });
+      f.c.acceptPersistentProfile({
+        ...caregiverProfile,
+        revision: 1,
+        privacyRevision: 0,
+        policyRevision: 0,
+        approvedFacts: [],
+      });
+    } else if (interrupt === 'disconnect') f.c.disconnect();
+    else command(interrupt === 'mute' ? { type: 'mute', muted: true } : { type: interrupt });
+    if (f.c.snapshot()?.phase === 'ended')
+      value(
+        f.c.handle('session.start', {
+          profileId: 'profile-alex',
+          endpoint: 'browser',
+          commandId: crypto.randomUUID(),
+        }),
+      );
+    else if (f.c.snapshot()?.phase === 'paused') command({ type: 'resume' });
+    value(await f.say('Yes please'));
+    expect(f.c.snapshot()?.teaching).toBeNull();
+  }
+});
+
+test('an interrupted semantic decision cannot install a late activity confirmation', async () => {
+  for (const interrupt of ['pause', 'mute', 'stop', 'disconnect', 'profile']) {
+    let finish!: (value: Result<any>) => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const f = fixture(undefined, undefined, {
+      async classify(input) {
+        if (input.text !== 'A natural activity request') return ok(noDecision);
+        entered();
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    const pending = f.say('A natural activity request');
+    await started;
+    const command = (action: Record<string, unknown>) =>
+      value(
+        f.c.handle('session.command', {
+          sessionId: f.c.snapshot()!.id,
+          expectedGeneration: f.c.snapshot()!.generation,
+          commandId: crypto.randomUUID(),
+          action,
+        }),
+      );
+    if (interrupt === 'profile') f.c.pauseForProfileUpdate({ preferredName: 'Alex' });
+    else if (interrupt === 'disconnect') f.c.disconnect();
+    else command(interrupt === 'mute' ? { type: 'mute', muted: true } : { type: interrupt });
+    expect((await pending).ok).toBe(false);
+    finish(ok({ ...noDecision, activity: 'teach_lemmi' }));
+    await Bun.sleep(0);
+    if (f.c.snapshot()?.phase === 'ended')
+      value(
+        f.c.handle('session.start', {
+          profileId: 'profile-alex',
+          endpoint: 'browser',
+          commandId: crypto.randomUUID(),
+        }),
+      );
+    else if (f.c.snapshot()?.phase === 'paused') command({ type: 'resume' });
+    value(await f.say('Yes please'));
+    expect(f.c.snapshot()?.teaching).toBeNull();
+  }
+});
+
+test('semantic offer followed by spoken confirmation uses fresh receipt-backed playback', async () => {
+  const f = semanticFixture();
+  f.setRecognizedText('A natural activity request');
+  const question = value<any>(await f.capture());
+  expect(question.reply.text).toBe('Would you like to start Teach Lemmi?');
+  const output = f.c.drainSpeechOutput()!;
+  const s = f.c.snapshot()!;
+  const scope = {
+    sessionId: s.id,
+    expectedGeneration: s.generation,
+    turnId: output.metadata.turnId,
+    leaseId: output.metadata.leaseId,
+    streamId: output.metadata.streamId,
+  };
+  value(f.c.playbackReceipt({ ...scope, status: 'started', playedChunks: 0 }));
+  value(f.c.playbackReceipt({ ...scope, status: 'completed', playedChunks: output.chunks.length }));
+  f.setRecognizedText('Yes please');
+  const result = value<any>(await f.capture());
+  expect(result.session.conversationMode).toBe('teach_lemmi');
+  expect(result.session.generation).toBeGreaterThan(s.generation);
+  expect(f.c.drainSpeechOutput()?.metadata.turnId).toBe(result.reply.turnId);
+  expect(f.c.snapshot()?.captureGrant).toBeNull();
+  expect(f.classifications()).toBe(1);
+  expect(f.calls()).toBe(0);
+});
+
+test('a failed spoken confirmation question clears the offer instead of launching on a later yes', async () => {
+  const f = semanticFixture('teach_lemmi', {
+    async synthesize() {
+      return fail('UNAVAILABLE', 'Fixture unavailable');
+    },
+  });
+  f.setRecognizedText('A natural activity request');
+  expect((await f.capture()).ok).toBe(false);
+  value(await f.say('Yes please'));
+  expect(f.c.snapshot()?.teaching).toBeNull();
 });
 
 test('valid maximum-length caller IDs cannot invalidate server-owned mode transitions', async () => {
@@ -198,13 +383,43 @@ test('activity selection recognizes explicit invitations and leaves incidental/n
   expect(requestedActivity('Please start Photo Story.')).toBe('photo');
   expect(requestedActivity('Explore pictures')).toBe('photo');
   expect(requestedActivity('Can we play Teach Lemmi?')).toBe('teaching');
+  for (const phrase of [
+    'I want to teach Lemmi',
+    'Can we teach Lemmi?',
+    'Could I teach you?',
+    'Please teach Lemmi',
+    'Let’s teach Lemmi',
+  ])
+    expect(requestedActivity(phrase)).toBe('teaching');
+  for (const phrase of [
+    'Could we look at some pictures?',
+    'I would like to look through photos',
+    'Can you start Photo Story?',
+  ])
+    expect(requestedActivity(phrase)).toBe('photo');
   for (const text of [
     'I used to play music',
     'Do not start Photo Story',
     'I want to stop',
     'What is a photo story?',
+    'I do not want to teach Lemmi',
+    'She said "teach Lemmi"',
+    'If I wanted to teach Lemmi tomorrow',
+    'Can we teach Lemmi? Actually, no',
   ])
     expect(requestedActivity(text)).toBeNull();
+});
+test('activity confirmation accepts punctuated consent and rejects qualified or quoted agreement', () => {
+  for (const text of ['Yes, please!', 'Yes please.', 'Sure', 'Let’s do that'])
+    expect(confirmsActivityOffer(text)).toBe(true);
+  for (const text of [
+    'Yes, but not now',
+    'No, thank you',
+    'She said yes please',
+    '"Yes please"',
+    'Yes please, actually no',
+  ])
+    expect(confirmsActivityOffer(text)).toBe(false);
 });
 test('spoken activity selection switches through the shared authority without model action selection', async () => {
   const f = fixture();
@@ -237,7 +452,13 @@ test('unavailable games remain explicit and paused/stale selections cannot start
   expect(f.c.snapshot()?.teaching).toBeNull();
   expect(f.calls()).toBe(0);
 });
-for (const text of ['Let’s play Teach Lemmi', 'Start Photo Story', 'Explore pictures']) {
+for (const text of [
+  'Let’s play Teach Lemmi',
+  'I want to teach Lemmi',
+  'Can we teach Lemmi?',
+  'Start Photo Story',
+  'Explore pictures',
+]) {
   test(`STT selection ${text} receives a fresh output turn with receipt-backed playback`, async () => {
     const f = fixture(text);
     const old = f.c.snapshot()!;

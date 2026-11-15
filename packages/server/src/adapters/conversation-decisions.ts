@@ -6,6 +6,7 @@ export {
 } from '@lemmi/contracts';
 export type { ConversationDecisionInput, ConversationDecision } from '@lemmi/contracts';
 export interface ConversationDecisionAdapter {
+  readonly scope?: 'conversation' | 'activities';
   classify(
     input: ConversationDecisionInput,
     signal: AbortSignal,
