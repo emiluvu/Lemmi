@@ -11,6 +11,9 @@
 #include "Protocol.h"
 #include "ProtocolCheck.h"
 #ifdef LEMMI_VOICE
+#ifndef LEMMI_VOICE_VERSION
+#define LEMMI_VOICE_VERSION "lemmi-voice/0.9"
+#endif
 #include "../audio/VoiceBridge.h"
 #include "../audio/WsFrameReader.h"
 #include "../audio/WsFrameWriter.h"
@@ -160,6 +163,28 @@ bool claim() {
 }
 
 #ifdef LEMMI_VOICE
+void resetTransportProbe(){
+#ifdef LEMMI_VOICE_DIAGNOSTICS
+  transportProbe=lemmi::TransportProbe{};
+#endif
+}
+int voiceTransportWrite(const char* p,size_t n,uint32_t ms){
+#ifdef LEMMI_VOICE_DIAGNOSTICS
+  transportProbeTask.store(xTaskGetCurrentTaskHandle());
+#endif
+  int result=esp_transport_write(tls,p,n,ms);
+#ifdef LEMMI_VOICE_DIAGNOSTICS
+  transportProbeTask.store(nullptr);
+#endif
+  return result;
+}
+void reportTransportProbe(){
+#ifdef LEMMI_VOICE_DIAGNOSTICS
+  Serial.printf("event=voice_transport_probe polls=%u poll_zero=%u poll_error=%u poll_max_us=%u writes=%u write_zero=%u write_want=%u write_error=%u write_max_us=%u camera=off\n",
+    unsigned(transportProbe.polls),unsigned(transportProbe.pollZero),unsigned(transportProbe.pollError),unsigned(transportProbe.pollMaxUs),
+    unsigned(transportProbe.writes),unsigned(transportProbe.writeZero),unsigned(transportProbe.writeWant),unsigned(transportProbe.writeError),unsigned(transportProbe.writeMaxUs));
+#endif
+}
 int writeVoiceFrame(uint8_t opcode,const char* payload,size_t bytes,int timeout,const VoiceBridge::Outbound* scope=nullptr){
   static lemmi::WsFrameWriter frame; // only network worker accesses this buffer
   uint8_t mask[4];esp_fill_random(mask,sizeof(mask));
@@ -172,9 +197,10 @@ int writeVoiceFrame(uint8_t opcode,const char* payload,size_t bytes,int timeout,
     voiceBatchTokens[index]={scope->localEpoch,scope->inputEpoch,scope->kind!=VoiceBridge::Receipt};
     return int(bytes);
   }
+  resetTransportProbe();
   voiceWriteResult=lemmi::boundedWrite(frame.data(),frame.size(),uint32_t(timeout),
     ESP_TLS_ERR_SSL_WANT_READ,ESP_TLS_ERR_SSL_WANT_WRITE,
-    [](const char* p,size_t n,uint32_t ms){return esp_transport_write(tls,p,n,ms);},
+    [](const char* p,size_t n,uint32_t ms){return voiceTransportWrite(p,n,ms);},
     [scope]{return !abortConnect.load()&&(!scope||(!latch.load()&&scope->localEpoch==controlEpoch.load()&&
       (scope->kind==VoiceBridge::Receipt||(!micMuted.load()&&scope->inputEpoch==voice.inputEpoch.load()))));},
     []{return millis();},[]{vTaskDelay(pdMS_TO_TICKS(2));});
@@ -183,9 +209,10 @@ int writeVoiceFrame(uint8_t opcode,const char* payload,size_t bytes,int timeout,
 }
 bool flushVoiceBatch(){
   if(!voiceBatch.size())return true;
+  resetTransportProbe();
   voiceWriteResult=lemmi::boundedWrite(voiceBatch.data(),voiceBatch.size(),100,
     ESP_TLS_ERR_SSL_WANT_READ,ESP_TLS_ERR_SSL_WANT_WRITE,
-    [](const char* p,size_t n,uint32_t ms){return esp_transport_write(tls,p,n,ms);},
+    [](const char* p,size_t n,uint32_t ms){return voiceTransportWrite(p,n,ms);},
     []{
       if(abortConnect.load()||latch.load())return false;
       for(size_t i=0;i<voiceBatch.count();++i){
@@ -213,7 +240,7 @@ bool send(ControlPolicy& state, const char* type, bool muted=false, bool initial
   auto p=cJSON_AddObjectToObject(root,"payload");
   if (!strcmp(type,"device.hello")) {
 #ifdef LEMMI_VOICE
-    cJSON_AddStringToObject(p,"firmwareVersion","lemmi-voice/0.9");cJSON_AddStringToObject(p,"endpoint","robot");
+    cJSON_AddStringToObject(p,"firmwareVersion",LEMMI_VOICE_VERSION);cJSON_AddStringToObject(p,"endpoint","robot");
     cJSON_AddBoolToObject(p,"cameraSupported",false);cJSON_AddBoolToObject(p,"pettingSupported",false);
     auto a=cJSON_AddObjectToObject(p,"audio");cJSON_AddStringToObject(a,"encoding","pcm_s16le");
     cJSON_AddNumberToObject(a,"sampleRate",16000);cJSON_AddNumberToObject(a,"channels",1);cJSON_AddNumberToObject(a,"frameMs",20);
@@ -406,6 +433,7 @@ void worker(void*) {
         if(!batchOK){
             latch.store(true);controlEpoch.fetch_add(1);
             Serial.printf("event=voice_send_failed reason=%u status=%u result=%d bytes=%u send_max_ms=%u capture_sent=%u camera=off\n",unsigned(voiceSendFailure),unsigned(voiceWriteResult.status),voiceWriteResult.last,unsigned(voiceWriteResult.sent),unsigned(voiceMaxSendMs.load()),unsigned(voiceCaptureSent.load()));
+            if(voiceSendFailure==6)reportTransportProbe();
             exitStage="control_send";result="Audio send failed";abortConnect.store(true);break;
         }
         }
@@ -629,7 +657,7 @@ void setup() {
   if (!commands || xTaskCreatePinnedToCore(worker,"control",24576,nullptr,1,&task,0)!=pdPASS) esp_restart();
   draw(); fixedEvent("boot");
 #ifdef LEMMI_VOICE
-  Serial.printf("firmware=lemmi-voice/0.9 display=%dx%d capture=off camera=off\n",M5.Display.width(),M5.Display.height());
+  Serial.printf("firmware=%s display=%dx%d capture=off camera=off\n",LEMMI_VOICE_VERSION,M5.Display.width(),M5.Display.height());
   Serial.printf("event=voice_boot reset=%u heap_free=%u loop_min=%u camera=off\n",unsigned(esp_reset_reason()),unsigned(ESP.getFreeHeap()),unsigned(uxTaskGetStackHighWaterMark(nullptr)));
 #else
   Serial.printf("firmware=lemmi-control/0.9 display=%dx%d capture=off camera=off\n",M5.Display.width(),M5.Display.height());

@@ -170,6 +170,7 @@ def probe_control(connection):
 STATUS = re.compile(
     r"event=voice_send_failed reason=(?:2|3|4|6) status=[0-3] result=-?\d{1,10} bytes=\d{1,5} send_max_ms=\d{1,10} capture_sent=\d{1,10} camera=off|"
     r"event=voice_fault code=(?:[0-9]|1[0-2]) send_max_ms=\d{1,10} capture_sent=\d{1,10} heap_free=\d{1,10} camera=off|"
+    r"event=voice_transport_probe polls=\d{1,10} poll_zero=\d{1,10} poll_error=\d{1,10} poll_max_us=\d{1,10} writes=\d{1,10} write_zero=\d{1,10} write_want=\d{1,10} write_error=\d{1,10} write_max_us=\d{1,10} camera=off|"
     r"event=voice_link nodelay=1 wifi_sleep=0 camera=off|"
     r"event=voice_ready audio=[01] output_window=(?:4|12) language=(?:en|de) camera=off|"
     r"event=voice_stream received=\d{1,4} consumed=\d{1,4} buffer_waits=\d{1,4} camera=off|"

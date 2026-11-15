@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "playback", "presentation", "petting", "control", "voice", "avatars", "display"], default="foundation")
+parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "playback", "presentation", "petting", "control", "voice", "voice_diag", "avatars", "display"], default="foundation")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 lock = json.loads((root / "toolchain.json").read_text())
@@ -18,7 +18,10 @@ sketch = root / ("tests/arduino_" + args.target) if args.target in ("packetizer"
 if args.target in ("avatars", "display"):
     import sys
     subprocess.run([sys.executable, str(root / "tools/export-avatars.py"), "--target", args.target], check=True)
-subprocess.run([str(cli), "compile", "--fqbn", lock["fqbn"],
+extra=[]
+if args.target == "voice_diag":
+    extra=["--build-property", "compiler.c.elf.extra_flags=-Wl,--cref -Wl,--wrap=esp_transport_poll_write -Wl,--wrap=esp_tls_conn_write"]
+subprocess.run([str(cli), "compile", *extra, "--fqbn", lock["fqbn"],
                 "--config-file", str(config), "--build-path", str(root / "build" / args.target),
                 str(sketch)], check=True)
 
@@ -31,11 +34,12 @@ if args.target == "feasibility":
         raise SystemExit("Camera bus adapter missing from link")
     print("PASS: application SCCB adapter linked; SDK SCCB driver absent.")
 
-if args.target == "voice":
+if args.target in ("voice", "voice_diag"):
     import sys
     dump_tools=list((root / '.arduino/data/packages/m5stack/tools/esp-x32').glob('*/bin/xtensa-esp32s3-elf-objdump'))
     if len(dump_tools)!=1:
         raise SystemExit('Expected one pinned Xtensa objdump; inspect installed toolchain.')
+    probe_args=['--transport-probe-map',str(root / 'build' / args.target / 'lemmi_voice_diag.ino.map')] if args.target == 'voice_diag' else []
     subprocess.run([sys.executable,str(root / 'tools/check-stack.py'),
-                    '--elf',str(root / 'build/voice/lemmi_voice.ino.elf'),
-                    '--objdump',str(dump_tools[0])],check=True)
+                    '--elf',str(root / 'build' / args.target / ('lemmi_' + args.target + '.ino.elf')),
+                    '--objdump',str(dump_tools[0]),*probe_args],check=True)

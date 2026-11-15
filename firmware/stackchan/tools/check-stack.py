@@ -27,16 +27,36 @@ def check(disassembly):
     return path
 
 
+def check_probe_link(link_map):
+    lines = link_map.splitlines()
+    for symbol in ('__wrap_esp_transport_poll_write', '__wrap_esp_tls_conn_write'):
+        entries = [i for i, line in enumerate(lines) if line.startswith(symbol + ' ')]
+        if len(entries) != 1:
+            raise ValueError('Missing diagnostic wrapper cross-reference: ' + symbol)
+        block = []
+        for line in lines[entries[0] + 1:]:
+            if line and not line.startswith(' '):
+                break
+            block.append(line)
+        if 'libtcp_transport.a(transport_ssl.c.obj)' not in '\n'.join(block):
+            raise ValueError('SDK SSL writer does not reference diagnostic wrapper: ' + symbol)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--elf', required=True, type=Path)
     parser.add_argument('--objdump', required=True, type=Path)
+    parser.add_argument('--transport-probe-map', type=Path)
     args = parser.parse_args()
     disassembly = subprocess.check_output([str(args.objdump), '-dC', str(args.elf)], text=True)
     try:
         path = check(disassembly)
+        if args.transport_probe_map:
+            check_probe_link(args.transport_probe_map.read_text())
     except ValueError as error:
         raise SystemExit(str(error)) from None
+    if args.transport_probe_map:
+        print('PASS: both exact SDK SSL call sites reference diagnostic wrappers.')
     print(f'PASS: known audio path {path} + reserve {RESERVE} <= loop stack {LOOP_STACK}; runtime watermark checks still required.')
 
 

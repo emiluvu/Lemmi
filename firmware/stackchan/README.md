@@ -210,3 +210,11 @@ Then test display/touch/Wi-Fi/camera together and audio→camera→audio transit
 `packages/contracts/src/device.ts` and `scripts/fake-device.ts` are starting transport examples only. The documented deployed gateway supports scoped certificate-verified WSS controls and optional voice; the original loopback mock token and `ws://` URL are development-only. Backend-deploy documentation/source and control-checks distinguish current device compatibility from unverified voice/camera integration. Kylie supplies art after measured display/export limits.
 
 Sources: [M5Stack Arduino setup](https://docs.m5stack.com/en/arduino/stackchan/program), [display example/build requirements](https://docs.m5stack.com/en/arduino/stackchan/display), [StackChan BSP](https://github.com/m5stack/StackChan-BSP), [factory recovery](https://docs.m5stack.com/en/StackChan#restore-factory-firmware).
+
+### Uplink diagnostic variant (not yet installed)
+
+The separate [`voice_diag` target](lemmi_voice_diag/README.md) observes the exact
+SDK socket-poll/TLS-write return paths using verified linker wrappers. It keeps
+normal voice 0.9 and all audio limits intact. This is diagnostic preparation,
+not a fix or physical voice acceptance; coordinate counterpart review and one
+UTC-marked test before installation/capture.

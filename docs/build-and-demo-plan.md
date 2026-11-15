@@ -804,3 +804,17 @@ cJSON parser checks pass; all 12 provisioning/privacy checks and fetched backend
 schema fixture/hello/handoff validation pass. Display 0.7 pinned compile and
 backup/image/esptool upload preflight passed during preparation. Whitespace check
 passes. No real speech/provider/camera or independent-use acceptance is implied.
+
+### Emilia: uplink diagnostic preparation after controlled retest
+
+Origin correlation at backend commit `67188b3` records 164 accepted frames,
+zero rejections, and a later heartbeat close following the robot's bounded-send
+failure; this is not successful physical voice acceptance or proof against
+short network stalls. See [send-stall handoff](handoffs/stackchan-send-stall-investigation.md).
+A separate `voice_diag` target now records the actual SDK socket-poll versus
+TLS-write return counters, preserving existing buffers and limits. Pinned voice
+and diagnostic builds, 22 Python tests, five native sanitizer programs, exact
+linker-hook checks and backup/image upload dry run pass. No new flash/capture.
+Anay's counterpart review and a coordinated installation/one local hardware
+attempt remain pending; camera, petting and motion integration remain disabled
+in the voice target. Do not mark smooth conversation or local latency accepted.

@@ -64,6 +64,7 @@ class ProvisionChecks(unittest.TestCase):
             for line in [
                 'event=voice_send_failed reason=6 status=2 result=0 bytes=0 send_max_ms=100 capture_sent=100 camera=off',
                 'event=voice_fault code=2 send_max_ms=100 capture_sent=3 heap_free=70000 camera=off',
+                'event=voice_transport_probe polls=5 poll_zero=5 poll_error=0 poll_max_us=20000 writes=0 write_zero=0 write_want=0 write_error=0 write_max_us=0 camera=off',
                 'event=voice_link nodelay=1 wifi_sleep=0 camera=off',
                 'event=voice_ready audio=1 output_window=12 language=en camera=off',
                 'event=voice_ready audio=1 output_window=4 language=de camera=off',
@@ -81,6 +82,7 @@ class ProvisionChecks(unittest.TestCase):
             ]:
                 self.assertTrue(pattern.fullmatch(line))
                 self.assertFalse(pattern.fullmatch(line+' transcript=private'))
+            self.assertFalse(pattern.fullmatch('event=voice_transport_probe polls=private poll_zero=0 camera=off'))
             self.assertFalse(pattern.fullmatch('event=voice_audio capture=private playback=off camera=off'))
             self.assertFalse(pattern.fullmatch('event=voice_reject stage=secret camera=off'))
             self.assertFalse(pattern.fullmatch('event=voice_send_failed reason=secret status=0 result=0 bytes=0 send_max_ms=0 capture_sent=0 camera=off'))

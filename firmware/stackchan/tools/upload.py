@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timezone
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--target", choices=["foundation", "feasibility", "petting", "control", "voice", "avatars", "display"], default="foundation")
+parser.add_argument("--target", choices=["foundation", "feasibility", "petting", "control", "voice", "voice_diag", "avatars", "display"], default="foundation")
 parser.add_argument("--port", required=True)
 parser.add_argument("--backup-dir", required=True, type=Path)
 parser.add_argument("--esptool-python", default=sys.executable)
@@ -35,7 +35,7 @@ if backup.stat().st_size != 16777216 or hashlib.sha256(backup.read_bytes()).hexd
 lock = json.loads((root / "toolchain.json").read_text())
 build = root / "build" / args.target
 sketch = "lemmi_" + args.target
-firmware = {"foundation": "lemmi-foundation/0.1", "feasibility": "lemmi-feasibility/0.8", "petting": "lemmi-petting/0.2", "control": "lemmi-control/0.9", "voice": "lemmi-voice/0.9", "avatars": "lemmi-avatars/0.1", "display": "lemmi-display/0.7"}[args.target]
+firmware = {"foundation": "lemmi-foundation/0.1", "feasibility": "lemmi-feasibility/0.8", "petting": "lemmi-petting/0.2", "control": "lemmi-control/0.9", "voice": "lemmi-voice/0.9", "voice_diag": "lemmi-voice/0.9-diag1", "avatars": "lemmi-avatars/0.1", "display": "lemmi-display/0.7"}[args.target]
 if json.loads((build / "build.options.json").read_text())["fqbn"] != lock["fqbn"]:
     raise SystemExit("Build target differs from pinned toolchain")
 # Same four offsets/images as the pinned M5Stack platform.txt upload recipe.
