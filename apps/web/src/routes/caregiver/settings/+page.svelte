@@ -3,7 +3,7 @@
   let passwordInfoOpen = $state(false);
 </script>
 
-<svelte:head><title>Caregiver Setting — Lemmi</title></svelte:head>
+<svelte:head><title>Caregiver settings — Lemmi</title></svelte:head>
 <div class="caregiver-settings">
   <p class="eyebrow">Your account</p>
   <h1>Caregiver Setting</h1>

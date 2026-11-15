@@ -825,7 +825,10 @@ test('silence at fifteen seconds keeps the microphone open and a late answer use
     expect(f.track.stopped).toBe(false);
     expect(f.sent.some(([type]) => ['input.pause', 'audio.end'].includes(type))).toBe(false);
     f.frames(true, 10);
-    f.frames(false, 50);
+    f.frames(false, 74);
+    expect(f.track.stopped).toBe(false);
+    expect(f.sent.some(([type]) => type === 'audio.end')).toBe(false);
+    f.frames(false, 1);
     expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(1);
     expect(f.sent.some(([type]) => type === 'input.pause')).toBe(false);
     expect(f.track.stopped).toBe(true);

@@ -24,6 +24,15 @@ const germanContactClaims = [
   ),
 ];
 
+// A narrow extra guard for observed display claims, not image understanding or
+// universal semantic validation. Only the host can select/present a photo.
+export function claimsPhotoPresentation(text: string): boolean {
+  const normal = text.normalize('NFKC').replace(/[’‘]/gu, "'").replace(/\s+/gu, ' ');
+  return /(?:^|[.!?]\s+)(?:here(?:'s| is| are) (?:(?:a|the|your|some) )?(?:photo(?:s)?|picture(?:s)?|image(?:s)?)|i(?:'m| am) (?:showing|displaying) (?:(?:you|you all) )?(?:(?:a|the|your|some) )?(?:photo(?:s)?|picture(?:s)?|image(?:s)?)|i(?:'ve| have) (?:just )?(?:displayed|opened|put up) (?:(?:a|the|your|some) )?(?:photo(?:s)?|picture(?:s)?|image(?:s)?))\b/iu.test(
+    normal,
+  );
+}
+
 // Mechanical checks supplement the prompt and reviewed fixed routes. They do
 // not prove semantic safety, language fluency, or factual grounding universally.
 export function permittedModelReply(text: string, support: CommunicationSupport): boolean {

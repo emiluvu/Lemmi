@@ -65,7 +65,7 @@ import {
   requestedPhotoAction,
   confirmsActivityOffer,
 } from './adapters/input-routing';
-import { permittedModelReply } from './adapters/reply-policy';
+import { claimsPhotoPresentation, permittedModelReply } from './adapters/reply-policy';
 import { mentionsTopic, redirectInstructions } from './adapters/conversation-redirects';
 import { conversationRecap } from './adapters/conversation-recap';
 import {
@@ -1350,6 +1350,9 @@ export class SessionCoordinator {
             : selectProfileFacts(this.approvedFacts, input.text, this.summaryMemoryEnabled ? 5 : 8),
     });
     if (!prepared.ok) return prepared;
+    prepared.data.system += photo?.ok
+      ? '\nThe application has selected the current Photo Story scene. Discuss only its supplied context; do not claim you loaded, changed or inspected the image.'
+      : '\nNo photo is displayed by this conversation. You cannot show, display, open or change pictures. Do not claim a picture is visible or promise to display one. Photo Story starts only through application controls; if asked, explain that the participant can say Start Photo Story. Never invent a photo or describe an unseen picture.';
     if (this.summaryMemoryEnabled && !session.teaching && !this.photoTalking())
       prepared.data.system += memoryContext(
         this.priorMemories.filter((memory) => memory.sessionId !== session.id),
@@ -1559,6 +1562,11 @@ export class SessionCoordinator {
         );
         if (!current() || signal.aborted)
           return fail('REVISION_CONFLICT', 'Discarded an obsolete conversation result');
+        const photoClaim =
+          response.ok &&
+          input.language === 'en' &&
+          !photo?.ok &&
+          claimsPhotoPresentation(response.data.text);
         if (
           this.summaryMemoryEnabled &&
           response.ok &&
@@ -1569,6 +1577,7 @@ export class SessionCoordinator {
             source: 'model',
           }).success &&
           !fixedDecisionReply &&
+          !photoClaim &&
           !redirect &&
           !session.teaching &&
           !this.photoTalking() &&
@@ -1603,14 +1612,21 @@ export class SessionCoordinator {
             'Response left the reviewed teaching topic; choose another topic or finish',
           );
         else {
-          this.activityOffer = proposedActivity;
+          const canOfferPhoto = this.publicPhotoEnabled() && session.endpoint === 'browser';
+          this.activityOffer = photoClaim ? (canOfferPhoto ? 'photo' : null) : proposedActivity;
           const redirectFallback =
             !!redirect && mentionsTopic(response.data.text, redirectSettings!.awayFrom);
-          const replyText = redirectFallback
-            ? input.language === 'de'
-              ? 'Wir können uns einen ruhigen Moment Zeit nehmen.'
-              : 'We can take a quiet moment together.'
-            : response.data.text;
+          const replyText = photoClaim
+            ? canOfferPhoto
+              ? session.communicationSupport.preset === 'quiet'
+                ? 'To start Photo Story, say yes.'
+                : 'Would you like to start Photo Story?'
+              : 'Photo Story is not available here. We can keep talking.'
+            : redirectFallback
+              ? input.language === 'de'
+                ? 'Wir können uns einen ruhigen Moment Zeit nehmen.'
+                : 'We can take a quiet moment together.'
+              : response.data.text;
           if (redirect) {
             redirectTopics.forEach((topic) => this.redirectedTopics.add(topic));
             this.lastRedirectedMessage = input.text;
@@ -1630,7 +1646,7 @@ export class SessionCoordinator {
               text: replyText,
               language: input.language,
               source:
-                redirectFallback || fixedDecisionReply
+                photoClaim || redirectFallback || fixedDecisionReply
                   ? 'fixed'
                   : this.mode === 'mock'
                     ? 'scripted'

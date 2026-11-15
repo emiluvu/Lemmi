@@ -10,6 +10,7 @@ export type BrowserSpeechTiming = {
 };
 export interface BrowserAudioOptions {
   automatic?: boolean;
+  // Defaults to a 1.5-second thinking pause; the initial no-speech wait is separate.
   silenceMs?: number;
   loadDetector?: () => Promise<VoiceDetector>;
   now?: () => number;

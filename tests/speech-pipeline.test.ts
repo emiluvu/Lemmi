@@ -644,10 +644,12 @@ test('a participant can begin speaking after a long initial pause under the same
     payload: { leaseId: scope.leaseId, streamId: scope.streamId, chunkCount: 1600 },
   };
   expect(DeviceEventSchema.safeParse(envelope).success).toBe(true);
-  expect(DeviceEventSchema.safeParse({
-    ...envelope,
-    payload: { ...envelope.payload, chunkCount: SPEECH_CAPTURE_FRAMES + 1 },
-  }).success).toBe(false);
+  expect(
+    DeviceEventSchema.safeParse({
+      ...envelope,
+      payload: { ...envelope.payload, chunkCount: SPEECH_CAPTURE_FRAMES + 1 },
+    }).success,
+  ).toBe(false);
   const reply = await f.end(1600);
   expect(reply.ok).toBe(true);
   expect(f.seen.model).toBe('A fictional garden greeting');

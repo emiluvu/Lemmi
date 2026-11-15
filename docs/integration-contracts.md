@@ -296,7 +296,7 @@ After a successful new `input.start`, configured/negotiated speech reads a fixed
 ### Local conversation reliability candidate — November 15
 
 Not deployed. Browser initial no-speech waits 30 seconds; post-speech ending
-retains its configured 1,000–8,000 ms window. Browser capture ends at 39.5 seconds
+uses the user-selected 1,500 ms default, configurable over 1,000–8,000 ms. Browser capture ends at 39.5 seconds
 or 1,975 frames; server grants and both audio.end schemas cap at 40 seconds /
 2,000 frames / 1,280,000 bytes. The local STT wrapper accepts that same byte cap;
 post-capture inference deadlines remain 20 seconds. Matching web/gateway/wrapper

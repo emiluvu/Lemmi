@@ -2,14 +2,17 @@
 
 November 15, 2026. Local branch `fix/lemmi-conversation-reliability`, isolated
 worktree `/tmp/lemmi-conversation-reliability`. Not deployed. The original shared
-checkout and other dirty worktrees retain their work. No credentials, database
+checkout and other dirty worktrees retain their work. Integration includes the
+latest fetched backend release `8a08430`, including scalar photo asset tracking
+and unsupported image-claim safeguards. No credentials, database
 records, host configuration or firmware were changed.
 
 ## Behavior and causes
 
 - Browser initial silence previously paused after 15 seconds. It now waits 30
   seconds, with no empty recognition/model request. Normal post-speech ending is
-  separately configurable. Quiet still returns capture-off after a reply.
+  separately configurable; the user selected a 1.5-second default (range 1–8
+  seconds). Quiet still returns capture-off after a reply.
 - A retired output's `response.cancel` could stop a fresh browser capture or
   Resume intent. Both browser controllers now require the current output's
   session/turn/stream identifiers. Actual current cancellation still stops it.
@@ -40,14 +43,23 @@ clearing and cancellation remain bounded. New clients can still parse the old
 
 Deploy matching web, gateway and local speech wrapper together after review:
 an older wrapper rejects input over 20 seconds. No dependency, migration or
-provider change. Start/reconnect/Unmute do not independently authorize capture.
+provider change. Set existing `PUBLIC_LEMMI_END_SILENCE_MS` configuration to
+`1500` at rollout: an explicit old `1000` overrides the new default.
+Start/reconnect/Unmute do not independently authorize capture.
 Firmware may retain an earlier local timeout; the legacy local
 `/participant/voice` client also retains its 19.5-second limit. Current designed
 conversation, teaching and Photo Story use the updated LiveParticipant path.
 
 ## Verification and next handoff
 
-Final integrated verification is recorded in the build plan and backend status.
+Pinned Bun 1.4.4 frozen install, type/Svelte check, production build, formatting
+and whitespace checks passed. Final integrated suite: **451 passed / 46 skipped /
+0 failed**, 12,391 expectations across 58 files. The 46 database-dependent checks
+need configured PostgreSQL. Seven Python wrapper boundary checks passed. The
+full gateway suite includes a 30-turn fixture conversation and checks real local
+WSS routing with explicit synthetic speech/model adapters. No real provider call
+or retained microphone media is involved. Detailed verification is also recorded
+in the build plan and backend status.
 Tests use explicit fictional adapters and local loopback gateways. They do not
 establish real ASR/LLM quality or prove every reported intermittent stall fixed.
 No hosting-machine, real microphone/speaker, physical K151 or live-provider

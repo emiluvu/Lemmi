@@ -16,8 +16,11 @@
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
   let source = $state('');
   let attempt = $state(0);
+  // Activity snapshots are fresh objects even when the selected image is the
+  // same. Depend on the scalar ID so playback/heartbeat updates keep the blob.
+  let selectedAssetId = $derived(assetId);
   $effect(() => {
-    const id = assetId;
+    const id = selectedAssetId;
     attempt;
     const controller = new AbortController();
     let active = true;
@@ -96,6 +99,8 @@
     width: 100%;
     height: min(320px, 28dvh);
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     place-items: center;
     background: #fffdf7;
     border-radius: 20px;
@@ -103,6 +108,8 @@
     text-align: center;
   }
   img {
+    min-width: 0;
+    min-height: 0;
     width: 100%;
     height: 100%;
     object-fit: contain;

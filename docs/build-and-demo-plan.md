@@ -1,5 +1,82 @@
 # Lemmi — Build and demo plan
 
+## Local conversation reliability candidate — November 15, 2026
+
+Branch `fix/lemmi-conversation-reliability`, integrating fetched backend release
+`8a08430`. Not deployed. Browser initial no-speech allowance is 30 seconds;
+post-speech silence defaults to the user's selected **1.5 seconds** (range 1–8).
+Shared capture/input bounds are 40 seconds / 2,000 frames / 1,280,000 bytes;
+matching web, gateway and local speech wrapper must ship together. Set existing
+`PUBLIC_LEMMI_END_SILENCE_MS` configuration to `1500` when rolling out, since an
+explicit older `1000` overrides the new default. No migration or provider change.
+
+Fixed retired output cancellation interrupting fresh listening/Resume; strengthened
+async error scoping for same-generation Mute/Unmute. Natural Teach Lemmi topic
+selection now accepts “I would like to talk about gardening” and continues with
+the model. Spoken photo next/back/skip, easier deliberate activity exits/switches
+and simple photo invitations reuse current authority, eligibility and reducers.
+Approved photo grounding remains server-side. Latest deployed image-load and
+unsupported picture-claim safeguards are retained.
+
+Observed locally with pinned Bun 1.4.4: frozen install, type/Svelte, production
+build, formatting and whitespace checks passed. **451 tests passed, 46 skipped,
+zero failures; 12,391 expectations across 58 files**. Skips require configured
+PostgreSQL test databases, unavailable here. Seven Python speech-wrapper boundary
+tests passed. Gateway fixture coverage includes 30-turn continuation, paused
+STT/model/TTS cancellation, same-generation Mute/Unmute, fresh capture, spoken
+photo next/back, gardening menu selection and substantive follow-up, current
+synthesis failures and the 40-second ready advertisement. Browser tests cover
+30-second no-speech, a late answer, the 1.5-second default and speech resetting
+its timer; a 32-second server input verifies both end schemas and buffer clearing.
+
+These are software/fictional-adapter observations; no live ASR/LLM, current
+Chromium/keyboard, actual microphone/speaker or K151 acceptance was run. The
+intermittent user-reported stall is not claimed universally resolved. Anay reviews
+contracts/cancellation, Kylie participant text/controls, Lukas topic/navigation,
+and Emilia actual endpoint controls/timing. The legacy local `/participant/voice`
+path retains its earlier 19.5-second cap; current designed modes use the updated
+LiveParticipant path. [Detailed handoff](handoffs/conversation-reliability.md).
+
+## Lemmi branding deployed — November 15, 2026
+
+**Web runtime `f3f5199`**, gateway `5146030`, speech/tunnel retained.
+Integrated `e1a5bf9` with the current participant release while retaining scoped
+saved-photo smoke checks. Changes are supplied logo/favicon, route titles and
+metadata, plus exactly `/favicon.svg` and `/images/brand/lemmi.png` in the static
+proxy allowlist. PNG SHA-256 and embedded favicon bytes match the documented
+source; no artwork regeneration, avatar, gateway, schema or dependency change.
+
+Bun 1.4.4 frozen install, type/Svelte, build, formatting and whitespace passed.
+Existing page/access/exit/presentation tests: **16 passed / 159 expectations**.
+Production HTTP/verified TLS/WSS/private-photo and branding-asset MIME smoke
+passed on one disposable PostgreSQL database, removed afterward. The preceding
+backend release's 462-test suite was not rerun for this UI/static-only slice.
+Chromium with the candidate production build passed desktop/mobile logo bounds,
+route titles/metadata, menu keyboard/Escape, no overflow or runtime errors, and
+32px favicon decode with 626 opaque pixels. These used a separate mock browser;
+its navigation lock was isolated between page inspections. No profile/session
+writes, microphone, screenshots or hardware tests.
+
+Web-only rollout at **10:05:17 UTC**; Nginx `-t` passed and the installed proxy
+reloaded with only the two exact static additions. Gateway/speech/tunnel PID and
+start state and private `.env` hash were unchanged. All four services active,
+zero automatic restarts. Protected prior source/build/proxy/runtime record:
+`.data/branding-rollback-path`. No database migration or profile/credential write.
+
+Actual public HTTPS Chromium at desktop/mobile passed byte-exact PNG, expected
+PNG/SVG MIME, a painted 32px favicon (626 opaque pixels), caregiver/settings
+titles and global metadata, keyboard menu/Escape and no overflow/runtime errors.
+The unassigned participant entry correctly redirected to caregiver setup; no
+profile was enrolled to bypass that behavior. Tests waited for hydration and
+isolated only their disposable browser's navigation cookie between pages.
+Unlisted brand files/README, favicon suffixes, `.env`, internal and mock paths
+remained 404. No public screenshots, microphone, profile/session writes or
+hardware acceptance. Reload/reopen the tab if the favicon is cached.
+
+The reviewed source and this acceptance record are synchronized to `main` and
+`backend-deploy` by fast-forward; the deployment checkout stays `backend-deploy`.
+Earlier unspecified bugs and physical K151/audio acceptance remain open.
+
 ## Participant greetings, teaching choices and Finish deployed — November 15, 2026
 
 Reviewed handoff `1037fe1` against the newer deployed startup-recovery and
@@ -69,6 +146,10 @@ human audio and hardware rehearsal at their respective boundaries.
 ### Participant usability candidate — November 14, 2026 (local, not deployed)
 
 `codex/participant-greetings-exit`, based on main `f3e3b41`, adds fixed spoken conversation/activity greetings, an eligible spoken/visible teaching menu and typed selection, stable captions, and a persistent Finish activity button. Photo leave can preserve an existing pause. No firmware, migration, dependency or provider change. Observed on Bun 1.4.4: frozen install, type/Svelte checks (0 errors/warnings), **382 tests passed / 42 skipped / 0 failed**, 6,037 expectations, production build, formatting and diff whitespace. Headless Chromium fictional transport checks at desktop and two mobile sizes verified stable caption bounds, keyboard topic/Finish controls, a visible 48 px Finish target and no unintended capture request. Database checks remain skipped without configuration; actual microphone/speaker/K151 and deployment are unrun. Anay/Lukas/Kylie/Emilia review the shared boundaries before integration. [Exact behavior, compatibility, observed checks and handoff](handoffs/participant-greetings-exit.md).
+
+### Lemmi branding candidate — November 15, 2026 (not deployed)
+
+`codex/lemmi-branding` uses the user-supplied `lemmi.png` unchanged for a reusable header/welcome logo and self-contained SVG favicon, adds browser/mobile identity metadata, and updates the default/UI title and product description. The reverse-proxy template and existing smoke script allow exactly the two public brand asset paths. Observed on Bun 1.4.4: frozen install, type/Svelte checks (0 errors/warnings), production build, formatting, **371 tests passed / 42 database checks skipped / 0 failed**, exact image-byte/allowlist checks, and desktop/mobile Chromium logo/favicon/title/keyboard inspection. No gateway, migration, dependency, credentials, participant avatar or firmware changes. Actual Nginx syntax/host rollout remains Anay’s handoff; Kylie reviews branding. [Deployment steps and evidence](handoffs/lemmi-branding.md).
 
 ### Activity routing repair — November 14, 2026 (local, not deployed)
 
@@ -1274,3 +1355,43 @@ Stackchan transport diagnostics are off; evidence and rollback pointers remain
 saved. No further code change, deployment, restart or test was performed for
 this final handoff. Next session should reproduce the user's remaining bugs
 against these exact revisions before choosing another fix.
+
+
+## Photo Story and conversation debugging candidate — November 15, 2026
+
+`fix/photo-story-conversation-stalls`, source `5d1cece`, integration `0bcc44d` through
+`backend-deploy/435b73a`, is prepared without deploying/restarting existing services.
+Reproduced missed Photo Story phrase dispatch, desktop image clipping and obsolete
+async failures published into newer authority. Covered model display claims now
+become honest offers. Final combined gate after the upstream integration: **473 tests / 6,867
+expectations, zero failures/skips**, on five disposable PostgreSQL databases;
+separate production HTTPS/WSS/private-PNG and branding smoke; zero type/Svelte
+errors/warnings; build/format/whitespace and 15 Python fixture checks passed. Chromium landscape/portrait at three viewport sizes, image failure Pause
+and keyboard retry without capture passed. A paced 30-turn gateway/controller
+fixture crossed Photo Story entry/exit. Latest greetings/teaching/branding remain integrated; see the
+[completion and server handoff](handoffs/photo-story-conversation-stalls.md).
+These checks do not upgrade human speech, live-provider, public-network or hardware
+acceptance. Anay reviews gateway/data boundaries; Kylie image layout; Lukas activity
+routing; Emilia actual endpoint/local controls before integrated release.
+
+
+## Server acceptance — Photo Story and conversation fixes, November 15, 2026
+
+Observed rollout: gateway `1f1c2c4` at 12:10:50 UTC; final web `d4e99d9` at
+12:15:17 UTC. Independently repeated 473 tests / 6,867 expectations without
+failures/skips, 15 Python fixture checks, pinned install/type/build/format,
+production HTTPS/WSS/private-photo smoke and isolated/public Chromium checks.
+Server review additionally reproduced photo refetches during playback and fixed
+scalar asset tracking; regression checks zero fetches for 20 unchanged snapshots
+and reauthorization on a privacy revision. Final public browser recovery,
+keyboard teaching/Finish and image error Pause/retry passed with zero runtime
+errors. Final synthetic public STT → external model → TTS photo entry/discussion
+passed with three outputs/three capture requests and one protected image read.
+Robot-protocol TTS/receipt
+checks passed; first generic greeting probe failure remains undiagnosed after a
+successful unchanged rerun. Original profiles/credentials and Alex's five saved
+photos preserved; only test-owned fixtures removed. No migration/configuration,
+model, speech/tunnel restart or physical flash. Protected rollback pointer:
+`.data/photo-stalls-rollback-path`. [Full evidence](backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026).
+Human 30-turn, microphone/speaker quality and this rollout's K151 acceptance remain
+unrun; Kylie/Lukas/Emilia review their UI/content/local-device boundaries.

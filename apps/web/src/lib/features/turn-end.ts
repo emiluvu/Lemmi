@@ -5,7 +5,7 @@ export class TurnEnd {
   private heard = false;
   private quietMs = 0;
   private elapsedMs = 0;
-  constructor(readonly silenceMs = 1000) {
+  constructor(readonly silenceMs = 1500) {
     if (!Number.isInteger(silenceMs) || silenceMs < 1000 || silenceMs > 8000)
       throw new Error('End silence must be 1000–8000 ms');
   }

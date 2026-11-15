@@ -1,5 +1,74 @@
 # Lemmi backend integration reference
 
+## Photo Story and conversation fixes deployed — November 15, 2026
+
+Current **web `d4e99d9`, gateway `1f1c2c4`** integrate
+`fix/photo-story-conversation-stalls/15851e1`. Web/gateway restarted together at
+12:10:50 UTC; a reviewed web-only image reload correction followed at 12:15:17 UTC.
+No new HTTP route, WSS event, contract, migration, dependency or configuration.
+Speech `a779c70`, tunnel/proxy/database and provider settings retained.
+
+Existing `input.text` and captured-speech routes recognize reviewed explicit
+Photo Story phrases. English ungrounded display claims become a fixed offer;
+confirmation still uses the authoritative activity transition. Obsolete async
+results/errors cannot cancel a newer generation/lease/profile/privacy/policy/
+endpoint scope. Current failures remain visible. Scoped image layout contains
+both orientations, and identical activity snapshots retain the decoded blob;
+existing authority revisions still remount and reauthorize it.
+
+Server checks passed: **473 tests / 6,867 expectations**, five disposable databases,
+15 Python fixture tests, frozen install/type/build/format and production verified
+HTTPS/WSS/private-PNG smoke. Final UI correction repeated relevant build/browser/
+production checks. Public Chromium confirmed decoded scoped photo entry,
+setup/image error recovery, keyboard teaching/Finish and safe retry/Stop;
+synthetic public speech confirmed real local STT → external model → local TTS
+photo entry/discussion and continuation with one protected image read.
+Public robot-protocol TTS/receipts passed on rerun after one undiagnosed initial
+greeting-probe failure. No physical microphone/speaker or K151 acceptance.
+
+[Deployment evidence, limitations and protected rollback pointer](backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026),
+[source and server handoff](handoffs/photo-story-conversation-stalls.md).
+
+## Lemmi branding deployed — November 15, 2026
+
+**Web runtime `f3f5199`**, gateway `5146030`, speech/tunnel retained.
+Integrated `e1a5bf9` with the current participant release while retaining scoped
+saved-photo smoke checks. Changes are supplied logo/favicon, route titles and
+metadata, plus exactly `/favicon.svg` and `/images/brand/lemmi.png` in the static
+proxy allowlist. PNG SHA-256 and embedded favicon bytes match the documented
+source; no artwork regeneration, avatar, gateway, schema or dependency change.
+
+Bun 1.4.4 frozen install, type/Svelte, build, formatting and whitespace passed.
+Existing page/access/exit/presentation tests: **16 passed / 159 expectations**.
+Production HTTP/verified TLS/WSS/private-photo and branding-asset MIME smoke
+passed on one disposable PostgreSQL database, removed afterward. The preceding
+backend release's 462-test suite was not rerun for this UI/static-only slice.
+Chromium with the candidate production build passed desktop/mobile logo bounds,
+route titles/metadata, menu keyboard/Escape, no overflow or runtime errors, and
+32px favicon decode with 626 opaque pixels. These used a separate mock browser;
+its navigation lock was isolated between page inspections. No profile/session
+writes, microphone, screenshots or hardware tests.
+
+Web-only rollout at **10:05:17 UTC**; Nginx `-t` passed and the installed proxy
+reloaded with only the two exact static additions. Gateway/speech/tunnel PID and
+start state and private `.env` hash were unchanged. All four services active,
+zero automatic restarts. Protected prior source/build/proxy/runtime record:
+`.data/branding-rollback-path`. No database migration or profile/credential write.
+
+Actual public HTTPS Chromium at desktop/mobile passed byte-exact PNG, expected
+PNG/SVG MIME, a painted 32px favicon (626 opaque pixels), caregiver/settings
+titles and global metadata, keyboard menu/Escape and no overflow/runtime errors.
+The unassigned participant entry correctly redirected to caregiver setup; no
+profile was enrolled to bypass that behavior. Tests waited for hydration and
+isolated only their disposable browser's navigation cookie between pages.
+Unlisted brand files/README, favicon suffixes, `.env`, internal and mock paths
+remained 404. No public screenshots, microphone, profile/session writes or
+hardware acceptance. Reload/reopen the tab if the favicon is cached.
+
+The reviewed source and this acceptance record are synchronized to `main` and
+`backend-deploy` by fast-forward; the deployment checkout stays `backend-deploy`.
+Earlier unspecified bugs and physical K151/audio acceptance remain open.
+
 ## Participant greetings, teaching choices and Finish deployed — November 15, 2026
 
 Reviewed handoff `1037fe1` against the newer deployed startup-recovery and

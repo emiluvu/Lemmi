@@ -16,12 +16,12 @@ test('a short answer starts endpointing; shorter pauses survive and each new tur
   for (const ms of [0, 999, 8001, NaN, Infinity, 2000.5]) expect(() => new TurnEnd(ms)).toThrow();
 });
 
-test('the faster default preserves a shorter pause, resets on resumed speech and ends once after one second', () => {
+test('the 1.5-second default preserves a thinking pause and resets fully on resumed speech', () => {
   const turn = new TurnEnd();
   for (let i = 0; i < 5; i++) expect(turn.push(true)).toBe('continue');
-  for (let i = 0; i < 49; i++) expect(turn.push(false)).toBe('continue');
+  for (let i = 0; i < 74; i++) expect(turn.push(false)).toBe('continue');
   expect(turn.push(true)).toBe('continue');
-  for (let i = 0; i < 49; i++) expect(turn.push(false)).toBe('continue');
+  for (let i = 0; i < 74; i++) expect(turn.push(false)).toBe('continue');
   expect(turn.push(false)).toBe('finished');
 });
 
@@ -51,6 +51,13 @@ test('initial silence waits thirty seconds while normal post-speech ending stays
   const lateReply = new TurnEnd();
   for (let i = 0; i < 1400; i++) expect(lateReply.push(false)).toBe('continue');
   for (let i = 0; i < 5; i++) expect(lateReply.push(true)).toBe('continue');
-  for (let i = 0; i < 49; i++) expect(lateReply.push(false)).toBe('continue');
+  for (let i = 0; i < 74; i++) expect(lateReply.push(false)).toBe('continue');
   expect(lateReply.push(false)).toBe('finished');
+});
+
+test('a configured one-second fast option remains available', () => {
+  const turn = new TurnEnd(1000);
+  for (let i = 0; i < 5; i++) expect(turn.push(true)).toBe('continue');
+  for (let i = 0; i < 49; i++) expect(turn.push(false)).toBe('continue');
+  expect(turn.push(false)).toBe('finished');
 });

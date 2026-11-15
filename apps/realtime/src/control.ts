@@ -109,13 +109,28 @@ export function startControlGateway(options: Options) {
   // Late failures use the current wire envelope, so discard them when the
   // authority that started their work has been replaced by Pause/Resume or Stop.
   function asyncScopeCurrent(ws: Bun.ServerWebSocket<SocketData>, token: SessionSnapshot | null) {
-    if (!token || !sockets.has(ws) || !access.current(ws.data.identity) || !ownsEndpoint(ws.data.identity))
+    if (
+      !token ||
+      !sockets.has(ws) ||
+      !access.current(ws.data.identity) ||
+      !ownsEndpoint(ws.data.identity)
+    )
       return false;
     const latest = sessions.forProfile(ws.data.identity.profileId).snapshot();
-    return !!latest && ([
-      'id', 'generation', 'leaseId', 'profileRevision', 'privacyRevision',
-      'policyRevision', 'activeEndpointId',
-    ] as const).every((key) => latest[key] === token[key]);
+    return (
+      !!latest &&
+      (
+        [
+          'id',
+          'generation',
+          'leaseId',
+          'profileRevision',
+          'privacyRevision',
+          'policyRevision',
+          'activeEndpointId',
+        ] as const
+      ).every((key) => latest[key] === token[key])
+    );
   }
   function disconnect(identity: DeviceIdentity) {
     if (ownsEndpoint(identity)) sessions.forProfile(identity.profileId).disconnect();
@@ -761,7 +776,12 @@ export function startControlGateway(options: Options) {
           void work
             .then((result) => {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
-              if (!result.ok && (!sameWork() || (result.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, selected)))) return;
+              if (
+                !result.ok &&
+                (!sameWork() ||
+                  (result.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, selected)))
+              )
+                return;
               const latest = coordinator.snapshot();
               if (
                 result.ok &&
@@ -884,7 +904,12 @@ export function startControlGateway(options: Options) {
           void work
             .then((result) => {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
-              if (!result.ok && (!sameWork() || (result.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, current)))) return;
+              if (
+                !result.ok &&
+                (!sameWork() ||
+                  (result.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, current)))
+              )
+                return;
               const latest = coordinator.snapshot();
               if (
                 result.ok &&
@@ -1003,7 +1028,12 @@ export function startControlGateway(options: Options) {
             )
             .then((spoken) => {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
-              if (!spoken.ok && (!sameWork() || (spoken.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, selected)))) return;
+              if (
+                !spoken.ok &&
+                (!sameWork() ||
+                  (spoken.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, selected)))
+              )
+                return;
               if (
                 spoken.ok &&
                 spoken.data.kind === 'reply' &&

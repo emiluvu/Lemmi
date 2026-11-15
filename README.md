@@ -4,7 +4,7 @@
 `fix/lemmi-conversation-reliability` fixes premature silence pauses, stale
 cancellations after Resume, natural teaching-topic selection, spoken photo
 navigation and activity exits. Browser initial silence is 30 seconds; normal
-post-speech ending remains short. Deploy matching web, gateway and local speech
+post-speech ending defaults to the requested 1.5 seconds. Deploy matching web, gateway and local speech
 wrapper together for the new bounded 40-second input contract.
 [Changes, local checks and host/robot retest](docs/handoffs/conversation-reliability.md).
 
@@ -25,6 +25,8 @@ Refresh/reconnect, select Alex and explicitly Start. [Checks and handoff](docs/h
 stopped with uplink unresolved. [Preserved evidence and experiment review](docs/handoffs/stackchan-uplink-backend-investigation.md).
 
 **Participant usability improvements deployed — web/gateway `5146030`:** spoken conversation/activity greetings, spoken and visible eligible teaching-topic choices, stable captions, and a persistent **Finish activity** control. [Implementation, verification, and counterpart handoff](docs/handoffs/participant-greetings-exit.md).
+
+**Branding deployed — web `f3f5199`:** the supplied Lemmi artwork now supplies the app logo and favicon, with updated browser titles/metadata. [Backend web/proxy deployment handoff](docs/handoffs/lemmi-branding.md).
 
 **Stackchan gateway update deployed (`264df22`):** [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.
 
@@ -77,7 +79,9 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
-**Current deployment:** web `d6d2ff6`, gateway `95bdcef`; follow the microphone flow above. Enrollment, plain Unmute and mode selection alone do not grant capture. Browser Start is the explicit opt-in to conversation listening.
+Deployed Photo Story/conversation fixes: web `d4e99d9`, gateway `1f1c2c4`. Explicit photo requests, image containment, repeated image reads and obsolete asynchronous errors are fixed; 473 backend tests plus production/public browser checks passed. [Evidence, remaining human/hardware checks and rollback](docs/backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026).
+
+**Current deployment:** web `d4e99d9`, gateway `1f1c2c4`; follow the microphone flow above. Enrollment, plain Unmute and mode selection alone do not grant capture. Browser Start is the explicit opt-in to conversation listening.
 
 
 **Teach Lemmi source increment (`codex/teach-lemmi`):** a playable scripted Alex text demo is available in the existing Participant page. Backend teaching handlers reuse the shared coordinator, OpenRouter and speech seams, with reviewed topics, session-only feedback and a fifteen-minute active-time limit. [Tester manual](docs/teach-lemmi-tester-manual.md) and [Anay/Kylie/Emilia handoff](docs/handoffs/lukas-teach-lemmi.md) cover launch and checks. Teach Lemmi and the integrated live participant shell are deployed as runtime `f5724a0`; start at `/access` → `/participant`. Public voice is enabled for fictional team tests; actual browser microphone/speaker, physical robot acceptance and durable teaching memory/journal observations remain pending.
