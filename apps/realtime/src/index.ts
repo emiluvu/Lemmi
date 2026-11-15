@@ -8,7 +8,11 @@ import { DeviceEventSchema, ServerEventSchema, fail, type ServerEvent } from '@l
 import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
-import { localSpeechConfig, createLocalSpeechAdapters } from '@lemmi/server';
+import {
+  localSpeechConfig,
+  createLocalSpeechAdapters,
+  speechConcurrencyConfig,
+} from '@lemmi/server';
 function startMockGateway() {
   assertMockMode();
   const coordinator = new MockCoordinator();
@@ -225,6 +229,7 @@ if (process.env.LEMMI_MODE === 'live') {
     repository,
     demoEnrollment: process.env.LEMMI_DEMO_ENROLLMENT === '1',
     speech,
+    speechConcurrency: speech ? speechConcurrencyConfig() : undefined,
     caregiverSubject: config?.subject,
     ...controlConfig(),
     port: Number(process.env.GATEWAY_PORT ?? 3001),

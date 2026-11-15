@@ -67,6 +67,7 @@ def configure(directory, stt_profile="base"):
         "LEMMI_SPEECH_STT_ENGINE=faster-whisper", "LEMMI_SPEECH_TTS_ENGINE=piper",
         "LEMMI_SPEECH_STT_MODEL_PATH=" + json.dumps(str(directory / ("stt-small" if stt_profile == "small" else "stt"))),
         "LEMMI_SPEECH_STT_DEVICE=cpu", "LEMMI_SPEECH_STT_COMPUTE=int8",
+        "LEMMI_SPEECH_STT_WORKERS=1", "LEMMI_SPEECH_TTS_WORKERS=1", "LEMMI_SPEECH_TTS_DEVICE=cpu",
         "LEMMI_SPEECH_THREADS=4",
         "LEMMI_SPEECH_VOICE_EN=" + json.dumps(str(directory / "tts" / (voice + ".onnx"))),
         "LEMMI_SPEECH_VOICE_DE=", "",

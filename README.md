@@ -1,5 +1,7 @@
 # Lemmi
 
+Undeployed speech performance work: [worker pools, CUDA options and testing-server handoff](docs/handoffs/speech-gpu-concurrency.md). Local concurrency is tested; NVIDIA setup/measurements are delegated to the testing-server agent.
+
 Undeployed speech candidate: [automatic browser turn ending and timing diagnostics](docs/handoffs/natural-speech-turns.md). Listening can finish after 1.5 seconds of detected non-speech; manual Finish speaking remains. Initial silence pauses without model submission. The selected backend voice is `en_US-hfc_female-medium` for browser and Stackchan output; whole-turn STT, capture bounds and firmware are unchanged; physical microphone/voice-quality review remains pending.
 
 Local UI/browser integration preparation: [combined frontend/backend handoff](docs/handoffs/frontend-backend-integration.md) — includes the copied uncommitted UI, Teach Lemmi/Alex content, browser client wiring, observed checks and remaining deployment gates.

@@ -1,5 +1,7 @@
 # Lemmi — Integration contracts and handoffs
 
+**Undeployed speech concurrency increment:** separate STT/TTS admission lanes and independently cancelable 1–4-worker engine pools replace the global single-job gate. Match `LEMMI_SPEECH_STT_WORKERS` / `LEMMI_SPEECH_TTS_WORKERS` in gateway and speech-wrapper environments; existing input/output limits and per-profile ownership remain. CUDA TTS is explicitly selectable; target NVIDIA validation is delegated to the server agent. Private `/health` adds engine device/compute and configured/ready worker counts; public HTTP/WSS schemas are unchanged. [Implementation, local evidence and server-agent steps](handoffs/speech-gpu-concurrency.md).
+
 **Undeployed browser speech candidate:** [natural speech turns](handoffs/natural-speech-turns.md) adds local WebRTC detection using existing granted PCM/`audio.end`/`input.pause`. No wire/schema change. Optional internal `SpeechAdapters.onTiming` propagates through the scheduler. Public web settings control automatic/manual ending and content-free durations. The user-selected browser default is 1500 ms after speech; firmware silence detection remains pending with the same initial target. Backend provisioning now selects `en_US-hfc_female-medium` (22,050 Hz) for either output endpoint. Initial silence uses paused + explicit Resume; whole-turn STT and capture bounds remain.
 
 **Status:** Starter baseline implemented; full v1/provider/hardware contract freeze pending

@@ -10,7 +10,7 @@ import signal
 import socket
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -30,6 +30,9 @@ class Config:
     stt_model: str = ""
     stt_device: str = "cpu"
     stt_compute: str = "int8"
+    tts_device: str = "cpu"
+    stt_workers: int = 1
+    tts_workers: int = 1
     threads: int = 4
     voice_en: str = ""
     voice_de: str = ""
@@ -45,6 +48,9 @@ class Config:
             stt_model=os.environ.get(p + "STT_MODEL_PATH", ""),
             stt_device=os.environ.get(p + "STT_DEVICE", "cpu"),
             stt_compute=os.environ.get(p + "STT_COMPUTE", "int8"),
+            tts_device=os.environ.get(p + "TTS_DEVICE", "cpu"),
+            stt_workers=int(os.environ.get(p + "STT_WORKERS", "1")),
+            tts_workers=int(os.environ.get(p + "TTS_WORKERS", "1")),
             threads=int(os.environ.get(p + "THREADS", "4")),
             voice_en=os.environ.get(p + "VOICE_EN", ""),
             voice_de=os.environ.get(p + "VOICE_DE", ""),
@@ -55,6 +61,10 @@ class Config:
             raise ValueError("Unsupported speech engine; no fallback was selected")
         if result.stt_device not in {"cpu", "cuda"} or result.stt_compute not in {"int8", "float16", "int8_float16", "float32"}:
             raise ValueError("Unsupported STT execution configuration")
+        if result.tts_device not in {"cpu", "cuda"}:
+            raise ValueError("Unsupported TTS device")
+        if not 1 <= result.stt_workers <= 4 or not 1 <= result.tts_workers <= 4:
+            raise ValueError("Each speech pool requires 1–4 workers")
         if not 0 <= result.port <= 65535 or not 1 <= result.threads <= 16:
             raise ValueError("Invalid speech port/thread bounds")
         if result.stt_backend != "disabled" and (not result.stt_model or not Path(result.stt_model).is_dir()):
@@ -83,16 +93,26 @@ def engine_process(connection, config):
     os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
     os.environ["DO_NOT_TRACK"] = "1"
     try:
+        # Bound ONNX/OpenMP CPU work per independently cancelable process.
+        os.environ["OMP_NUM_THREADS"] = str(config["threads"])
         import numpy as np
         stt = None
         voices = {}
         if config["stt_backend"] == "faster-whisper":
+            if config["stt_device"] == "cuda":
+                import ctranslate2
+                if config["stt_compute"] not in ctranslate2.get_supported_compute_types("cuda", 0):
+                    raise ValueError("Requested GPU compute is unavailable")
             from faster_whisper import WhisperModel
             stt = WhisperModel(config["stt_model"], device=config["stt_device"],
                                compute_type=config["stt_compute"], cpu_threads=config["threads"],
                                num_workers=1, local_files_only=True)
         if config["tts_backend"] == "piper":
             from piper import PiperVoice
+            import onnxruntime as ort
+            use_cuda = config["tts_device"] == "cuda"
+            if use_cuda and "CUDAExecutionProvider" not in ort.get_available_providers():
+                raise ValueError("CUDA TTS provider unavailable")
             for language in ["en", "de"]:
                 model = config["voice_" + language]
                 if model:
@@ -101,9 +121,20 @@ def engine_process(connection, config):
                         voice_config = json.load(f)
                     if voice_config.get("phoneme_type", "espeak") != "espeak" or not voice_config.get("language", {}).get("code", "").startswith(language):
                         raise ValueError("Unsupported or mismatched voice language")
-                    voices[language] = PiperVoice.load(model, use_cuda=False)
-        connection.send({"ready": True, "stt": {"backend": config["stt_backend"], "languages": ["en", "de", "auto"] if stt else []},
-                         "tts": {"backend": config["tts_backend"], "languages": list(voices)}})
+                    # Keep Piper's phonemizer/config but explicitly bound ORT threads.
+                    options = ort.SessionOptions()
+                    options.intra_op_num_threads = config["threads"]
+                    options.inter_op_num_threads = 1
+                    options.log_severity_level = 4
+                    from piper.config import PiperConfig
+                    providers = [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "HEURISTIC"})] if use_cuda else ["CPUExecutionProvider"]
+                    session = ort.InferenceSession(model, sess_options=options, providers=providers)
+                    if use_cuda and session.get_providers()[0] != "CUDAExecutionProvider":
+                        raise ValueError("CUDA TTS initialization failed; no CPU fallback")
+                    session.disable_fallback()
+                    voices[language] = PiperVoice(session=session, config=PiperConfig.from_dict(voice_config))
+        connection.send({"ready": True, "stt": {"backend": config["stt_backend"], "device": config["stt_device"], "compute": config["stt_compute"], "languages": ["en", "de", "auto"] if stt else []},
+                         "tts": {"backend": config["tts_backend"], "device": config["tts_device"], "languages": list(voices)}})
     except Exception:
         connection.send({"ready": False})
         connection.close()
@@ -180,6 +211,13 @@ class Worker:
         self.capabilities = None
         self.early_cancels = {}
         self.cancel_lock = threading.Lock()
+
+    def health(self):
+        process, capabilities = self.process, self.capabilities
+        try:
+            return capabilities if process and process.is_alive() else None
+        except (ValueError, OSError):
+            return None
 
     def start(self, deadline):
         context = mp.get_context("spawn")
@@ -263,14 +301,99 @@ class Worker:
             self.lock.release()
 
 
+class WorkerPool:
+    """No inference queue here. The gateway owns bounded waiting/deadlines.
+
+    Each process has its own model copy, pipe and cancel gate, so killing one
+    turn's native inference never kills another participant's work.
+    """
+    def __init__(self, config, target=engine_process):
+        self.workers = {}
+        self.lock = threading.Lock()
+        self.active = {}
+        self.early_cancels = {}
+        self.closed = False
+        if config.stt_backend != "disabled":
+            single = replace(config, tts_backend="disabled", voice_en="", voice_de="")
+            self.workers["stt"] = [Worker(single, target) for _ in range(config.stt_workers)]
+        if config.tts_backend != "disabled":
+            single = replace(config, stt_backend="disabled", stt_model="")
+            self.workers["tts"] = [Worker(single, target) for _ in range(config.tts_workers)]
+
+    def start(self, deadline):
+        try:
+            for workers in self.workers.values():
+                for worker in workers:
+                    worker.start(deadline)
+        except Exception:
+            self.dispose()
+            raise
+
+    def health(self):
+        result = {"ready": True}
+        for kind in ["stt", "tts"]:
+            workers = self.workers.get(kind, [])
+            ready = [state for worker in workers if (state := worker.health()) and state.get("ready")]
+            if workers and not ready:
+                result["ready"] = False
+            backend = getattr(workers[0].config, kind + "_backend") if workers else "disabled"
+            details = ready[0][kind] if ready else {"backend": backend, "languages": []}
+            result[kind] = {**details, "workers": len(workers), "readyWorkers": len(ready)}
+        if self.closed:
+            result["ready"] = False
+        return result if result["ready"] else None
+
+    def cancel(self, request_id):
+        with self.lock:
+            worker = self.active.get(request_id)
+            if worker:
+                return worker.cancel(request_id)
+            cutoff = time.monotonic() - 30
+            self.early_cancels = {key: at for key, at in self.early_cancels.items() if at > cutoff}
+            if len(self.early_cancels) < 256:
+                self.early_cancels[request_id] = time.monotonic()
+            return False
+
+    def infer(self, request_id, job):
+        with self.lock:
+            if self.closed or request_id in self.active:
+                raise RuntimeError("Unavailable or duplicate speech job")
+            canceled_at = self.early_cancels.pop(request_id, None)
+            if canceled_at is not None and canceled_at > time.monotonic() - 30:
+                raise RuntimeError("Speech request canceled before assignment")
+            busy = set(self.active.values())
+            worker = next((w for w in self.workers.get(job["kind"], []) if w not in busy), None)
+            if worker is None:
+                raise RuntimeError("Speech pool busy or disabled")
+            self.active[request_id] = worker
+        try:
+            return worker.infer(request_id, job)
+        finally:
+            with self.lock:
+                self.active.pop(request_id, None)
+
+    def dispose(self, graceful=False):
+        with self.lock:
+            self.closed = True
+            active = list(self.active.items())
+        for request_id, worker in active:
+            worker.cancel(request_id)
+        for workers in self.workers.values():
+            for worker in workers:
+                # Wait for the canceled request's owner to finish touching its pipe.
+                with worker.lock:
+                    worker.dispose(graceful=graceful)
+
+
 class SpeechServer(ThreadingHTTPServer):
     daemon_threads = True
-    request_queue_size = 4
+    request_queue_size = 16
 
     def __init__(self, config, worker):
         self.config = config
         self.worker = worker
-        self.slots = threading.BoundedSemaphore(8)
+        # At most eight inference slots plus room for cancel/health/control calls.
+        self.slots = threading.BoundedSemaphore(16)
         super().__init__(("127.0.0.1", config.port), Handler)
 
     def process_request(self, request, client_address):
@@ -330,8 +453,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.allowed():
             if self.path == "/health":
-                ready = bool(self.server.worker.capabilities and self.server.worker.process and self.server.worker.process.is_alive())
-                self.reply(200 if ready else 503, {"ok": ready, "data": self.server.worker.capabilities if ready else None})
+                state = self.server.worker.health()
+                self.reply(200 if state else 503, {"ok": bool(state), "data": state})
             else:
                 self.reply(404, {"ok": False})
 
@@ -385,8 +508,8 @@ def main():
     try:
         config = Config.from_env()
         stage = "engine initialization"
-        worker = Worker(config)
-        worker.start(time.monotonic() + 60)
+        worker = WorkerPool(config)
+        worker.start(time.monotonic() + 120)
         stage = "loopback binding"
         server = SpeechServer(config, worker)
         print(f"Lemmi private speech ready on 127.0.0.1:{server.server_port}; no request/audio/transcript logging", flush=True)
