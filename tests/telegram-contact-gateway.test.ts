@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { ServerEventSchema, type ServerEvent, type HelpSnapshot } from '@lemmi/contracts';
+import { ServerEventSchema, fail, type ServerEvent, type HelpSnapshot } from '@lemmi/contracts';
 import { controlHelloFixture } from '@lemmi/contracts/fixtures';
 import {
   database,
@@ -39,6 +39,7 @@ let gateway: ReturnType<typeof startControlGateway>;
 let base: string;
 let outcome: 'accepted' | 'failed' = 'accepted';
 const sends: string[] = [];
+let issuedCredential: string | undefined;
 beforeAll(async () => {
   if (!url) return;
   if (!new URL(url).pathname.endsWith('_contact_test'))
@@ -56,6 +57,32 @@ beforeAll(async () => {
     port: 0,
     repository,
     caregiverSubject: auth.subject,
+    chatAdapter: {
+      async complete() {
+        return { ok: true, data: { text: 'A fictional garden.', language: 'en' } };
+      },
+    },
+    speech: {
+      stt: {
+        async transcribe() {
+          return { ok: true, data: { text: 'I need assistance', language: 'en' } };
+        },
+      },
+      tts: {
+        async synthesize() {
+          return {
+            ok: true,
+            data: {
+              pcm: new Uint8Array(1280),
+              sampleRate: 16000,
+              channels: 1,
+              encoding: 'pcm_s16le',
+              language: 'en',
+            },
+          };
+        },
+      },
+    },
     contact: {
       config: contactConfig,
       sender: {
@@ -118,6 +145,7 @@ async function helpHttp(
   );
 }
 async function issue() {
+  if (issuedCredential) return issuedCredential;
   const pair = await gateway.data!.devices.pair(auth.subject, {
     deviceId: 'stackchan-alex',
     profileId: 'profile-alex',
@@ -130,7 +158,8 @@ async function issue() {
     localConfirmed: true,
   });
   if (!claim.ok) throw new Error(claim.error.message);
-  return claim.data.credential;
+  issuedCredential = claim.data.credential;
+  return issuedCredential;
 }
 function client(credential: string) {
   const socket = new WebSocket(`${base.replace('http:', 'ws:')}/v1/device-stream`, {
@@ -157,14 +186,19 @@ function client(credential: string) {
     }
     throw new Error('Expected contact event did not arrive');
   }
-  function send(type: string, payload: unknown = {}, commandId = randomUUID()) {
+  function send(
+    type: string,
+    payload: unknown = {},
+    commandId = randomUUID(),
+    scope?: { id: string; generation: number; turnId?: string },
+  ) {
     socket.send(
       JSON.stringify({
         protocol_version: 1,
         event_id: commandId,
-        session_id: null,
-        turn_id: null,
-        generation: 0,
+        session_id: scope?.id ?? null,
+        turn_id: scope?.turnId ?? null,
+        generation: scope?.generation ?? 0,
         sequence: sequence++,
         type,
         payload,
@@ -204,7 +238,7 @@ dbtest(
           event.payload.help.status === 'accepted',
       );
       expect(accepted.type === 'help.changed' && accepted.payload.help.message).toContain(
-        'sent a notification to your caregiver',
+        'sent a notification to your trusted contact',
       );
       expect(sends).toHaveLength(1);
       expect((await sql`SELECT * FROM lemmi.help_requests`).length).toBe(1);
@@ -262,5 +296,109 @@ dbtest(
       (await helpHttp(route, 'POST', 'authorized', { commandId: randomUUID(), chatId: 'forged' }))
         .status,
     ).toBe(400);
+  },
+);
+
+dbtest(
+  'an obsolete contact-save failure cannot retire a fresh listening turn after Stop and Start',
+  async () => {
+    const originalCreate = gateway.contact!.create;
+    let release!: () => void;
+    let trigger: Parameters<typeof originalCreate>[0] | undefined;
+    gateway.contact!.create = async (input) => {
+      trigger = input;
+      return new Promise((resolve) => {
+        release = () => resolve(fail('REVISION_CONFLICT', 'Canceled fixture contact trigger'));
+      });
+    };
+    const c = client(await issue());
+    const latest = () =>
+      [...c.messages].reverse().find((event) => event.type === 'state.changed') as
+        | Extract<ServerEvent, { type: 'state.changed' }>
+        | undefined;
+    const session = () => latest()?.payload.session;
+    async function until(predicate: () => boolean) {
+      const deadline = Date.now() + 4000;
+      while (!predicate()) {
+        if (Date.now() >= deadline) throw new Error('Contact cancellation fixture deadline');
+        await Bun.sleep(5);
+      }
+    }
+    const scoped = (type: string, payload: unknown = {}, turnId?: string) => {
+      const current = session();
+      if (!current) throw new Error('Current fixture session required');
+      return c.send(type, payload, randomUUID(), {
+        id: current.id,
+        generation: current.generation,
+        turnId,
+      });
+    };
+    try {
+      await c.opened;
+      c.send('device.hello', {
+        firmwareVersion: 'contact-cancel-fixture',
+        endpoint: 'robot',
+        cameraSupported: false,
+        pettingSupported: false,
+        audio: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1, frameMs: 20 },
+        playback: { encoding: 'pcm_s16le', channels: 1, sampleRates: [16000] },
+      });
+      await c.wait((event) => event.type === 'device.ready');
+      c.send('input.start');
+      await until(() => !!session());
+      const firstSession = session()!.id;
+      scoped('input.text', { text: 'I need assistance', language: 'en' });
+      await until(() => !!trigger);
+      expect(trigger?.current?.()).toBe(true);
+      scoped('input.stop');
+      await until(() => session()?.phase === 'ended');
+      c.send('input.start');
+      await until(() => !!session() && session()!.id !== firstSession);
+      const newSession = session()!.id;
+      const opening = await c.wait(
+        (event) => event.type === 'response.start' && event.session_id === newSession,
+      );
+      if (opening.type !== 'response.start') throw new Error('Missing fixture greeting');
+      const meta = opening.payload;
+      await until(
+        () =>
+          c.messages.filter(
+            (event) => event.type === 'audio.chunk' && event.payload.streamId === meta.streamId,
+          ).length === meta.chunkCount,
+      );
+      scoped(
+        'audio.receipt',
+        { leaseId: meta.leaseId, streamId: meta.streamId, status: 'started', playedChunks: 0 },
+        meta.turnId,
+      );
+      scoped(
+        'audio.receipt',
+        {
+          leaseId: meta.leaseId,
+          streamId: meta.streamId,
+          status: 'completed',
+          playedChunks: meta.chunkCount,
+        },
+        meta.turnId,
+      );
+      await until(() => session()?.phase === 'waiting');
+      scoped('input.mute', { muted: false });
+      await until(() => session()?.micMuted === false);
+      scoped('input.speak', { language: 'en' });
+      await until(() => session()?.phase === 'listening' && !!session()?.captureGrant);
+      const turnId = session()!.captureGrant!.turnId;
+      expect(trigger?.current?.()).toBe(false);
+      const before = c.messages.length;
+      release();
+      await Bun.sleep(30);
+      expect(c.messages.slice(before).filter((event) => event.type === 'error')).toEqual([]);
+      expect(session()?.phase).toBe('listening');
+      expect(session()?.captureGrant?.turnId).toBe(turnId);
+    } finally {
+      release?.();
+      gateway.contact!.create = originalCreate;
+      c.socket.close();
+      await Bun.sleep(10);
+    }
   },
 );

@@ -123,7 +123,9 @@ export function startControlGateway(options: Options) {
       ? {
           async create(input) {
             const result = await contact.create(input);
-            if (!result.ok) {
+            // A failed obsolete trigger must not borrow a newer session envelope:
+            // generic errors retire the browser's current listening intent.
+            if (!result.ok && (!input.current || input.current())) {
               for (const socket of sockets)
                 if (
                   socket.data.hello &&

@@ -23,6 +23,9 @@ export const handle: Handle = async ({ event, resolve }) => {
   const dataRoute =
     /^\/v1\/(profiles\/[^/]+(?:\/(?:(photos|assets)(?:\/[^/]+)?|communication-support(?:\/apply)?))?|participant\/profiles\/[^/]+|assets\/[^/]+(?:\/metadata)?)$/.test(
       event.url.pathname,
+    ) ||
+    /^\/v1\/profiles\/[^/]+\/help-requests(?:\/[^/]+(?:\/(?:acknowledge|cancel|resolve))?)?$/.test(
+      event.url.pathname,
     );
   const demoPage = [
     '/',

@@ -170,12 +170,12 @@
     if (event.type === 'help.changed' && event.payload.help.profileId === assignment?.profileId) {
       message = german
         ? ({
-            created: 'Ich benachrichtige deine Betreuungsperson.',
-            sending: 'Ich benachrichtige deine Betreuungsperson.',
-            accepted: 'Ich habe eine Nachricht an deine Betreuungsperson gesendet.',
+            created: 'Ich benachrichtige deine Vertrauensperson.',
+            sending: 'Ich benachrichtige deine Vertrauensperson.',
+            accepted: 'Ich habe eine Nachricht an deine Vertrauensperson gesendet.',
             delivery_unknown: 'Der Nachrichtenstatus ist unklar. Eine Antwort ist nicht bestätigt.',
-            acknowledged: 'Deine Betreuungsperson hat deine Anfrage bestätigt.',
-            resolved: 'Eine Betreuungsperson hat die Anfrage als erledigt markiert.',
+            acknowledged: 'Deine Vertrauensperson hat deine Anfrage bestätigt.',
+            resolved: 'Eine Vertrauensperson hat die Anfrage als erledigt markiert.',
             canceled: 'Weitere Kontaktversuche wurden beendet.',
             delivered: 'Die Zustellung wurde gemeldet. Eine Antwort ist nicht bestätigt.',
             failed:
@@ -599,9 +599,7 @@
     <button onclick={() => control('input.stop')} disabled={!session || session.phase === 'ended'}
       >{wording('Stop', 'Stopp')}</button
     >
-    <button
-      onclick={() => control('input.help')}
-      disabled={!connected || !session || session.phase === 'ended'}
+    <button onclick={() => control('input.help')} disabled={!connected}
       >{wording('Get help', 'Hilfe holen')}</button
     >
   </div>
@@ -833,9 +831,7 @@
         ? wording('Resume conversation', 'Gespräch fortsetzen')
         : 'Pause'}</button
     >
-    <button
-      onclick={() => control('input.stop')}
-      disabled={!connected || !session || session.phase === 'ended'}
+    <button onclick={() => control('input.stop')} disabled={!connected}
       >{wording('Stop', 'Stopp')}</button
     >
     <button

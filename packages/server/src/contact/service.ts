@@ -267,13 +267,16 @@ export class TelegramContactService implements CaregiverContact {
       return { ...a, leaseId, ...valid[0] };
     });
     changed.forEach((help) => this.notify(help));
-    if (!job || this.stopped) return;
+    if (!job) return;
+    if (this.stopped) {
+      await this.releaseUnsent(job, true);
+      return;
+    }
     // Recheck after claiming and before network I/O. Already in-flight messages cannot be recalled.
     const current = await this
       .sql`SELECT 1 FROM lemmi.help_requests r JOIN lemmi.profiles p ON p.id=r.profile_id JOIN lemmi.telegram_routes t ON t.profile_id=p.id JOIN lemmi.contacts c ON c.id=${job.contact_id}::uuid JOIN lemmi.profile_access pa ON pa.profile_id=p.id AND pa.subject=t.subject WHERE r.id=${job.request_id}::uuid AND r.status IN ('created','sending','accepted','delivery_unknown') AND r.expires_at>now() AND p.deletion_state='active' AND p.is_demo AND p.revision=r.profile_revision AND p.privacy_revision=r.privacy_revision AND p.policy_revision=r.policy_revision AND t.enabled AND t.subject=${this.config.subject} AND t.revision=r.route_revision AND (r.category IN ('help_request','contact_request') OR t.auto_alerts) AND c.profile_id=p.id AND c.channel='telegram' AND c.opted_in AND c.verified_at IS NOT NULL AND c.tested_at IS NOT NULL AND c.revision=${job.contact_revision} AND c.id=CASE WHEN ${job.slot}='safe' THEN t.safe_contact_id WHEN ${job.slot}='backup' THEN t.backup_contact_id ELSE t.primary_contact_id END`;
     if (!current.length || this.stopped) {
-      await this
-        .sql`UPDATE lemmi.help_attempts SET state='canceled',lease_id=NULL,lease_expires_at=NULL WHERE id=${job.id}::uuid AND lease_id=${job.leaseId}::uuid`;
+      await this.releaseUnsent(job, !!current.length && this.stopped);
       return;
     }
     const reason =
@@ -322,6 +325,22 @@ export class TelegramContactService implements CaregiverContact {
       return this.refresh(tx, job.request_id);
     });
     if (updated) this.notify(updated);
+  }
+  private async releaseUnsent(job: Row, restarting: boolean) {
+    const changed = await this.sql.begin(async (tx) => {
+      // No network call began. A supervisor stop leaves durable work pending;
+      // invalid authority cancels the whole request, including its backup.
+      const attempts = restarting
+        ? await tx`UPDATE lemmi.help_attempts SET state='pending',tries=GREATEST(0,tries-1),lease_id=NULL,lease_expires_at=NULL WHERE id=${job.id}::uuid AND lease_id=${job.leaseId}::uuid AND state='sending' RETURNING request_id`
+        : await tx`UPDATE lemmi.help_attempts SET state='canceled',lease_id=NULL,lease_expires_at=NULL WHERE id=${job.id}::uuid AND lease_id=${job.leaseId}::uuid AND state='sending' RETURNING request_id`;
+      if (!attempts.length) return;
+      if (restarting) return this.refresh(tx, job.request_id);
+      await tx`UPDATE lemmi.help_attempts SET state='canceled' WHERE request_id=${job.request_id}::uuid AND state='pending'`;
+      const requests =
+        await tx`UPDATE lemmi.help_requests SET status=CASE WHEN expires_at<=now() THEN 'no_response' ELSE 'canceled' END WHERE id=${job.request_id}::uuid AND status IN ('created','sending','accepted','delivery_unknown') RETURNING *`;
+      return requests.length ? this.snapshot(requests[0]) : undefined;
+    });
+    if (changed) this.notify(changed);
   }
   private async refresh(tx: TransactionSQL, id: string) {
     const rows = await tx`SELECT * FROM lemmi.help_requests WHERE id=${id}::uuid FOR UPDATE`;

@@ -151,7 +151,7 @@ test('direct requests to call or speak with a named person notify the configured
       if (!result.ok || result.data.kind !== 'reply')
         throw new Error('Expected fixed notification status');
       expect(result.data.reply.source).toBe('fixed');
-      expect(result.data.reply.text).toContain('caregiver');
+      expect(result.data.reply.text).toContain('trusted contact');
       expect(result.data.reply.text).not.toMatch(
         /I (?:called|have called|am calling|will call) (?:your sister|Maya|your friend)/i,
       );
@@ -317,7 +317,7 @@ test('a maximum-length support recommendation still returns bounded fixed notifi
   expect(result.ok && result.data.kind === 'reply').toBe(true);
   if (!result.ok || result.data.kind !== 'reply') throw new Error('Expected bounded contact reply');
   expect(result.data.reply.text.length).toBeLessThanOrEqual(600);
-  expect(result.data.reply.text).toBe("I'm notifying your caregiver.");
+  expect(result.data.reply.text).toBe("I'm notifying your trusted contact.");
   expect(f.c.snapshot()?.phase).toBe('paused');
 });
 

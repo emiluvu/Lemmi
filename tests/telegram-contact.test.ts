@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import type { TransactionSQL } from 'bun';
 import { ok, fail } from '@lemmi/contracts';
 import { caregiverProfile } from '@lemmi/contracts/fixtures';
 import {
@@ -717,6 +718,139 @@ dbtest(
       }
     } finally {
       await automatic.stop();
+    }
+  },
+);
+
+// Intervene after the real claim transaction commits, before its separate
+// pre-send authority check. No fixture replaces persistence or sender logic.
+function afterClaim(work: () => Promise<void> | void) {
+  let intercepted = false;
+  return new Proxy(sql, {
+    get(target, property) {
+      if (property === 'begin')
+        return async (callback: (tx: TransactionSQL) => Promise<unknown>) => {
+          const result = await sql.begin(callback);
+          if (!intercepted && result && typeof result === 'object' && 'leaseId' in result) {
+            intercepted = true;
+            await work();
+          }
+          return result;
+        };
+      const value = Reflect.get(target, property);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    apply(target, _receiver, arguments_) {
+      return Reflect.apply(target, target, arguments_);
+    },
+  });
+}
+
+for (const interruption of [
+  'recipient',
+  'privacy',
+  'acknowledged',
+  'resolved',
+  'canceled',
+] as const) {
+  dbtest(
+    `pre-send ${interruption} race prevents sending and publishes truthful durable status`,
+    async () => {
+      let sends = 0;
+      const sender: TelegramSender = {
+        async send() {
+          sends++;
+          return { status: 'accepted', messageId: 1 };
+        },
+      };
+      const original = await setup(sender, { backupChatId: '99999' });
+      const id = accepted(await original.create(request())).id;
+      await original.stop();
+      const changes: string[] = [];
+      const guarded = new TelegramContactService(
+        afterClaim(async () => {
+          if (interruption === 'recipient')
+            await sql`UPDATE lemmi.contacts SET opted_in=false WHERE id=(SELECT primary_contact_id FROM lemmi.telegram_routes WHERE profile_id='profile-alex')`;
+          else if (interruption === 'privacy')
+            await sql`UPDATE lemmi.profiles SET privacy_revision=privacy_revision+1 WHERE id='profile-alex'`;
+          else {
+            await original.update(
+              'profile-alex',
+              id,
+              interruption === 'canceled' ? 'cancel' : 'acknowledge',
+              config.subject,
+            );
+            if (interruption === 'resolved')
+              await original.update('profile-alex', id, 'resolve', config.subject);
+          }
+        }),
+        { ...config, backupChatId: '99999' },
+        sender,
+        (help) => changes.push(help.status),
+      );
+      try {
+        await guarded.tick();
+        await guarded.tick();
+        expect(sends).toBe(0);
+        const expected =
+          interruption === 'recipient' || interruption === 'privacy' ? 'canceled' : interruption;
+        expect((await guarded.read('profile-alex', id)).status).toBe(expected);
+        expect(
+          (await sql`SELECT state FROM lemmi.help_attempts WHERE request_id=${id}::uuid`).every(
+            (a: any) => a.state === 'canceled',
+          ),
+        ).toBe(true);
+        if (expected === 'canceled' && interruption !== 'canceled')
+          expect(changes).toContain('canceled');
+      } finally {
+        await guarded.stop();
+      }
+    },
+  );
+}
+
+dbtest(
+  'a supervisor stop after claim preserves unsent work for one send after restart',
+  async () => {
+    let sends = 0;
+    const sender: TelegramSender = {
+      async send() {
+        sends++;
+        return { status: 'accepted', messageId: 1 };
+      },
+    };
+    const original = await setup(sender);
+    const id = accepted(await original.create(request())).id;
+    await original.stop();
+    let stopping: Promise<void> | undefined;
+    let paused: TelegramContactService;
+    paused = new TelegramContactService(
+      afterClaim(() => {
+        stopping = paused.stop();
+      }),
+      config,
+      sender,
+    );
+    await paused.tick();
+    await stopping;
+    expect(sends).toBe(0);
+    expect((await paused.read('profile-alex', id)).status).toBe('created');
+    expect(
+      (
+        await sql`SELECT state,tries,lease_id FROM lemmi.help_attempts WHERE request_id=${id}::uuid`
+      )[0],
+    ).toMatchObject({ state: 'pending', tries: 0, lease_id: null });
+    const restarted = new TelegramContactService(sql, config, sender);
+    try {
+      await restarted.tick();
+      await restarted.tick();
+      expect(sends).toBe(1);
+      expect((await restarted.read('profile-alex', id)).status).toBe('accepted');
+      expect(
+        (await sql`SELECT tries FROM lemmi.help_attempts WHERE request_id=${id}::uuid`)[0].tries,
+      ).toBe(1);
+    } finally {
+      await restarted.stop();
     }
   },
 );
