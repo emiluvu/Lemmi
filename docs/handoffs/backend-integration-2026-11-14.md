@@ -1,6 +1,6 @@
 # Backend branch integration and rollout
 
-Prepared on `anay/backend-integration-20261114` from deployed source `01b6ffb`.
+Prepared on `anay/backend-integration-20261114` from deployed source `01b6ffb`; now installed as gateway/private speech `c594130` and web `12a1e47`.
 Read the original handoffs on their respective branches before integration.
 
 ## Integrated source
@@ -58,3 +58,7 @@ Neither meets the handoff's all-cases/zero-unavailable gate. **Keep `LEMMI_DECIS
 Actual installation, runtime revision, public acceptance and rollback pointer are recorded in [backend status](../backend-status.md), the [API reference](../backend_api.md), and the build plan after observed rollout. Historical feature-handoff “undeployed” statements describe their original work and are superseded by that release record.
 
 Anay: investigate CUDA driver initialization in a maintenance window, then rerun actual isolated inference/throughput/cancellation before choosing GPU settings; investigate decision mismatches/unavailability without weakening data policy. Kylie: review settings and browser recovery/keyboard/zoom. Emilia: verify physical local controls, capture/output, firmware endpointing and room noise. Lukas: review retained teaching/Photo Story behavior and activity-launch handoffs. No completed P0, clinical validation or unattended-care readiness is claimed.
+
+### Observed public/browser rollout
+
+Migration 005 and CPU 2+2/HFC settings installed with backup retained at the host rollback pointer. Actual public STT→external LLM→TTS, capture-off waiting/Stop, persistent credential and scoped Photo Story checks passed. Chromium desktop/mobile caught a Type instead disclosure closing during input; web `12a1e47` binds its user-controlled state. It also makes hidden-tab Pause actually owner-only, correcting the inherited handoff's unimplemented claim. Repeated actual browser checks passed typed submit/Start/Stop, settings, game Escape, no overflow/runtime errors, and observer-hidden-no-Pause versus owner-hidden-Pause across two scoped endpoints. Full 311-test suite passed again after those fixes. No human microphone or audible speaker test was performed.

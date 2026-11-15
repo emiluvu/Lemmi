@@ -1,5 +1,7 @@
 # Backend deployment branch
 
+Current host: gateway/private speech `c594130`, web `12a1e47`. Migration `005_conversation_redirects.sql` is applied. CPU speech uses two STT/two TTS workers and HFC female medium; match gateway/wrapper worker counts. Semantic decisions and CUDA remain disabled after observed evaluation/initialization failures. Keep the shared checkout on `backend-deploy`. [Latest acceptance/configuration/rollback](backend-status.md#integrated-backend-release--november-14-2026), [integration handoff](handoffs/backend-integration-2026-11-14.md). Earlier deployment snapshots below retain historical limitations.
+
 `backend-deploy` is the integration branch for the team-managed backend machine. Merge tested backend changes into it and push normally; do not force-push it. The deployment machine can fetch/pull that branch and rebuild/restart using Anay's automation. This document does not install a tunnel, service manager or automatic updater.
 
 The first snapshot includes authenticated device controls, optional OpenRouter **text** chat, private local speech engines/adapters, shared activity contracts and the [backend API inventory](backend_api.md). Browser sign-in/chat, live microphone/playback, full journal/notification workflows, real notifications and camera remain pending. This is a fictional-profile integration deployment, not completed care-service readiness.

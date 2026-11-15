@@ -1,13 +1,11 @@
 # Lemmi
 
-Local feature branch: [semantic conversation decisions](docs/handoffs/conversation-decisions.md) adds opt-in Jev/OpenAI decision detection for open-chat redirects and reminders. Disabled by default; fictional evaluation instructions and remaining live acceptance are in the handoff. The deployed status below does not include this local branch.
+Integrated release: [branch merges, tested CPU speech concurrency, HFC voice, browser turn ending and UI fixes](docs/handoffs/backend-integration-2026-11-14.md). Semantic decisions remain disabled after live evaluation; CUDA remains off after a driver initialization failure. See [current runtime and public acceptance](docs/backend-status.md).
 
 Public fictional demo: unlock [Lemmi](https://lemmi.chaoswarrior.dev/access), then open the [caregiver workspace](https://lemmi.chaoswarrior.dev/caregiver). `/` opens that workspace; its profile Conversation links open the designed [live companion screen](https://lemmi.chaoswarrior.dev/participant/conversation). Profile listing/creation and conversation/Teach Lemmi use the live backend; Photo Story is available with reviewed illustrations; other games are labeled previews, and camera/journals/private profile editing remain unavailable in this browser. The shared key does not authorize private caregiver APIs. See [current deployment and checks](docs/backend-status.md).
-Undeployed speech performance work: [worker pools, CUDA options and testing-server handoff](docs/handoffs/speech-gpu-concurrency.md). Local concurrency is tested; NVIDIA setup/measurements are delegated to the testing-server agent.
+Deployed open-conversation speech: [automatic browser turn ending and timing diagnostics](docs/handoffs/natural-speech-turns.md). Listening can finish after 1.5 seconds of detected non-speech; manual Finish speaking remains. Initial silence pauses without model submission. The selected backend voice is `en_US-hfc_female-medium` for browser and Stackchan output; whole-turn STT, capture bounds and firmware are unchanged; physical microphone/voice-quality review remains pending.
 
-Undeployed speech candidate: [automatic browser turn ending and timing diagnostics](docs/handoffs/natural-speech-turns.md). Listening can finish after 1.5 seconds of detected non-speech; manual Finish speaking remains. Initial silence pauses without model submission. The selected backend voice is `en_US-hfc_female-medium` for browser and Stackchan output; whole-turn STT, capture bounds and firmware are unchanged; physical microphone/voice-quality review remains pending.
-
-Local UI/browser integration preparation: [combined frontend/backend handoff](docs/handoffs/frontend-backend-integration.md) — includes the copied uncommitted UI, Teach Lemmi/Alex content, browser client wiring, observed checks and remaining deployment gates.
+Frontend/backend integration background: [original combined handoff](docs/handoffs/frontend-backend-integration.md), including Teach Lemmi/Alex content and browser wiring; the current release record supersedes its original deployment status.
 
 Backend checklist: [Anay's tasks](docs/anay_tasks.md) — teammate blockers, backend work and agent claims.
 

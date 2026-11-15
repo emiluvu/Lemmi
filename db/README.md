@@ -85,3 +85,6 @@ The communication-support suite uses a separate disposable `LEMMI_SUPPORT_TEST_D
 For the media migration upgrade/rollback suite, set `LEMMI_SCHEMA_TEST_DATABASE_URL` privately to a **different dedicated disposable** database ending `_schema_test`, then run `bun test tests/media-collections.test.ts`. This suite resets its selected `lemmi` schema and migration ledger to test a populated foundation upgrade; do not reuse the ordinary backend-test database or another agent's database. With both variables set, `bun run test` runs both suites against separate databases.
 
 For the historical full-draft diagnostic, use a third dedicated database ending `_review_test` via `LEMMI_REVIEW_DATABASE_URL` and run `bun scripts/review-app-data-proposal.ts`. It resets/removes that schema and reports boolean observations of missing draft guards; it is not a deployment command or an acceptance test for those behaviors.
+
+
+Migration `005_conversation_redirects.sql` adds explicit caregiver-configured redirect lists to profiles; it is applied on the current shared host. Apply with the normal checksummed migration runner, preserving prior receipts and without reseeding Alex. Keep this additive column/receipt when rolling code back; semantic decision enablement needs no additional migration. See the [integrated release](../docs/handoffs/backend-integration-2026-11-14.md).
