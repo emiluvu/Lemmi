@@ -9,8 +9,8 @@ routes, unavailable German activities, and opt-in pinned German voice candidate
 provisioning. Existing profile permissions/data/keys and English defaults remain.
 Independent read-only backend authority/cancellation review found no blocker.
 
-Observed locally with pinned Bun **1.4.4**: frozen install, **317 passed / 40
-database cases skipped / zero failed**, **5,224 expectations**; Svelte/TypeScript
+Observed locally with pinned Bun **1.4.4**: frozen install, **318 passed / 40
+database cases skipped / zero failed**, **5,228 expectations**; Svelte/TypeScript
 check, production build, full source formatting and whitespace passed. All **15
 Python speech/provisioning tests** passed. Existing production SvelteKit → fixture
 managed identity → verified HTTPS/WSS → pairing/chat/Pause/Resume/revoke smoke
