@@ -55,9 +55,17 @@ import { fixedInputReply, routeParticipantText } from './adapters/input-routing'
 import { permittedModelReply } from './adapters/reply-policy';
 import { mentionsTopic, redirectInstructions } from './adapters/conversation-redirects';
 import { conversationRecap } from './adapters/conversation-recap';
+import {
+  abortable,
+  ConversationDecisionSchema,
+  type ConversationDecisionAdapter,
+} from './adapters/conversation-decisions';
 import type { ChatAdapter, ChatMessage } from './adapters/types';
 import { SpeechTurns, type SpeechAdapters } from './speech-turns';
 import { elapsedEpochClock } from './elapsed-clock';
+const openConversationInstructions =
+  '\nOpen conversation: follow any everyday subject or subject change. No topic selection is required. Answer directly; an acknowledgment can stand alone. Do not quiz, repeat introductions or ask a question every turn.' +
+  '\nUse recent dialogue for references, not as verified biography. Clarify briefly when needed. Do not redirect to profile interests or teaching without applicable transition guidance. Acknowledge uncertain facts; do not pretend to browse, check live information or start activities.';
 // One session authority; teaching reuses conversation/speech without durable dialogue retention.
 export class SessionCoordinator {
   constructor(
@@ -73,6 +81,7 @@ export class SessionCoordinator {
       pack: ApprovedPack;
       availableAssetIds: string[];
     },
+    private readonly decisions?: ConversationDecisionAdapter,
   ) {
     this.now = now === Date.now ? elapsedEpochClock() : now;
     if (mode === 'live' && chatAdapter && speech)
@@ -382,6 +391,7 @@ export class SessionCoordinator {
   }
   private dialogue: ChatMessage[] = [];
   private redirectedTopics = new Set<string>();
+  private lastRedirectedMessage: string | null = null;
   private chatIds = new Map<string, string>();
   private lastChat: { commandId: string; result: Result<ConversationTextResult> } | null = null;
   private pendingChat: {
@@ -577,6 +587,7 @@ export class SessionCoordinator {
     this.pendingChat = null;
     this.dialogue = [];
     this.redirectedTopics.clear();
+    this.lastRedirectedMessage = null;
     this.lastChat = null;
     this.speech?.interrupt(inputOnly, preserveSpeech);
   }
@@ -668,8 +679,14 @@ export class SessionCoordinator {
       input.purpose = 'photo_opening';
     }
     const fixed =
-      route === 'recap' && input.language === 'en'
-        ? conversationRecap(this.dialogue, this.profile.conversationRedirects?.awayFrom ?? [])
+      route === 'recap' &&
+      input.language === 'en' &&
+      (!this.decisions || !!session.teaching || this.photoTalking())
+        ? conversationRecap(
+            this.dialogue,
+            this.profile.conversationRedirects?.awayFrom ?? [],
+            this.lastRedirectedMessage,
+          )
         : fixedInputReply(route, input.language);
     if (route === 'topic_refusal' && session.teaching?.entityId)
       this.teachingHidden.add(session.teaching.entityId);
@@ -688,11 +705,13 @@ export class SessionCoordinator {
         return fail('REVISION_CONFLICT', 'A conversation turn is pending');
       if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
       const previousDialogue = interrupts ? [] : this.dialogue;
+      const previousRedirectedMessage = interrupts ? null : this.lastRedirectedMessage;
       const previousRedirectedTopics = interrupts
         ? new Set<string>()
         : new Set(this.redirectedTopics);
       this.cancelChat(false, speechOwner);
       this.redirectedTopics = previousRedirectedTopics;
+      this.lastRedirectedMessage = previousRedirectedMessage;
       if (!interrupts)
         this.dialogue = [
           ...previousDialogue,
@@ -843,31 +862,33 @@ export class SessionCoordinator {
     if (!prepared.ok) return prepared;
     const redirectSettings =
       !session.teaching && !this.photoTalking() ? this.profile.conversationRedirects : undefined;
-    const redirectTopics =
+    let redirectTopics =
       redirectSettings?.awayFrom.filter(
         (topic) => !this.redirectedTopics.has(topic) && mentionsTopic(input.text, [topic]),
       ) ?? [];
-    const redirect = redirectInstructions(
-      input.text,
-      redirectSettings && {
-        ...redirectSettings,
-        awayFrom: redirectTopics,
-        toward: redirectSettings.toward.filter(
-          (topic) => !mentionsTopic(topic, redirectSettings.awayFrom),
-        ),
-      },
-    );
+    let redirect = this.decisions
+      ? ''
+      : redirectInstructions(
+          input.text,
+          redirectSettings && {
+            ...redirectSettings,
+            awayFrom: redirectTopics,
+            toward: redirectSettings.toward.filter(
+              (topic) => !mentionsTopic(topic, redirectSettings.awayFrom),
+            ),
+          },
+        );
     if (redirect) prepared.data.system += '\n' + redirect;
-    if (!redirect && redirectSettings && mentionsTopic(input.text, redirectSettings.awayFrom))
+    if (
+      !this.decisions &&
+      !redirect &&
+      redirectSettings &&
+      mentionsTopic(input.text, redirectSettings.awayFrom)
+    )
       prepared.data.system +=
         '\nA subject transition has already been offered for this subject. Respect the participant choosing to continue; do not push another redirect. Existing safety rules still apply.';
-    if (!session.teaching && !this.photoTalking() && !redirect)
-      prepared.data.system +=
-        '\nOpen conversation: the participant may introduce any everyday topic or change subjects freely. No topic selection or approved topic catalog is required.' +
-        '\nAnswer the current message directly before considering an optional follow-up. Follow a new subject without redirecting to profile interests or teaching.' +
-        '\nUse recent dialogue to understand references, but treat participant statements as transient self-reports, never verified biography. Ask one brief clarification only when needed.' +
-        '\nGeneral knowledge is allowed; acknowledge uncertainty about current events or facts you cannot verify. Never pretend to browse, check live information or start an activity. Activity availability is controlled by the application.' +
-        '\nAn acknowledgment or direct answer can stand alone. Do not end every response with a question, repeat introductions, or turn ordinary conversation into a quiz.';
+    if (!session.teaching && !this.photoTalking() && !redirect && !this.decisions)
+      prepared.data.system += openConversationInstructions;
     if (photo?.ok && photo.data.kind === 'conversation_context') {
       prepared.data.system +=
         '\n' +
@@ -910,13 +931,95 @@ export class SessionCoordinator {
     };
     pending.promise = (async () => {
       let result: Result<ConversationTextResult>;
+      let fixedDecisionReply = false;
       try {
         const response = await new Promise<Awaited<ReturnType<ChatAdapter['complete']>>>(
           (resolve, reject) => {
             const aborted = () => reject(new Error('Turn canceled'));
             signal.addEventListener('abort', aborted, { once: true });
             Promise.resolve()
-              .then(() => {
+              .then(async () => {
+                signal.throwIfAborted();
+                if (this.decisions && !session.teaching && !this.photoTalking()) {
+                  const topics = (redirectSettings?.awayFrom ?? []).map((label, index) => ({
+                    id: `topic_${index}`,
+                    label,
+                    offered: this.redirectedTopics.has(label),
+                  }));
+                  const decisionSignal = AbortSignal.any([signal, AbortSignal.timeout(2500)]);
+                  const evaluated = await abortable(
+                    () =>
+                      this.decisions!.classify(
+                        {
+                          text: input.text,
+                          language: input.language,
+                          history: this.dialogue.map((entry) => ({ ...entry })),
+                          topics,
+                        },
+                        decisionSignal,
+                      ),
+                    decisionSignal,
+                  );
+                  if (!current() || signal.aborted) throw new Error('Obsolete decision');
+                  if (!evaluated.ok)
+                    return fail(
+                      'UNAVAILABLE',
+                      'Conversation detection unavailable; retry explicitly',
+                    );
+                  const decision = ConversationDecisionSchema.safeParse(evaluated.data);
+                  if (
+                    !decision.success ||
+                    decision.data.redirectTopicIds.some(
+                      (id) => !topics.some((topic) => topic.id === id),
+                    )
+                  )
+                    return fail('UNAVAILABLE', 'Invalid conversation decision');
+                  // A reminder has precedence over an optional topic offer or activity classification.
+                  if (decision.data.recap) {
+                    fixedDecisionReply = true;
+                    return ok({
+                      text: conversationRecap(
+                        this.dialogue,
+                        redirectSettings?.awayFrom ?? [],
+                        this.lastRedirectedMessage,
+                        input.language,
+                      ),
+                      language: input.language,
+                    });
+                  }
+                  redirectTopics = topics
+                    .filter(
+                      (topic) =>
+                        !topic.offered && decision.data.redirectTopicIds.includes(topic.id),
+                    )
+                    .map((topic) => topic.label);
+                  if (decision.data.declinesRedirect) {
+                    topics
+                      .filter((topic) => topic.offered)
+                      .forEach((topic) => this.redirectedTopics.add(topic.label));
+                    prepared.data.system +=
+                      '\nThe participant declined a subject change. Respect their choice and do not offer another redirect.';
+                  } else if (redirectTopics.length && redirectSettings) {
+                    redirect = redirectInstructions(
+                      input.text,
+                      {
+                        ...redirectSettings,
+                        awayFrom: redirectTopics,
+                        toward: redirectSettings.toward.filter(
+                          (topic) => !mentionsTopic(topic, redirectSettings.awayFrom),
+                        ),
+                      },
+                      true,
+                    );
+                    prepared.data.system += '\n' + redirect;
+                  }
+                  if (decision.data.activity !== 'none')
+                    prepared.data.system +=
+                      '\nRequested activity ID: ' +
+                      decision.data.activity +
+                      '. Voice activity launching is not connected. Explain that activity controls are needed; never claim it started.';
+                  if (!redirect) prepared.data.system += openConversationInstructions;
+                }
                 signal.throwIfAborted();
                 return this.chatAdapter!.complete(prepared.data, signal);
               })
@@ -938,7 +1041,10 @@ export class SessionCoordinator {
           response.data.language !== input.language
         )
           result = fail('UNAVAILABLE', 'Invalid conversation reply');
-        else if (!permittedModelReply(response.data.text, session.communicationSupport))
+        else if (
+          !fixedDecisionReply &&
+          !permittedModelReply(response.data.text, session.communicationSupport)
+        )
           result = fail('UNAVAILABLE', 'Response did not meet the configured conversation policy');
         else if (
           teachingTopic &&
@@ -956,19 +1062,30 @@ export class SessionCoordinator {
               ? 'Wir können uns einen ruhigen Moment Zeit nehmen.'
               : 'We can take a quiet moment together.'
             : response.data.text;
-          if (redirect) redirectTopics.forEach((topic) => this.redirectedTopics.add(topic));
-          this.dialogue = [
-            ...this.dialogue,
-            { role: 'user', content: input.text },
-            { role: 'assistant', content: replyText },
-          ].slice(-6) as ChatMessage[];
+          if (redirect) {
+            redirectTopics.forEach((topic) => this.redirectedTopics.add(topic));
+            this.lastRedirectedMessage = input.text;
+          }
+          // A semantic recap request must not replace the substantive thread with
+          // its own paraphrase on the next reminder request.
+          if (!fixedDecisionReply)
+            this.dialogue = [
+              ...this.dialogue,
+              { role: 'user', content: input.text },
+              { role: 'assistant', content: replyText },
+            ].slice(-6) as ChatMessage[];
           result = ok({
             kind: 'reply',
             reply: {
               turnId: input.commandId,
               text: replyText,
               language: input.language,
-              source: redirectFallback ? 'fixed' : this.mode === 'mock' ? 'scripted' : 'model',
+              source:
+                redirectFallback || fixedDecisionReply
+                  ? 'fixed'
+                  : this.mode === 'mock'
+                    ? 'scripted'
+                    : 'model',
             },
             session: this.snapshot()!,
           });

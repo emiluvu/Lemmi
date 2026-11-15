@@ -25,6 +25,7 @@ import {
   hasPrivateAccess,
   type DeviceIdentity,
   type ChatAdapter,
+  type ConversationDecisionAdapter,
   PersistentData,
   DataError,
   dataFailure,
@@ -55,6 +56,7 @@ type Options = {
   port: number;
   now?: () => number;
   chatAdapter?: ChatAdapter;
+  decisionAdapter?: ConversationDecisionAdapter;
   repository?: DataRepository;
   caregiverSubject?: string;
   accessKey?: string | null;
@@ -78,6 +80,7 @@ export function startControlGateway(options: Options) {
     now,
     () => broadcast(),
     options.demoEnrollment === true,
+    options.decisionAdapter,
   );
   for (const profile of options.profiles ?? []) sessions.acceptPersistentProfile(profile);
   // In-memory fixtures explicitly enroll fictional profiles; PostgreSQL supplies its own is_demo check.

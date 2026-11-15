@@ -11,6 +11,8 @@ export * from './device-http';
 export * from './private-access';
 export type { SpeechAdapters, SpeechTiming } from './speech-turns';
 export * from './adapters/openrouter';
+export * from './adapters/openrouter-decisions';
+export * from './adapters/conversation-decisions';
 export * from './adapters/local-speech';
 export type * from './adapters/types';
 

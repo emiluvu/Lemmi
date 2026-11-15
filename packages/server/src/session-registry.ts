@@ -2,6 +2,7 @@ import type { ProfileDetail } from '@lemmi/contracts';
 import { publicPhotoStoryPack } from '@lemmi/activities';
 import { caregiverProfile } from '@lemmi/contracts/fixtures';
 import type { ChatAdapter } from './adapters/types';
+import type { ConversationDecisionAdapter } from './adapters/conversation-decisions';
 import type { SpeechAdapters } from './speech-turns';
 import { SessionCoordinator } from './session-coordinator';
 
@@ -15,6 +16,7 @@ export class SessionRegistry {
     private readonly now: () => number = Date.now,
     private readonly changed: () => void = () => {},
     private readonly publicPhotoStory = false,
+    private readonly decisions?: ConversationDecisionAdapter,
   ) {
     this.acceptPersistentProfile({
       ...structuredClone(caregiverProfile),
@@ -59,6 +61,7 @@ export class SessionRegistry {
               availableAssetIds: ['photo-story-garden', 'photo-story-park'],
             }
           : undefined,
+        this.decisions,
       );
       this.entries.set(profile.id, coordinator);
     }
