@@ -22,4 +22,19 @@ int main() {
   g.ready(); assert(g.enter(LocalGate::Microphone, 0xfffffff0u));
   assert(!g.expired(0x10u) && g.expired(0x1400u));
   assert(!g.enter(LocalGate::Requested, 1));
+  g.stop();g.ready();
+  assert(g.enter(LocalGate::Tone,100));
+  const auto tone=g.generation;
+  assert(!g.toneTestActive(100)); // initialization/failed submission is not blue
+  assert(g.acceptTone(tone,1500)); // slow initialization must not spend playback time
+  assert(g.toneTestActive(1500)&&g.toneTestActive(2499));
+  assert(!g.acceptTone(tone,2000)); // duplicate cannot extend the test
+  assert(!g.toneTestActive(2500)&&g.expired(2500));
+  g.stop();assert(!g.toneTestActive(2000)&&!g.acceptTone(tone,2000));
+  g.ready();assert(g.enter(LocalGate::Requested,2600));
+  assert(g.enter(LocalGate::Camera,2601));
+  assert(!g.acceptTone(tone,2602)&&!g.toneTestActive(2602));
+  g.stop();g.ready();assert(g.enter(LocalGate::Tone,0xfffffff0u));
+  assert(g.acceptTone(g.generation,0xfffffff0u));
+  assert(g.toneTestActive(0x10u)&&!g.toneTestActive(0x400u));
 }

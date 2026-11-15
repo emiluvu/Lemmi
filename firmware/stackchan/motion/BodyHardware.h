@@ -2,6 +2,7 @@
 #include <M5Unified.h>
 #include <driver/uart.h>
 #include "ServoPacket.h"
+#include "../presentation/StatusLights.h"
 
 // Narrow adapters derived from official register/protocol facts; no BSP begin,
 // RGB animation, calibration, EEPROM, broadcast position, or pitch motion.
@@ -35,9 +36,12 @@ public:
     return pink(false);
   }
   bool pink(bool on){
+    return lights(on?StatusLights::Color::Pink:StatusLights::Color::Off);
+  }
+  bool lights(StatusLights::Color state){
     if(!ready_)return false;
-    // Dim RGB(48,8,24), steady. LED RAM contains little-endian RGB565 words.
-    const uint16_t color=on?uint16_t(0x3043):0;
+    // LED RAM contains little-endian RGB565 words. No servo traffic.
+    const uint16_t color=StatusLights::rgb565(state);
     for(int i=0;i<12;i++){
       uint8_t data[]={uint8_t(color),uint8_t(color>>8)};
       if(!M5.In_I2C.writeRegister(0x6f,0x30+i*2,data,2,100000))return false;

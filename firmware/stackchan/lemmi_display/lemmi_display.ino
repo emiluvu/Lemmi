@@ -22,7 +22,7 @@ void button(int y,const char* label,uint16_t color=TFT_DARKGREY){
   M5.Display.setCursor(16,y+11);M5.Display.print(label);
 }
 void stop(){
-  if(bodyOK){if(!body.powerOff())lightFault=true;if(!body.pink(false))lightFault=true;}
+  if(bodyOK){if(!body.powerOff())lightFault=true;if(!body.lights(StatusLights::Color::Off))lightFault=true;}
   stopped=true;resumePending=false;hearts=false;gesture.reset();dirty=true;
   M5.Mic.end();M5.Speaker.stop();M5.Speaker.end();
   Serial.println("event=display_stop capture=off camera=off");
@@ -81,7 +81,7 @@ void loop(){
     if(!pressed){
       resumePending=false;
       if(!sensorOK)sensorOK=strip.begin();
-      if(sensorOK){gesture.reset();hearts=false;stopped=false;if(bodyOK&&!body.pink(false))lightFault=true;}
+      if(sensorOK){gesture.reset();hearts=false;stopped=false;if(bodyOK&&!body.lights(StatusLights::Color::Off))lightFault=true;}
       dirty=true;
     }
   }
@@ -93,14 +93,16 @@ void loop(){
       const uint8_t zones=petZoneMask(raw);
       if(!hearts&&gesture.update(zones,true,now)){
         hearts=true;heartAt=now;dirty=true;
-        if(bodyOK&&!lightFault&&!body.pink(true)){lightFault=true;stop();}
+        // This offline target has no active audio drivers. The shared policy
+        // preserves audio indicators when the future live adapter is connected.
+        if(bodyOK&&!lightFault&&!body.lights(StatusLights::choose(stopped,false,false,hearts))){lightFault=true;stop();}
       }
     }
   }
   // Static pet_ack in either mode; no continuous animation or motion.
   if(hearts&&uint32_t(now-heartAt)>=1200){
     hearts=false;dirty=true;
-    if(bodyOK&&!body.pink(false)){lightFault=true;stop();}
+    if(bodyOK&&!body.lights(StatusLights::choose(stopped,false,false,hearts))){lightFault=true;stop();}
   }
   if(dirty)draw();
   delay(2);

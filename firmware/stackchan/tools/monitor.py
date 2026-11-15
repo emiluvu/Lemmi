@@ -29,7 +29,7 @@ allowed = {
     "event=display_stop capture=off camera=off",
     "firmware=lemmi-display/0.7 capture=off camera=off",
 }
-boot = re.compile(r"firmware=(?:lemmi-foundation/0\.1|lemmi-feasibility/0\.[2345]|lemmi-petting/0\.[12]|lemmi-control/0\.[12345678]) display=\d{2,4}x\d{2,4} capture=off camera=off")
+boot = re.compile(r"firmware=(?:lemmi-foundation/0\.1|lemmi-feasibility/0\.[2345678]|lemmi-petting/0\.[12]|lemmi-control/0\.[12345678]) display=\d{2,4}x\d{2,4} capture=off camera=off")
 diagnostics = re.compile(
     r"event=servo_probe battery_mv=-?\d{1,5} yaw=(?:ok|value|timeout_empty|timeout_partial|reply|write|tx_wait|rx_flush|rx_error|not_ready) pitch=(?:ok|value|timeout_empty|timeout_partial|reply|write|tx_wait|rx_flush|rx_error|not_ready) off=[01] capture=off camera=off|"
     r"event=motion_fault stage=(?:uart_init|power_on|power_missing|yaw_probe|yaw_torque_value|yaw_torque_off|pitch_torque_off|yaw_limit_low|yaw_limit_high|yaw_position|pose_bounds|hold_goal|yaw_torque_on|move_bounds|move_goal|return_position|finish_torque_off|power_off) transport=(?:none|uart_busy|uart_install|uart_config|not_ready|rx_pending|rx_flush|rx_error|tx_wait|write|timeout|timeout_empty|timeout_partial|reply|ok) capture=off camera=off|"
@@ -44,7 +44,7 @@ diagnostics = re.compile(
     r"event=camera_frame width=\d{1,5} height=\d{1,5} format=-?\d{1,10} bytes=\d{1,10} valid=[01]|"
     r"event=camera_allowed local_only=1 limit_ms=15000|"
     r"event=audio_start kind=(?:mic|tone) ok=[01]|"
-    r"event=test_stop reason=(?:local|expired|declined|mute|audio_error|camera_done|start_timeout) cleanup_ms=\d{1,10} camera_pending=[01]|"
+    r"event=test_stop reason=(?:local|expired|declined|mute|audio_error|lights_error|camera_done|start_timeout) cleanup_ms=\d{1,10} camera_pending=[01]|"
     r"event=camera_result code=-?\d{1,10} frames=\d{1,10} max_wait_ms=\d{1,10} heap_before=\d{1,10} heap_after=\d{1,10}|"
     r"event=camera_closed stop_to_closed_ms=\d{1,10} max_loop_gap_ms=\d{1,10})"
 )

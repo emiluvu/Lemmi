@@ -5,6 +5,7 @@
 #include "LocalGate.h"
 #include "CameraBus.h"
 #include "CameraFrame.h"
+#include "../motion/BodyHardware.h"
 
 // Version-specific internal camera HAL entry point from the pinned 3.3.10 SDK.
 // Its declaration is verified against upstream cam_hal.h; build/link checks pin
@@ -15,9 +16,28 @@ SemaphoreHandle_t peripheralBus;
 std::atomic<bool> cameraWanted{false};
 namespace {
 LocalGate gate;
-SemaphoreHandle_t frameLock;
+BodyHardware body;
+bool lightsOK=false;
+StatusLights::Color shownLight=StatusLights::Color::Off;
+bool dirty = true;
 std::atomic<bool> cameraBusy{false};
 std::atomic<int> cameraResult{0}; // 0 idle, 1 starting, 2 active, 3 failed, 4 ended
+bool syncLights() {
+  if(!lightsOK)return false;
+  const auto color=StatusLights::choose(gate.mode==LocalGate::Stopped,
+    gate.mode==LocalGate::Microphone&&M5.Mic.isRunning(),
+    gate.toneTestActive(millis()),false,
+    gate.mode==LocalGate::Camera&&cameraWanted.load()&&cameraBusy.load()&&cameraResult.load()==2);
+  if(color==shownLight)return true;
+  // Share the camera SCCB/touch lock; never wait for its worker.
+  if(xSemaphoreTake(peripheralBus,0)!=pdTRUE)return true;
+  const bool ok=body.lights(color);
+  xSemaphoreGive(peripheralBus);
+  if(ok)shownLight=color;
+  else {lightsOK=false;dirty=true;}
+  return ok;
+}
+SemaphoreHandle_t frameLock;
 std::atomic<uint32_t> cameraToken{0}, cameraSince{0};
 uint16_t preview[160 * 120];
 uint32_t previewToken = 0, previewAt = 0;
@@ -26,7 +46,6 @@ int16_t samples[256]; // 16 ms at 16 kHz; never persisted or replayed
 bool samplePending = false;
 uint32_t closingSince = 0, lastPaint = 0, lastLoop = 0, maxLoopGap = 0, lastFrameShown = 0;
 int lastCameraResult = 0;
-bool dirty = true;
 bool workerAvailable = false;
 
 void button(int y, const char* label, uint32_t color = TFT_DARKGREY, int h = 30) {
@@ -48,10 +67,10 @@ void draw() {
     d.print(gate.mode == LocalGate::Microphone ? "MIC ON - level only" : "Camera / microphone off");
   }
   if (gate.mode == LocalGate::Ready) {
-    button(52, workerAvailable ? "Camera test (15s)" : "Camera unavailable");
-    button(86, "Speaker tone (1s)");
+    button(52, workerAvailable&&lightsOK ? "Camera test (15s)" : "Camera unavailable");
+    button(86, lightsOK ? "Speaker tone (1s) - blue" : "Audio lights unavailable");
     button(120, gate.muted ? "UNMUTE (stays off)" : "MUTE microphone");
-    button(154, gate.muted ? "Mic test: unmute first" : "Start mic test (5s)");
+    button(154, !lightsOK ? "Audio lights unavailable" : gate.muted ? "Mic test: unmute first" : "Mic test (5s) - green");
   } else if (gate.mode == LocalGate::Requested) {
     d.setCursor(8, 54); d.print("Preview on this screen?");
     button(88, "ALLOW CAMERA (15s)"); button(134, "Not now");
@@ -78,6 +97,7 @@ void stopAll(const char* reason) {
   cameraWanted.store(false); // invalidate before any drawing/cleanup
   if (cameraBusy.load() && !closingSince) closingSince = started;
   M5.Mic.end(); M5.Speaker.stop(); M5.Speaker.end();
+  syncLights();
   samplePending = false; memset(samples, 0, sizeof(samples));
   discardPreview(); dirty = true;
   Serial.printf("event=test_stop reason=%s cleanup_ms=%lu camera_pending=%u\n",
@@ -155,7 +175,7 @@ void cameraWorker(void*) {
 TaskHandle_t cameraTask = nullptr;
 
 void startCamera() {
-  if (!workerAvailable || cameraBusy.load() || !gate.enter(LocalGate::Camera, millis())) return;
+  if (!lightsOK || !workerAvailable || cameraBusy.load() || !gate.enter(LocalGate::Camera, millis())) return;
   M5.Mic.end(); M5.Speaker.end();
   cameraToken.store(gate.generation); cameraSince.store(gate.since);
   cameraResult.store(1); cameraBusy.store(true); cameraWanted.store(true);
@@ -166,16 +186,20 @@ void startCamera() {
 }
 void startAudio(bool mic) {
   const auto mode = mic ? LocalGate::Microphone : LocalGate::Tone;
-  if (cameraBusy.load() || !gate.enter(mode, millis())) return;
+  if (!lightsOK || cameraBusy.load() || !gate.enter(mode, millis())) return;
+  const uint32_t token=gate.generation;
   dirty = true; draw(); // visible listening notice precedes capture initialization
   bool ok;
   if (mic) { M5.Speaker.end(); ok = M5.Mic.begin(); }
   else {
     M5.Mic.end(); M5.Speaker.setVolume(64);
     ok = M5.Speaker.begin() && M5.Speaker.tone(440, 1000);
+    // Cover the full bounded tone test, including buffered output after the
+    // driver's polling flag drops. Initialization must not use up its deadline.
+    if(ok)ok=gate.acceptTone(token,millis());
   }
   Serial.printf("event=audio_start kind=%s ok=%u\n", mic ? "mic" : "tone", unsigned(ok));
-  if (!ok) stopAll("audio_error");
+  if (!ok || !syncLights()) stopAll("audio_error");
 }
 }
 void setup() {
@@ -188,9 +212,10 @@ void setup() {
   config.internal_imu = false; config.internal_rtc = false;
   M5.begin(config);
   M5.Mic.end(); M5.Speaker.end();
+  lightsOK=body.begin(); // VM off and LEDs only; no servo/UART initialization
   workerAvailable = xTaskCreatePinnedToCore(cameraWorker, "camera-test", 8192, nullptr, 1, &cameraTask, 0) == pdPASS;
   draw();
-  Serial.printf("firmware=lemmi-feasibility/0.5 display=%dx%d capture=off camera=off\n", M5.Display.width(), M5.Display.height());
+  Serial.printf("firmware=lemmi-feasibility/0.8 display=%dx%d capture=off camera=off\n", M5.Display.width(), M5.Display.height());
 }
 void loop() {
   const uint32_t now = millis();
@@ -266,5 +291,6 @@ void loop() {
       if (!samplePending) stopAll("audio_error");
     }
   }
+  if(!syncLights()&&(gate.mode==LocalGate::Microphone||gate.mode==LocalGate::Tone||gate.mode==LocalGate::Camera))stopAll("lights_error");
   delay(2);
 }

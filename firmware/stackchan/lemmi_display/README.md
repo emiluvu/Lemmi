@@ -1,5 +1,10 @@
 # Avatar-only display — offline 0.1
 
+Latest source uses the shared [light policy](../presentation/README.md): green
+capture, blue speech, pink petting, off on Stop. This offline target has no audio
+and preserves pink behavior. Compile/host sanitizer checks pass; no upload or
+physical green/blue check. Live audio wiring remains pending.
+
 ## Display 0.7 user acceptance — pink lights only when petted
 
 Emilia confirms the requested pet-triggered pink-light behavior works after the

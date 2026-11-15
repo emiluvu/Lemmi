@@ -64,6 +64,14 @@ int main(){
   for(int i=0;i<12;++i){assert(M5.In_I2C.regs[0x30+i*2]==0x43);assert(M5.In_I2C.regs[0x31+i*2]==0x30);}
   assert(lights.pink(false));
   for(int i=0;i<24;++i)assert(M5.In_I2C.regs[0x30+i]==0);
+  assert(lights.lights(StatusLights::Color::Green));
+  for(int i=0;i<12;++i){assert(M5.In_I2C.regs[0x30+i*2]==0x80);assert(M5.In_I2C.regs[0x31+i*2]==0x01);}
+  assert(lights.lights(StatusLights::Color::Blue));
+  for(int i=0;i<12;++i){assert(M5.In_I2C.regs[0x30+i*2]==0x06);assert(M5.In_I2C.regs[0x31+i*2]==0);}
+  assert(lights.lights(StatusLights::Color::Yellow));
+  for(int i=0;i<12;++i){assert(M5.In_I2C.regs[0x30+i*2]==0x80);assert(M5.In_I2C.regs[0x31+i*2]==0x31);}
+  assert(lights.lights(StatusLights::Color::Off));
+  for(int i=0;i<24;++i)assert(M5.In_I2C.regs[0x30+i]==0);
   assert(HardwareSerial::sent.empty()&&!testUartInstalled);
   assert(!(M5.In_I2C.regs[5]&1));
   puts("PASS: VM pull setup, no boot servo traffic, probe/write distinction, failed prepare blocks goals and cuts VM request");

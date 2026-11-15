@@ -2,6 +2,43 @@
 
 Switching accounts or resuming? Read [Emilia’s restart handoff](../../docs/handoffs/emilia-resume.md).
 
+**Latest accepted test:** Emilia reports feasibility 0.8 upload PASS and confirms
+audible tone → blue lights → lights off. Speaker-blue regression is resolved in
+this user-observed retest. Installed firmware remains the offline test menu;
+pink petting is preserved in the separate display target. Backend deferred.
+
+**Current candidate:** 0.7 tone is audible but blue is missing by user report.
+Feasibility 0.8 uses a bounded local tone-test light window after successful
+submission rather than the speaker polling flag. Host tests/compile/preflight
+pass; hardware fix remains unverified. Next upload and retest speaker blue,
+then camera yellow. This test window is not a live speech playback receipt.
+
+**Latest local Stop receipt:** Emilia confirms feasibility 0.7 red Stop turns
+off the active camera preview and yellow lights. Yellow/expiry and early Stop
+now pass by user observation; latency unmeasured. Offline only.
+
+**Latest hardware receipt:** Emilia reports feasibility 0.7 upload PASS, yellow
+with the allowed local camera preview, and lights off at automatic expiry.
+Early local Stop/yellow-off remains pending. No backend/motion enabled.
+
+**Latest camera light:** prepared feasibility 0.7 adds yellow while the locally
+allowed camera is initialized/active. Green mic/blue speaker and pink display
+remain. Host tests, pinned compile/SCCB guard and upload preflight pass. No
+upload; physical yellow/Stop/expiry pending. Emilia confirmed 0.6 mic green,
+speaker blue and local camera preview. [Checks](feasibility-checks.md).
+
+**Latest test preparation:** feasibility 0.6 reuses the offline mic/speaker-tone/
+camera menu with green running-mic and blue playing-tone lights. Pinned compile,
+SCCB link guard, host checks and upload preflight pass. No upload or hardware
+color result yet; display/pink petting is preserved separately. See
+[rehearsal notes](feasibility-checks.md).
+
+**Latest light request:** backend reconnection deferred. Shared light policy and
+adapter support green for actual microphone capture, blue for actual speech,
+pink for petting, and off on Stop. Audio indicators override pink. Host sanitizer
+tests and display/presentation compiles pass. No upload; live audio wiring and
+physical green/blue verification remain pending. See [light preparation](presentation/README.md).
+
 **Latest control continuation (0.9):** 0.8 upload verified; 23:56 UTC ready_fields
 rejection persists. Latest fetched backend adds optional boolean photoStory;
 0.9 compatibility preparation and results are in [control checks](control-checks.md).

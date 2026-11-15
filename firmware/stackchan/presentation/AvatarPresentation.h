@@ -65,6 +65,9 @@ public:
       ?Frame::Open:Frame::Closed;
   }
   Avatar avatar() const { return avatar_; }
+  // Independent of mouth frame/reduced motion; true only after the current
+  // stream's actual driver callback, cleared on idle/cancel/revision changes.
+  bool playbackActive() const { return armed_&&playing_; }
   bool current(uint64_t token) const { return !exhausted_&&armed_&&token!=0&&token==epoch_; }
 private:
   static bool same(const Scope& a,const Scope& b) {

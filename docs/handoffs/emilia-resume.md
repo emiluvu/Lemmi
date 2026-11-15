@@ -1,5 +1,92 @@
 # Emilia — Stackchan restart handoff
 
+## Latest accepted checkpoint — feasibility 0.8 speaker blue restored
+
+Emilia reports 0.8 upload PASS, then confirms audible speaker tone, blue lights
+and lights off afterward ("all work"). Speaker/blue/off retest passes by user
+observation; regression resolved in that test, root cause/latency unmeasured.
+Installed target is offline feasibility 0.8. Green mic was observed on 0.6,
+yellow camera/expiry/local Stop on 0.7; no separate 0.8 mic/camera/early-audio-
+Stop retest recorded. Pink petting remains accepted/preserved in separate display
+0.7. Backend deferred, motion disabled; no new upload or serial access by agent.
+
+## Latest candidate — 0.8 blue tone-test window
+
+Emilia clarified tone plays but lights stay off on 0.7. Prepared feasibility
+0.8: replace speaker polling flag with a bounded one-second test window after
+successful local tone submission; initialize before starting its deadline.
+Stop/errors cancel it; old/duplicate acceptances cannot reopen/extend. This is
+an offline test indicator, not actual-consumption evidence for live speech.
+Yellow camera and green mic are unchanged. Host gate/color/hardware sanitizer
+checks pass. Hardware root cause remains unconfirmed; no upload yet. Next:
+upload then speaker-blue first, camera-yellow afterward.
+
+## Current issue — feasibility 0.7 speaker light regression
+
+Emilia reports speaker no longer turns lights blue after yellow update. Mark
+0.7 speaker/blue failed; 0.6 pass remains historical. Asked whether tone still
+plays and lights stay off or yellow; awaiting result before firmware changes.
+Inspected gate/policy/driver source; no confirmed cause. Do not claim yellow
+priority itself causes this or request a blind flash. Camera yellow/expiry/
+local Stop observations remain valid. Backend deferred; no motion work.
+
+## Latest hardware receipt — local camera Stop passed
+
+Emilia confirms red Stop during a fresh feasibility 0.7 camera preview turns
+off both preview and yellow lights. User-observed local Stop/off and earlier
+automatic expiry/off now pass; no measured latency. Installed target remains
+feasibility 0.7. Green mic/blue speaker were observed on 0.6; pink petting is
+preserved/previously accepted in the separate display target. No backend,
+motion, remote camera or live speech acceptance. No further flash performed.
+
+## Latest hardware receipt — feasibility 0.7 yellow/expiry
+
+Emilia reports upload PASS, then confirms yellow with the locally allowed camera
+preview and lights off at automatic expiry. Physical camera color/expiry pass
+by user report. Earlier 0.6 mic green and speaker blue observations remain
+separate. Early local Stop/yellow-off on 0.7 remains pending; next guide a fresh
+Camera → Allow → early red Stop. No backend or motion; pink display preserved.
+
+## Latest request — yellow camera on feasibility 0.7
+
+Emilia confirms 0.6 local camera preview with green/blue off, then requests yellow
+for camera activity. Prepared shared yellow policy plus initialized-camera wiring
+in feasibility 0.7. Request/start waiting stay unlit; Stop/expiry cancel camera
+and request lights off. Hardware light failure blocks camera start/stops active
+test. Host yellow priority/Stop/register and local gate checks pass. No upload;
+physical yellow/Stop/expiry remain pending. Guide one local upload then Camera →
+Allow; keep backend deferred and motion disabled. Pink display preserved.
+
+## Latest hardware receipt — feasibility 0.6 colors
+
+Emilia reports upload PASS; mic test shows a moving green level bar and green
+top light; speaker test shows blue. Physical color observations confirmed by
+user, no agent serial observation. Automatic off, unlit Unmute, early Mute/Stop
+and camera coexistence on 0.6 remain pending. Next guide local camera test one
+step at a time, then remaining light-off/Stop checks. Offline only, no backend.
+
+## Latest follow-up — reuse offline mic/speaker/camera menu
+
+Emilia asked to test colors using the earlier actual peripheral tests. Prepared
+feasibility 0.6: green for running mic port, blue for driver-playing test tone,
+off on idle/camera/Stop, existing camera Allow/expiry preserved. No backend or
+motion. Pinned compile passed (635,903 program bytes / 74,172 globals), including
+the SCCB link guard; local-gate/light/hardware-adapter host sanitizer tests pass.
+Original backup/four-image/esptool dry-run passed. No serial opened or upload.
+Next: guide one local upload using `--target feasibility`, then hardware steps
+one at a time. This temporarily replaces avatar/petting; restore display for
+pink petting afterward. [Rehearsal](../../firmware/stackchan/feasibility-checks.md).
+
+## Latest request — defer backend, prepare activity lights
+
+User deferred control upload/backend reconnection. Leave installed offline
+display in place. Prepared shared green capture / blue actual speech / pink
+petting policy and LED adapter; Stop overrides all, audio overrides pink.
+Offline display still has no audio. Host sanitizer checks and pinned display/
+presentation compiles pass. No upload, serial access or backend request.
+Live audio wiring and physical green/blue verification remain pending; see
+[presentation notes](../../firmware/stackchan/presentation/README.md).
+
 ## Display 0.7 user acceptance — pink lights only when petted
 
 Emilia confirms the requested pet-triggered pink-light behavior works after the

@@ -1,5 +1,60 @@
 # Lemmi — Build and demo plan
 
+Feasibility 0.8 hardware retest: Emilia reports upload PASS and confirms audible
+speaker tone, blue lights and lights off afterward. Speaker/blue/off passes by
+user report, resolving the reported regression in this test. No measured root
+cause/latency; earlier mic green and camera yellow receipts remain versioned
+separately. No live speech/backend or full secure F13 acceptance implied.
+
+Feasibility 0.8 candidate for reported audible-tone/no-blue regression: bounded
+one-second tone-test indicator after successful local submission, deadline after
+initialization, Stop/error and stale/duplicate guards. Actual hardware cause
+unconfirmed; test-window indication is not a live-speech playback receipt.
+Host gate/color/LED sanitizer checks, pinned compile (636,051 / 74,164 bytes),
+SCCB guard and upload preflight pass. No upload; speaker-blue/camera-yellow
+regression pending. Mic/camera selection and pink display remain unchanged.
+
+Current 0.7 regression: Emilia reports speaker test no longer lights blue after
+yellow-camera update. Speaker/blue FAILED on 0.7; audible tone and actual light
+state pending clarification, no cause/fix confirmed. Earlier 0.6 speaker pass
+is not 0.7 acceptance. Camera yellow/expiry/local Stop observations remain.
+
+Feasibility 0.7 follow-up: Emilia confirms early red local Stop turns off the
+active camera preview and yellow lights. Local Stop/off passes by user report,
+alongside the prior yellow/automatic-expiry result; latency unmeasured. This
+remains offline peripheral evidence, not secure F13/backend acceptance.
+
+Feasibility 0.7 hardware receipt: Emilia reports upload PASS and confirms yellow
+during the locally allowed camera preview, then lights off at automatic expiry.
+Color/expiry pass by user observation; no measured timing or remote-camera
+acceptance. Early local Stop/yellow-off on 0.7 remains pending.
+
+Emilia confirms 0.6 local camera preview with audio colors off, then requests
+yellow camera-on. Feasibility 0.7 adds initialized-camera yellow, unlit request/
+starting, Stop/expiry off request; shared color priority and exact yellow bytes
+pass host sanitizer tests. Local gate, pinned compile (636,019 program / 74,164
+globals), SCCB link guard and backup/upload preflight pass. No upload; physical
+yellow/expiry/Stop pending. No backend/motion change. Pink display preserved.
+
+Feasibility 0.6 hardware receipt: Emilia reports upload PASS, moving mic-level
+bar with green top light and blue during the speaker test. These physical color
+observations pass by user report. Automatic off, unlit Unmute, early Mute/Stop
+and camera coexistence on 0.6 remain pending; no live speech/backend acceptance.
+
+Emilia follow-up: prepared offline feasibility 0.6 to test green with the actual
+mic capture port, blue with the existing speaker tone, and local camera tests
+with audio colors off. Shared bus lock preserved; no backend/motion. Pinned
+compile (635,903 / 74,172 bytes), SCCB link guard, backup/upload dry-run and host
+local-gate/light/LED sanitizer tests pass. No upload or new hardware acceptance;
+pink petting remains in the preserved display target. [Checks](../firmware/stackchan/feasibility-checks.md).
+
+Latest Emilia light preparation: user deferred backend/control upload. Added
+shared green actual-capture / blue actual-speech / pink petting policy; Stop
+overrides all, audio indicators override pink. Existing offline pink behavior
+preserved. Host ASan/UBSan policy/avatar/hardware-adapter checks and pinned
+display/presentation compiles pass. No upload or live audio; physical green/blue
+and driver wiring pending. [Evidence](../firmware/stackchan/presentation/README.md).
+
 Use [Anay's task checklist](anay_tasks.md) for backend checkboxes, teammate blockers and Anay-agent file claims. This document retains team ownership, milestones and observed acceptance results.
 
 **Status:** Shared mock starter implemented; named feature work and live/hardware acceptance pending

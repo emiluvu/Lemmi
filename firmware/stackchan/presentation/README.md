@@ -1,5 +1,41 @@
 # Selected avatar and playback presentation foundation
 
+## Status lights — prepared, no upload
+
+Follow-up: shared policy also supports yellow for an active camera, ahead of
+audio/petting and below Stop. Feasibility 0.7 wires it to initialized current
+local camera activity; request/starting remain off. Host priority/Stop and exact
+yellow register tests pass. Physical yellow/expiry/Stop checks remain pending.
+Emilia confirmed green mic, blue speaker and the local preview on 0.6.
+
+`StatusLights.h` maps actual local microphone capture to green, actual Lemmi
+speech playback to blue, petting hearts to the existing pink, and idle to off.
+Stop overrides everything; capture/speech override pink. Capture defensively
+wins if both audio inputs are reported; the coordinator must prevent overlap.
+Unmute, capture permission, queued chunks and a server phase are not activity.
+
+`BodyHardware::lights` writes all 12 LEDs without UART/servo initialization;
+legacy `pink` callers remain supported. The offline display uses this policy
+with capture/speech false, preserving the accepted 1.2-second pink behavior.
+`AvatarPresentation::playbackActive()` exposes current actual playback even
+with reduced motion and clears on buffering/completion/invalidation.
+
+Live audio adapters remain pending: the serialized driver owner must supply
+actual capture/playback state, refresh LEDs on driver transitions and petting
+expiry, and clear activity/petting on Stop/pause/help/camera/disconnect/watchdog,
+ownership or revision invalidation. No backend connection or upload occurred.
+
+Observed: status-light priority, actual playback, static mode and stale-callback
+ASan/UBSan tests pass, as do existing avatar tests and hardware-adapter tests
+for exact green/blue/pink/off bytes with no servo traffic. Pinned display compile
+passes (2,860,867 program bytes / 26,444 globals); presentation compile passes
+(309,828 / 22,248). Physical green/blue and live transitions remain untested.
+
+```sh
+c++ -std=c++11 -Wall -Wextra -Werror -fsanitize=address,undefined firmware/stackchan/tests/status_lights.cpp -o /tmp/lemmi-status-lights-test
+/tmp/lemmi-status-lights-test
+```
+
 Prepared November 14, 2026. `AvatarPresentation.h` is a firmware-only helper,
 not a second session authority, audio executor or new network protocol. Current
 installed `lemmi-avatars/0.1` is unchanged. The helper is not yet wired into it

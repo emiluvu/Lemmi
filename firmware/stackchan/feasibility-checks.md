@@ -334,3 +334,119 @@ The monitor reported:
 This establishes sequential camera→mic→speaker resource reuse in this run;
 reverse audio→camera reuse, longer repetitions, peak heap, network load and real
 speech/STT/TTS remain unverified. No new firmware was uploaded for this check.
+# 0.6 light/audio rehearsal — prepared, hardware pending
+
+At Emilia's request, reuse this existing offline microphone/speaker/camera
+test menu to check the new light colors. Version 0.6 adds green while the local
+mic capture port reports running and blue while the speaker driver reports
+playing the 440 Hz test tone. This verifies a tone, not Lemmi speech or live
+STT/TTS. Camera/request/idle/stopped remain unlit. Stop/mute/expiry end audio
+and request LEDs off; LED failure blocks further audio tests. Physical light
+timing and I2C failure behavior remain unverified.
+
+LED writes share the existing peripheral-bus mutex with touch/camera, never
+wait on the camera worker, and only occur on color transitions. Body startup
+requests servo power off and initializes LEDs; no UART/servo probe or motion.
+The existing explicit local camera Allow, 15-second expiry and Stop remain.
+
+This target temporarily replaces the avatar/petting screen; it has no petting
+test. Display 0.7 source/build remains available to restore the accepted pink
+petting behavior. No backend, Wi-Fi or credential provisioning is needed.
+
+Host local-gate, status-light and hardware-adapter sanitizer tests pass. Pinned
+feasibility compile and upload preflight results are recorded in the latest
+handoff. Upload and green/blue/audio/camera hardware checks remain pending.
+
+Guide one step at a time: upload 0.6; confirm camera/mic/lights off at boot;
+Unmute must leave green off; explicitly start the 5-second mic test and check
+voice-responsive bar/green, then early Mute/Stop turns both off. Separately use
+Ready → Speaker tone for audible output/blue and check automatic off plus early
+Stop on a second run. Then Camera → Allow for the local preview/expiry/Stop;
+audio colors stay off. Restore display afterward for the pink petting check.
+
+## 0.6 hardware color receipt
+
+Emilia reports upload PASS, followed by a moving green microphone level bar
+and a green light on top during the mic test, and blue with the speaker test.
+This confirms the reported physical colors in the offline peripheral tests.
+Automatic light-off, Unmute remaining unlit, early Mute/Stop, camera coexistence
+on 0.6 and measured timing remain unverified in this receipt. No live speech,
+backend or remote-camera acceptance is implied. Next: local camera Allow test.
+
+Subsequent receipt: Emilia confirms local Camera → Allow shows the preview and
+green/blue remain off. No separate expiry/early Stop receipt on 0.6 yet.
+
+## 0.7 yellow camera indicator — prepared
+
+Emilia requests yellow while the camera is on. Shared light policy now includes
+dim RGB(48,48,0) yellow, ahead of audio/petting cues; Stop overrides all. The
+offline test supplies camera-active only after the worker reports successful
+initialization, with the current local camera gate, wanted flag and busy worker.
+Request/starting/decline remain unlit; Stop/expiry request off and cancel camera
+through the existing local teardown. Yellow is an activity cue, not evidence
+that asynchronous teardown has finished; the stopping notice remains separate.
+
+LED writes retain the shared bus lock. A light write failure now also stops a
+camera test; unavailable light hardware blocks camera start. No servo, backend,
+recording or new consent path. Green mic, blue speaker and display pink remain.
+Host light-policy (yellow priority/Stop) and exact yellow RGB565 hardware-adapter
+sanitizer tests pass, as does the local gate test. Physical yellow and Stop/
+expiry checks on 0.7 remain pending. Next: upload, then local Camera → Allow.
+
+Pinned 0.7 compile passes (636,019 program bytes / 74,164 globals), including
+the application SCCB link guard. Original backup/four-image/esptool upload
+dry-run passes; no serial opened or firmware uploaded by the agent.
+
+### 0.7 hardware receipt — yellow and expiry
+
+Emilia reports upload PASS. After Camera test → Allow, she confirms yellow
+lights with the preview and lights off at automatic expiry. These behaviors
+pass by user observation, without agent serial/timing measurement. Early local
+Stop/yellow-off on 0.7 remains pending; no remote camera or backend acceptance.
+
+Subsequent early-Stop receipt: Emilia confirms a fresh active camera preview
+and yellow lights both turn off after the red local Stop. This passes by user
+observation; physical Stop latency was not measured. Current observed colors:
+green mic and blue speaker on 0.6; yellow camera, automatic expiry/off and early
+local Stop/off on 0.7. Pink petting remains previously accepted in display 0.7,
+a separate target. Integrated live speech/camera/backend remains untested.
+
+### 0.7 regression report — speaker blue unavailable
+
+Emilia reports the speaker test no longer shows blue after the yellow-camera
+update. Treat speaker/blue on 0.7 as FAILED pending investigation; the 0.6 pass
+does not cover 0.7. Whether the tone remains audible and whether the lights are
+off or yellow is pending user clarification. No root cause or correction is
+confirmed. Camera-active selection is gated by current Camera mode, so retained
+cameraResult alone cannot select yellow during Tone in the inspected source.
+
+Clarification: the tone is audible, lights stay off. Prepared 0.8 removes the
+speaker polling flag from this generated-tone test's light lifetime. Blue now
+uses a single bounded one-second local tone window, accepted only after a
+successful tone submission, with its deadline starting after initialization.
+Stop/errors invalidate the window; old/duplicate acceptance cannot reopen or
+extend it. Camera yellow and microphone green logic are unchanged. This test
+window is not an audible-consumption receipt and must not be used for live
+speech indication; actual live playback callbacks remain required.
+
+Source review found the driver polling flag can cease before buffered I2S
+output drains and the old gate deadline included initialization. Neither is a
+measured root cause of this device report. 0.8 is a candidate correction,
+requiring speaker-blue and camera-yellow regression checks on hardware.
+Host local-gate sanitizer tests pass delayed initialization, no acceptance,
+deadline/rollover, duplicate rejection, early Stop and stale acceptance during
+camera. Shared color/hardware tests also pass. Hardware/upload pending.
+
+0.8 pinned compile passes (636,051 program bytes / 74,164 globals), SCCB link
+guard passes, original-backup/four-image/esptool upload dry-run passes. No serial
+opened by agent. No hardware correction is claimed until retested.
+
+### 0.8 speaker retest — passed by user observation
+
+Emilia reports upload PASS. Asked whether Speaker tone produces audible tone,
+blue lights and then lights off, she confirms "all work". The reported speaker/
+blue/off regression is resolved in this retest. No measured timing or exact
+physical root cause is established. Earlier green mic (0.6), yellow camera and
+expiry/local Stop (0.7), and pink petting (display 0.7) remain separate versioned
+observations; no separate 0.8 camera/mic/early-audio-Stop retest was requested
+or reported in this receipt. Offline test only; live speech/backend untested.
