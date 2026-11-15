@@ -100,6 +100,148 @@ test('same scene gives Conversational open questions, Guided yes/no and Quiet no
     expect(f.view.activityId).toBe('photo_album');
   }
 });
+
+test('open conversation Resume keeps the current topic and excludes the transient prompt from checkpoints', async () => {
+  const c = new SessionCoordinator(
+    'live',
+    {
+      async complete() {
+        return ok({ text: 'Do you enjoy watching tennis?', language: 'en' });
+      },
+    },
+    {
+      stt: {
+        async transcribe() {
+          throw new Error('No capture');
+        },
+      },
+      tts: {
+        async synthesize() {
+          return ok({
+            pcm: new Uint8Array(1280),
+            sampleRate: 16000,
+            channels: 1,
+            encoding: 'pcm_s16le',
+            language: 'en',
+          });
+        },
+      },
+    },
+  );
+  const s = value<SessionSnapshot>(
+    c.handle('session.start', {
+      profileId: 'profile-alex',
+      endpoint: 'browser',
+      commandId: crypto.randomUUID(),
+    }),
+  );
+  value(
+    await c.submitText({
+      sessionId: s.id,
+      expectedGeneration: s.generation,
+      commandId: crypto.randomUUID(),
+      text: 'Tennis',
+      language: 'en',
+    }),
+  );
+  for (const type of ['pause', 'resume'] as const)
+    value(
+      c.handle('session.command', {
+        sessionId: s.id,
+        expectedGeneration: c.snapshot()!.generation,
+        commandId: crypto.randomUUID(),
+        action: { type },
+      }),
+    );
+  const result = value<any>(
+    await c.speakSessionPrompt(
+      {
+        sessionId: s.id,
+        expectedGeneration: c.snapshot()!.generation,
+        commandId: crypto.randomUUID(),
+        language: 'en',
+      },
+      [16000],
+      true,
+    ),
+  );
+  expect(result.reply.text).toBe("We're back. Do you enjoy watching tennis?");
+  expect(c.snapshot()?.captureGrant).toBeNull();
+  expect(JSON.stringify(c.persistenceSnapshot())).not.toContain('tennis');
+});
+
+test('Resume restates the current photo follow-up transiently; Quiet stays capture-off without a question', async () => {
+  for (const preset of ['guided', 'quiet'] as const) {
+    let calls = 0;
+    const f = setup(
+      preset,
+      {
+        async complete() {
+          calls++;
+          return ok({
+            text: preset === 'quiet' ? 'We can enjoy the flowers.' : 'Do you like these roses?',
+            language: 'en',
+          });
+        },
+      },
+      {
+        stt: {
+          async transcribe() {
+            throw new Error('No capture requested');
+          },
+        },
+        tts: {
+          async synthesize() {
+            return ok({
+              pcm: new Uint8Array(1280),
+              sampleRate: 16000,
+              channels: 1,
+              encoding: 'pcm_s16le',
+              language: 'en',
+            });
+          },
+        },
+      },
+    );
+    const reply = value<any>(await f.c.submitText(f.command('Flowers'))).reply.text;
+    const before = f.c.photoView();
+    const control = (type: 'pause' | 'resume' | 'stop') =>
+      value(
+        f.c.handle('session.command', {
+          sessionId: f.s.id,
+          expectedGeneration: f.c.snapshot()!.generation,
+          commandId: crypto.randomUUID(),
+          action: { type },
+        }),
+      );
+    control('pause');
+    expect(f.c.speechOutputInfo()).toBeNull();
+    control('resume');
+    const prompt = value<any>(
+      await f.c.speakSessionPrompt(
+        {
+          sessionId: f.s.id,
+          expectedGeneration: f.c.snapshot()!.generation,
+          commandId: crypto.randomUUID(),
+          language: 'en',
+        },
+        [16000],
+        true,
+      ),
+    );
+    expect(prompt.reply.text).toBe(`We're looking at the same picture. ${reply}`);
+    expect(calls).toBe(1);
+    const after = f.c.photoView();
+    if (before?.activityId !== 'photo_album' || after?.activityId !== 'photo_album')
+      throw new Error('Missing photo view');
+    expect(after.currentAssetId).toBe(before.currentAssetId);
+    expect(f.c.snapshot()?.captureGrant).toBeNull();
+    if (preset === 'quiet') expect(prompt.reply.text).not.toContain('?');
+    expect(JSON.stringify(f.c.persistenceSnapshot())).not.toContain(reply);
+    control('stop');
+    expect(f.c.speechOutputInfo()).toBeNull();
+  }
+});
 test('uncertainty and repeated answers are valid, with no judgment or biography writes', async () => {
   const f = setup();
   for (const text of ["I don't know", "I'm not sure", 'Roses', 'Roses']) {

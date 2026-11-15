@@ -79,6 +79,18 @@ export class BrowserAudio {
       this.options.onTiming?.(timing);
     } catch {}
   }
+  // Called during an explicit output action's browser gesture. No microphone,
+  // detector, capture grant or automatic listening is requested here.
+  preparePlayback() {
+    try {
+      this.context ??= new AudioContext();
+      void this.context
+        .resume()
+        .catch(() => this.error('Audio unavailable. Try again when ready.'));
+    } catch {
+      this.error('Audio unavailable. Try again when ready.');
+    }
+  }
   async speak() {
     this.cancelInput();
     const epoch = this.epoch;

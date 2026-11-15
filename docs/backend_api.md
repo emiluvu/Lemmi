@@ -1,5 +1,11 @@
 # Lemmi backend integration reference
 
+## Photo Story Start/Resume source candidate — not deployed
+
+Branch `codex/photo-story-start-resume` changes behavior of existing WSS commands, without adding schemas or routes: a successful new `input.start` schedules one approved greeting/question when playback is negotiated; `input.photo.start` applies the existing `photo.talk` reducer action and introduces the approved caption with one optional question (Quiet: caption only); explicit `input.resume` schedules one reorientation and the current scene-bound prompt, or current open/teaching prompt. Start in Quiet offers a greeting without a question. No capture grant is issued by these outputs and there is no timer/reconnect prompting loop. Endpoints without negotiated playback retain control/text behavior; Photo Story still has text fallback.
+
+A bounded transient last-output reminder survives participant Pause/Resume and microphone mute only. Stop, disconnect, handoff, context/privacy/policy change and activity replacement clear it; it is excluded from checkpoints/journals/memory summaries. Existing revision/lease ownership and output receipts fence pending synthesis. Approved output uses the existing 600-character reply ceiling. Protected image reads retain all existing authorization/generation checks; the UI retries HTTP 409 once, uses an eight-second loading deadline and revokes temporary blob URLs on scope change/unmount. [Acceptance, limitations and counterpart handoff](handoffs/photo-story-start-resume-2026-11-14.md). Deployed reference below is unchanged.
+
 **Current deployment: web/gateway `95bdcef`.** UI branch `integration/frontend-backend/a664e7e` is merged and preserved. Private speech remains on its existing CPU 2+2/HFC setup; decisions remain off. All seven migrations are unchanged. [Observed review and public acceptance](backend-status.md#conversation-ui-and-spoken-modes-deployed--november-14-2026).
 
 New exact live demo HTTP operations (existing private gate, explicit demo enablement and same-origin checks; no generic live RPC):

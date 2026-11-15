@@ -653,19 +653,34 @@ export function startControlGateway(options: Options) {
             });
             if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
             broadcast();
-            if (
-              !result.ok ||
-              event.type === 'input.photo.start' ||
-              event.payload.action.type !== 'photo.talk'
-            )
-              return;
+            if (!result.ok) return;
+            if (event.type === 'input.photo.start') {
+              const view = coordinator.photoView();
+              if (!view || view.phase === 'unavailable') return;
+              const talk = coordinator.handle('activities.submit', {
+                sessionId: current!.id,
+                commandId: `photo-talk-${crypto.randomUUID()}`,
+                instanceId: view.instanceId,
+                expectedRevision: view.revision,
+                action: { type: 'photo.talk' },
+              });
+              broadcast();
+              if (!talk.ok) {
+                error(ws, talk.error.code, talk.error.message, event.event_id);
+                return;
+              }
+            } else if (event.payload.action.type !== 'photo.talk') return;
             actionAccepted = true;
           }
           // Provider work is never awaited by the socket handler. Stop/Pause/mute,
           // profile changes and handoff can immediately invalidate the result.
           const selected = coordinator.snapshot()!;
           const purpose = event.type === 'input.photo.repeat' ? 'photo_repeat' : 'photo_opening';
-          const work = coordinator.speakText(
+          const speak =
+            event.type === 'input.photo.start'
+              ? coordinator.speakPhotoOpening.bind(coordinator)
+              : coordinator.speakText.bind(coordinator);
+          const work = speak(
             {
               sessionId: selected.id,
               expectedGeneration: selected.generation,
@@ -907,6 +922,44 @@ export function startControlGateway(options: Options) {
           );
         emit(ws, 'command.ack', { mode: 'live', commandId: event.event_id, applied: result.ok });
         if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
+        if (
+          result.ok &&
+          ws.data.playbackRates.length &&
+          ((event.type === 'input.start' && current?.id !== coordinator.snapshot()?.id) ||
+            event.type === 'input.resume')
+        ) {
+          const selected = coordinator.snapshot()!;
+          void coordinator
+            .speakSessionPrompt(
+              {
+                sessionId: selected.id,
+                expectedGeneration: selected.generation,
+                commandId: event.event_id,
+                language: 'en',
+              },
+              ws.data.playbackRates,
+              event.type === 'input.resume',
+              ws.data.outputWindow,
+            )
+            .then((spoken) => {
+              if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
+              if (
+                spoken.ok &&
+                spoken.data.kind === 'reply' &&
+                ownsEndpoint(ws.data.identity) &&
+                coordinator.isCurrentTextReply(spoken.data.reply.turnId)
+              )
+                emit(ws, 'response.text', spoken.data.reply);
+              else if (!spoken.ok)
+                error(ws, spoken.error.code, spoken.error.message, event.event_id);
+              broadcast();
+            })
+            .catch(() => {
+              if (sockets.has(ws))
+                error(ws, 'UNAVAILABLE', 'Prompt playback unavailable', event.event_id);
+              broadcast();
+            });
+        }
         if (
           result.ok &&
           ws.data.playbackRates.length &&

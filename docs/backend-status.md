@@ -1,5 +1,11 @@
 # Lemmi backend status
 
+## Photo Story Start/Resume — local source candidate, November 14, 2026
+
+Branch `codex/photo-story-start-resume` adds an explicit Start greeting, automatic reviewed Photo Story introduction, and one-shot Resume reorientation through the existing speech authority. The browser prepares output without requesting a microphone, keeps Lemmi beside the protected picture, and reserves picture/caption space with bounded loading/error recovery. No wire schema, database migration, provider configuration or deployed revision changes. [Handoff and actual acceptance](handoffs/photo-story-start-resume-2026-11-14.md).
+
+Observed: 76 focused tests passed; full suite 307 pass / 52 database skips / three existing environment failures (OpenSSL absent from PATH in two TLS tests; Windows POSIX media mode assertion). Svelte/TypeScript passed, with zero Svelte errors/warnings. Production build passed. Fictional browser fixtures checked at 390×844 and 1280×800, including speaking/thinking and six-second/failed image loads. Real human audio, private deployed media/network, K151 and counterpart acceptance remain pending. No deployment performed.
+
 ## Conversation UI and spoken modes deployed — November 14, 2026
 
 **Web/gateway runtime `95bdcef`** merges `integration/frontend-backend` **`a664e7e`**, leaving that source branch unchanged. The checkout remains on `backend-deploy`. The private speech service was not restarted: CPU 2-STT/2-TTS/HFC configuration, provider/auth/device keys, current seven migration files and existing data were preserved. No migration, reset or reseed. Rollback database/source/build/config/proxy backup pointer: `.data/ui-voice-rollback-path`.

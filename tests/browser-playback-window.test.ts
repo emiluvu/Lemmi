@@ -134,28 +134,6 @@ async function endpoint(kind: 'browser' | 'robot', requested?: 4 | 12) {
       throw new Error('Audio not negotiated');
     const window = ready.payload.audio.outputWindowChunks;
     await acknowledged(send('input.start'));
-    await until(() => session?.phase === 'ready');
-    await acknowledged(send('input.mute', { muted: false }));
-    await acknowledged(send('input.speak', { language: 'en' }));
-    await until(() => session?.phase === 'listening');
-    const grant = session!.captureGrant!;
-    for (let index = 0; index < 2; index++)
-      send(
-        'audio.chunk',
-        {
-          leaseId: grant.leaseId,
-          streamId: grant.streamId,
-          chunkIndex: index,
-          encoding: 'pcm_s16le',
-          data: Buffer.alloc(640, 1).toString('base64'),
-        },
-        grant.turnId,
-      );
-    send(
-      'audio.end',
-      { leaseId: grant.leaseId, streamId: grant.streamId, chunkCount: 2 },
-      grant.turnId,
-    );
     await until(() => events.some((e) => e.type === 'response.start'));
     const event = events.find((e) => e.type === 'response.start')!;
     if (event.type !== 'response.start') throw new Error('Missing output metadata');

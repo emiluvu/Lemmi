@@ -487,6 +487,39 @@ test('concurrent speech output is delivered only to each profile owner, never an
     const observer = h.connect(await h.issue('browser-alex', 'profile-alex'), 'browser');
     await Promise.all([alex.hello(true), casey.hello(true), observer.hello(true)]);
     await Promise.all([alex.apply('input.start', null), casey.apply('input.start', null)]);
+    await Promise.all(
+      [alex, casey].map(async (client) => {
+        const first = await client.wait((event) => event.type === 'response.start');
+        if (first.type !== 'response.start') throw new Error('Missing greeting');
+        const meta = first.payload;
+        await client.wait((event) => event.type === 'audio.end' && event.turn_id === meta.turnId);
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          { leaseId: meta.leaseId, streamId: meta.streamId, status: 'started', playedChunks: 0 },
+          meta.turnId,
+        );
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          {
+            leaseId: meta.leaseId,
+            streamId: meta.streamId,
+            status: 'completed',
+            playedChunks: meta.chunkCount,
+          },
+          meta.turnId,
+        );
+        await client.wait(
+          (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+        );
+        client.events.splice(
+          0,
+          client.events.length,
+          ...client.events.filter((event) => event.type === 'state.changed'),
+        );
+      }),
+    );
     await Promise.all([
       alex.apply('input.mute', alex.latest(), { muted: false }),
       casey.apply('input.mute', casey.latest(), { muted: false }),
@@ -676,9 +709,20 @@ test('public Photo Story uses scoped browser ownership, reviewed captions and cu
         event.type === 'activity.changed' && event.payload.activity?.activityId === 'photo_album',
       startedAfter,
     );
+    const automaticOpening = await browser.wait(
+      (event) => event.type === 'response.text',
+      startedAfter,
+    );
+    expect(automaticOpening.type === 'response.text' && automaticOpening.payload.text).toContain(
+      'Roses',
+    );
+    await browser.wait(
+      (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+      browser.events.indexOf(automaticOpening) + 1,
+    );
     const garden = latestPhoto(browser);
     expect(garden.currentAssetId).toBe('photo-story-garden');
-    expect(garden.viewingMode).toBe('just_look');
+    expect(garden.viewingMode).toBe('talk');
     expect(inputs).toHaveLength(0);
     const openingAfter = browser.events.length;
     await browser.apply('input.photo.action', browser.latest(), {
@@ -764,6 +808,14 @@ test('public Photo Story Stop cancels an in-flight opening and suppresses a late
       (event) =>
         event.type === 'activity.changed' && event.payload.activity?.activityId === 'photo_album',
       startAfter,
+    );
+    const automaticOpening = await browser.wait(
+      (event) => event.type === 'response.text',
+      startAfter,
+    );
+    await browser.wait(
+      (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+      browser.events.indexOf(automaticOpening) + 1,
     );
     const garden = latestPhoto(browser);
     const openingId = browser.send('input.photo.action', browser.latest(), {

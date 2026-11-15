@@ -263,6 +263,109 @@ export class SessionCoordinator {
   speechConfigured() {
     return !!this.speech;
   }
+  // Scene-bound, transient output only; never part of checkpoints or summaries.
+  private photoReminder: { instanceId: string; assetId: string; text: string } | null = null;
+  private conversationReminder: string | null = null;
+  private rememberReply(result: Result<ConversationTextResult>) {
+    const view = this.photoView();
+    if (
+      result.ok &&
+      result.data.kind === 'reply' &&
+      this.photoTalking() &&
+      view?.activityId === 'photo_album' &&
+      view.currentAssetId
+    )
+      this.photoReminder = {
+        instanceId: view.instanceId,
+        assetId: view.currentAssetId,
+        text: result.data.reply.text,
+      };
+    else if (
+      result.ok &&
+      result.data.kind === 'reply' &&
+      !this.session?.teaching &&
+      (!this.activity || this.activity.phase === 'ended')
+    )
+      this.conversationReminder = result.data.reply.text;
+  }
+  async speakPhotoOpening(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
+    const parsed = ConversationTextCommandSchema.safeParse(raw);
+    if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid photo opening request');
+    const { text: _text, purpose: _purpose, ...input } = parsed.data;
+    const s = this.session;
+    if (
+      !s ||
+      s.id !== input.sessionId ||
+      s.generation !== input.expectedGeneration ||
+      !['ready', 'waiting'].includes(s.phase)
+    )
+      return fail('REVISION_CONFLICT', 'Use the current ready session');
+    if (this.configurationChanges.size || !this.photoTalking())
+      return fail('REVISION_CONFLICT', 'Photo conversation is not ready');
+    const view = this.photoView();
+    if (view?.activityId !== 'photo_album' || !view.currentAssetId)
+      return fail('UNAVAILABLE', 'No current approved picture');
+    const text = [
+      view.caption,
+      this.session?.communicationSupport.preset === 'quiet'
+        ? ''
+        : 'Would you like to talk about this picture?',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    this.photoReminder = { instanceId: view.instanceId, assetId: view.currentAssetId, text };
+    if (this.speech && rates.length)
+      return this.speech.speakApproved(input, rates, text, outputWindow);
+    this.session = { ...s, phase: 'waiting', captureGrant: null };
+    const result = ok<ConversationTextResult>({
+      kind: 'reply',
+      session: this.snapshot()!,
+      reply: { turnId: input.commandId, text, language: input.language, source: 'fixed' },
+    });
+    this.lastChat = { commandId: input.commandId, result };
+    return result;
+  }
+  async speakSessionPrompt(
+    raw: unknown,
+    rates: number[],
+    resume = false,
+    outputWindow: SpeechOutputWindow = 4,
+  ) {
+    if (this.configurationChanges.size)
+      return fail('REVISION_CONFLICT', 'Configuration save is pending');
+    const s = this.session;
+    if (!s) return fail('NOT_FOUND', 'Session not found');
+    const quiet = s.communicationSupport.preset === 'quiet';
+    const view = this.photoView();
+    let text = quiet
+      ? "Hello, I'm Lemmi. We can take our time."
+      : "Hello, I'm Lemmi, your AI companion. Would you like to talk about your day?";
+    if (resume) {
+      if (s.teaching)
+        text = s.teaching.prompt
+          ? `We're back with Teach Lemmi. ${s.teaching.prompt}`
+          : 'We can take our time.';
+      else if (view?.activityId === 'photo_album' && view.phase !== 'ended') {
+        const reminder = this.photoReminder;
+        const same =
+          reminder?.instanceId === view.instanceId && reminder.assetId === view.currentAssetId;
+        const prompt = same ? reminder.text : (view.caption ?? 'We can simply look.');
+        text = prompt.length <= 560 ? `We're looking at the same picture. ${prompt}` : prompt;
+      } else if (this.conversationReminder)
+        text =
+          this.conversationReminder.length <= 580
+            ? `We're back. ${this.conversationReminder}`
+            : this.conversationReminder;
+      else
+        text = quiet
+          ? "We're back. We can take our time."
+          : "We're back together. Would you like to talk about your day?";
+    }
+    return (
+      this.speech?.speakApproved(raw, rates, text, outputWindow) ??
+      fail('UNAVAILABLE', 'Speech adapters are disabled')
+    );
+  }
   requestCapture(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
     this.sweepTeaching();
     if (this.configurationChanges.size)
@@ -613,7 +716,11 @@ export class SessionCoordinator {
         this.lastChat.result.data.reply.turnId === turnId)
     );
   }
-  private cancelChat(inputOnly = false, preserveSpeech?: object) {
+  private cancelChat(inputOnly = false, preserveSpeech?: object, preserveReminder = false) {
+    if (!preserveReminder && !inputOnly) {
+      this.photoReminder = null;
+      this.conversationReminder = null;
+    }
     this.pendingChat?.controller.abort();
     this.pendingChat = null;
     this.dialogue = [];
@@ -893,6 +1000,7 @@ export class SessionCoordinator {
       });
       this.chatIds.set(input.commandId, fingerprint);
       this.lastChat = { commandId: input.commandId, result };
+      this.rememberReply(result);
       if (speechOwner) this.onFixedReply();
       return result;
     }
@@ -1319,6 +1427,7 @@ export class SessionCoordinator {
       if (this.pendingChat === pending) {
         this.pendingChat = null;
         this.lastChat = { commandId: input.commandId, result };
+        this.rememberReply(result);
       }
       return structuredClone(result);
     })();
@@ -1349,7 +1458,11 @@ export class SessionCoordinator {
   }
   private interrupt(input: Extract<ActivitySystemInput, { type: 'system.pause' | 'system.end' }>) {
     this.freezeTeaching();
-    this.cancelChat();
+    this.cancelChat(
+      false,
+      undefined,
+      input.type === 'system.pause' && input.reason === 'participant',
+    );
     if (!this.session || this.session.phase === 'ended') return;
     this.session = {
       ...this.session,
@@ -1590,7 +1703,7 @@ export class SessionCoordinator {
           case 'resume':
             if (this.session.phase !== 'paused')
               return fail('REVISION_CONFLICT', 'Session is not paused');
-            this.cancelChat();
+            this.cancelChat(false, undefined, true);
             this.system({ type: 'system.resume' });
             this.session = {
               ...this.session,
