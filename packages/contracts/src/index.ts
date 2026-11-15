@@ -1,4 +1,5 @@
 export * from './common';
+export * from './profile-context';
 export * from './communication-support';
 export * from './session';
 export * from './activity';

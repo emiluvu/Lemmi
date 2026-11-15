@@ -7,6 +7,14 @@ import {
   type Result,
 } from './common';
 import { type DemoProfileUpdate, ProfileCreateSchema } from './profile-assets';
+import {
+  ProfileContextViewSchema,
+  ProfileContextUpdateSchema,
+  ProfileImageUploadSchema,
+  ProfileImageDataSchema,
+  type ProfileContext,
+} from './profile-context';
+import { AssetMetadataSchema } from './profile-assets';
 import type { SessionSnapshot } from './session';
 import type { Fetcher } from './services';
 
@@ -44,7 +52,8 @@ export function createParticipantSetup(fetcher: Fetcher = fetch) {
         signal: AbortSignal.timeout(8000),
       });
       const bytes = await response.text();
-      if (bytes.length > 32768) throw new Error('Setup response too large');
+      if (bytes.length > (operation === 'profile-image-read' ? 1500000 : 65536))
+        throw new Error('Setup response too large');
       const result = ResultSchema(z.unknown()).safeParse(JSON.parse(bytes));
       if (result.success) {
         if (!result.data.ok) return { ok: false, error: result.data.error };
@@ -60,8 +69,31 @@ export function createParticipantSetup(fetcher: Fetcher = fetch) {
   }
   return {
     profiles: () => call('profiles', ParticipantProfilesSchema),
-    create: (preferredName: string, avatarId: ParticipantProfile['avatarId'] = 'lemming') =>
-      call('profiles', ParticipantProfileSchema, { preferredName, avatarId }),
+    create: (
+      preferredName: string,
+      avatarId: ParticipantProfile['avatarId'] = 'lemming',
+      details?: { context: ProfileContext; summaryMemoryEnabled: boolean },
+    ) => call('profiles', ParticipantProfileSchema, { preferredName, avatarId, ...details }),
+    context: (profileId: string) =>
+      call('profile-context', ProfileContextViewSchema, { profileId }),
+    saveContext: (input: z.infer<typeof ProfileContextUpdateSchema>) =>
+      call('profile-context-update', ProfileContextViewSchema, input),
+    uploadImage: (input: z.infer<typeof ProfileImageUploadSchema>) =>
+      call('profile-image-upload', AssetMetadataSchema, input),
+    image: (profileId: string, assetId: string) =>
+      call('profile-image-read', ProfileImageDataSchema, { profileId, assetId }),
+    forget: (profileId: string, expectedRevision: number, commandId: string) =>
+      call('profile-memory-forget', ProfileContextViewSchema, {
+        profileId,
+        expectedRevision,
+        commandId,
+      }),
+    fillDemo: (profileId: string, expectedRevision: number, commandId: string) =>
+      call('profile-demo-fill', ProfileContextViewSchema, {
+        profileId,
+        expectedRevision,
+        commandId,
+      }),
     update: (input: DemoProfileUpdate) => call('profile-update', ParticipantProfileSchema, input),
     current: () => call('current', ParticipantEndpointSchema),
     enroll: (profileId: string) =>

@@ -10,6 +10,7 @@ import {
   type ApplyCommunicationSupport,
   type SessionSnapshot,
   type ParticipantProfile,
+  ProfileContextSchema,
 } from '@lemmi/contracts';
 import {
   ProfileDetailSchema,
@@ -95,6 +96,18 @@ export class DataRepository {
     const facts =
       await tx`SELECT id,field,value,source FROM lemmi.profile_facts WHERE profile_id=${row.id} ORDER BY id`;
     return ProfileDetailSchema.parse({
+      context: ProfileContextSchema.parse(row.conversation_context ?? {}),
+      summaryMemoryEnabled: row.summary_memory_enabled ?? false,
+      memories: row.summary_memory_enabled
+        ? (
+            await tx`SELECT session_id,summary,updated_at FROM lemmi.conversation_memories WHERE profile_id=${row.id} AND profile_revision=${row.revision} AND privacy_revision=${row.privacy_revision} ORDER BY updated_at DESC LIMIT 10`
+          ).map((memory: any) => ({
+            sessionId: memory.session_id,
+            summary: memory.summary,
+            updatedAt: new Date(memory.updated_at).toISOString(),
+            source: 'ai_summary',
+          }))
+        : [],
       id: row.id,
       preferredName: row.preferred_name,
       avatarId: row.avatar_id,
@@ -111,11 +124,13 @@ export class DataRepository {
       approvedFacts: facts.map((r: any) => ({ ...r })),
     });
   }
-  async profile(principal: DataPrincipal, id: string, caregiver = false) {
+  async profile(principal: DataPrincipal, id: string, caregiver = false, demoOnly = false) {
     return this.sql.begin(async (tx) => {
       if (caregiver && principal.kind !== 'caregiver')
         throw new DataError('FORBIDDEN', 'Caregiver access required');
       const row = await this.scoped(tx, principal, id);
+      if (demoOnly && !row.is_demo)
+        throw new DataError('FORBIDDEN', 'Fictional demo profile required');
       const detail = await this.detail(tx, row);
       if (caregiver) return detail;
       return ParticipantProfileSchema.parse({
@@ -149,6 +164,8 @@ export class DataRepository {
   }
   async createProfile(subject: string, raw: unknown, demo = false, bootId?: string) {
     const input = ProfileCreateSchema.parse(raw);
+    if (input.context?.photos.length)
+      throw new DataError('VALIDATION_ERROR', 'Create the profile before uploading its pictures');
     const id = `profile-${randomUUID()}`;
     await this.sql.begin(async (tx) => {
       await tx`SELECT pg_advisory_xact_lock(1437236103)`;
@@ -159,7 +176,7 @@ export class DataRepository {
       }
       const count = await tx`SELECT count(*)::int AS n FROM lemmi.profiles`;
       if (count[0].n >= 100) throw new DataError('UNAVAILABLE', 'Profile capacity reached');
-      await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset,is_demo) VALUES (${id},${input.preferredName},${input.avatarId},'guided',${demo})`;
+      await tx`INSERT INTO lemmi.profiles (id,preferred_name,avatar_id,communication_preset,is_demo,conversation_context,summary_memory_enabled) VALUES (${id},${input.preferredName},${input.avatarId},'guided',${demo},${tx.json(ProfileContextSchema.parse(input.context ?? {}))},${input.summaryMemoryEnabled ?? false})`;
       await tx`INSERT INTO lemmi.profile_access (profile_id,subject,role) VALUES (${id},${subject},'caregiver')`;
     });
     return this.approvedProfile(subject, id);
@@ -173,7 +190,8 @@ export class DataRepository {
     const parsed = ProfileUpdateSchema.safeParse(raw);
     if (!parsed.success) throw new DataError('VALIDATION_ERROR', 'Invalid profile update');
     const input = parsed.data;
-    return this.sql.begin(async (tx) => {
+    const removedKeys: string[] = [];
+    const result = await this.sql.begin(async (tx) => {
       const row = await this.scoped(tx, principal, input.profileId, true);
       if (principal.kind !== 'caregiver') throw new DataError('FORBIDDEN', 'Caregiver required');
       if (demoOnly && !row.is_demo)
@@ -193,12 +211,39 @@ export class DataRepository {
       if (count[0].n >= 1000) throw new DataError('UNAVAILABLE', 'Mutation capacity reached');
       const previous = await this.detail(tx, row);
       const next = { ...previous, ...input.patch, revision: row.revision + 1 };
+      for (const photo of next.context?.photos ?? []) {
+        const owned =
+          await tx`SELECT 1 FROM lemmi.media_assets WHERE id=${photo.assetId}::uuid AND profile_id=${input.profileId} AND kind='image' AND approved`;
+        if (!owned.length)
+          throw new DataError('FORBIDDEN', 'Photo is not assigned to this profile');
+      }
       // Stop stale context before COMMIT. A failed commit leaves the session paused.
       beforeCommit();
       const changed =
         await tx`UPDATE lemmi.profiles SET preferred_name=${next.preferredName},avatar_id=${next.avatarId},
         communication_preset=${next.communicationSupport.preset},interests=${tx.json(next.interests)},
-        sensitive_guidance=${next.sensitiveTopicGuidance},conversation_redirects=${tx.json(next.conversationRedirects ?? { awayFrom: [], toward: [] })},revision=revision+1,updated_at=now() WHERE id=${input.profileId} RETURNING *`;
+        sensitive_guidance=${next.sensitiveTopicGuidance},conversation_redirects=${tx.json(next.conversationRedirects ?? { awayFrom: [], toward: [] })},conversation_context=${tx.json(next.context ?? ProfileContextSchema.parse({}))},summary_memory_enabled=${next.summaryMemoryEnabled ?? false},revision=revision+1,updated_at=now() WHERE id=${input.profileId} RETURNING *`;
+      // Context corrections and revocation clear dependent summaries, including any
+      // checkpoint computed against the previous revision. Re-enabling never restores them.
+      if (
+        (input.patch.context &&
+          JSON.stringify(input.patch.context) !== JSON.stringify(previous.context)) ||
+        (input.patch.summaryMemoryEnabled !== undefined &&
+          input.patch.summaryMemoryEnabled !== previous.summaryMemoryEnabled) ||
+        input.patch.approvedFacts ||
+        (input.patch.conversationRedirects &&
+          JSON.stringify(input.patch.conversationRedirects) !==
+            JSON.stringify(previous.conversationRedirects))
+      )
+        await tx`DELETE FROM lemmi.conversation_memories WHERE profile_id=${input.profileId}`;
+      else
+        await tx`UPDATE lemmi.conversation_memories SET profile_revision=${next.revision} WHERE profile_id=${input.profileId} AND profile_revision=${row.revision}`;
+      for (const photo of previous.context?.photos ?? []) {
+        if (next.context?.photos.some((item) => item.assetId === photo.assetId)) continue;
+        const removed =
+          await tx`DELETE FROM lemmi.media_assets WHERE id=${photo.assetId}::uuid AND profile_id=${input.profileId} AND entity_ids @> '["profile:approved-photo"]'::jsonb RETURNING storage_key`;
+        removedKeys.push(...removed.map((asset: any) => asset.storage_key));
+      }
       if (input.patch.approvedFacts) {
         await tx`DELETE FROM lemmi.profile_facts WHERE profile_id=${input.profileId}`;
         for (const fact of input.patch.approvedFacts)
@@ -210,6 +255,14 @@ export class DataRepository {
           VALUES (${input.profileId},${next.revision},${next.communicationSupport.preset},1,${principal.subject})`;
       return this.detail(tx, changed[0]);
     });
+    for (const key of removedKeys) {
+      try {
+        await this.media.remove(key);
+      } catch {
+        /* startup reconciliation retries unreferenced bytes */
+      }
+    }
+    return result;
   }
   async withSupportProfile<T>(
     principal: DataPrincipal,
@@ -240,7 +293,11 @@ export class DataRepository {
       ...(row.width ? { width: row.width, height: row.height } : {}),
     });
   }
-  async createAsset(principal: DataPrincipal, raw: unknown): Promise<AssetMetadata> {
+  async createAsset(
+    principal: DataPrincipal,
+    raw: unknown,
+    demoOnly = false,
+  ): Promise<AssetMetadata> {
     if (principal.kind !== 'caregiver')
       throw new DataError('FORBIDDEN', 'Caregiver access required');
     const parsed = AssetCreateSchema.safeParse(raw);
@@ -265,6 +322,8 @@ export class DataRepository {
     try {
       return await this.sql.begin(async (tx) => {
         const profile = await this.scoped(tx, principal, input.profileId, true);
+        if (demoOnly && !profile.is_demo)
+          throw new DataError('FORBIDDEN', 'Fictional demo profile required');
         const receipts =
           await tx`SELECT fingerprint,resource_id FROM lemmi.mutation_receipts WHERE profile_id=${input.profileId} AND subject=${principal.subject} AND operation='asset.create' AND command_id=${input.commandId}`;
         if (receipts.length) {
@@ -307,9 +366,18 @@ export class DataRepository {
       bytes.fill(0);
     }
   }
-  async asset(principal: DataPrincipal, id: string, readBytes = false) {
+  async asset(principal: DataPrincipal, id: string, readBytes = false, demoOnly = false) {
     return this.sql.begin(async (tx) => {
       const profile = await this.scoped(tx, principal, principal.profileId);
+      if (demoOnly && !profile.is_demo)
+        throw new DataError('FORBIDDEN', 'Fictional demo profile required');
+      if (
+        demoOnly &&
+        !ProfileContextSchema.parse(profile.conversation_context ?? {}).photos.some(
+          (photo) => photo.assetId === id,
+        )
+      )
+        throw new DataError('FORBIDDEN', 'Photo is not attached to this profile');
       const rows =
         await tx`SELECT * FROM lemmi.media_assets WHERE id=${id}::uuid AND profile_id=${principal.profileId} AND approved`;
       if (!rows.length) throw new DataError('NOT_FOUND', 'Approved asset not found');
@@ -348,6 +416,9 @@ export class DataRepository {
       await tx`INSERT INTO lemmi.gateway_state (singleton,boot_id) VALUES (true,${bootId}::uuid) ON CONFLICT (singleton) DO UPDATE SET boot_id=EXCLUDED.boot_id`;
       await tx`UPDATE lemmi.devices SET boot_id=${bootId}::uuid`;
       await tx`UPDATE lemmi.sessions SET phase='ended',generation=generation+1,ended_at=now() WHERE phase<>'ended'`;
+      // Upload drafts interrupted before attachment have no usable profile context.
+      // Reconcile only this feature's dedicated uploads, never album/music assets.
+      await tx`DELETE FROM lemmi.media_assets a WHERE a.entity_ids @> '["profile:approved-photo"]'::jsonb AND NOT EXISTS (SELECT 1 FROM lemmi.profiles p, jsonb_array_elements(COALESCE(p.conversation_context->'photos','[]'::jsonb)) photo WHERE p.id=a.profile_id AND photo->>'assetId'=a.id::text)`;
     });
     const linked = await this.sql`SELECT storage_key FROM lemmi.media_assets`;
     const keys = new Set(linked.map((row: any) => row.storage_key));
@@ -359,6 +430,8 @@ export class DataRepository {
     events: { id: string; event: unknown }[],
     bootId?: string,
     supportSelections: SupportSelection[] = [],
+    memory?: { summary: string; profileRevision: number; privacyRevision: number },
+    forgetMemory = false,
   ) {
     if (supportSelections.length > 50)
       throw new DataError('VALIDATION_ERROR', 'Support context is bounded');
@@ -380,6 +453,18 @@ export class DataRepository {
       for (const raw of events) {
         const event = JournalEventSchema.parse(raw.event);
         await tx`INSERT INTO lemmi.activity_events (id,profile_id,session_id,event) VALUES (${raw.id}::uuid,${snapshot.profileId},${snapshot.id},${tx.json(event)}) ON CONFLICT (id) DO NOTHING`;
+      }
+      if (forgetMemory) {
+        await tx`UPDATE lemmi.profiles SET summary_memory_enabled=false WHERE id=${snapshot.profileId}`;
+        await tx`DELETE FROM lemmi.conversation_memories WHERE profile_id=${snapshot.profileId}`;
+      }
+      if (!forgetMemory && memory && memory.summary.trim() && memory.summary.length <= 300) {
+        const permitted =
+          await tx`SELECT 1 FROM lemmi.profiles WHERE id=${snapshot.profileId} AND deletion_state='active' AND summary_memory_enabled AND revision=${memory.profileRevision} AND privacy_revision=${memory.privacyRevision}`;
+        if (permitted.length) {
+          await tx`INSERT INTO lemmi.conversation_memories (profile_id,session_id,summary,profile_revision,privacy_revision) VALUES (${snapshot.profileId},${snapshot.id},${memory.summary},${memory.profileRevision},${memory.privacyRevision}) ON CONFLICT (profile_id,session_id) DO UPDATE SET summary=EXCLUDED.summary,updated_at=now() WHERE lemmi.conversation_memories.profile_revision=EXCLUDED.profile_revision AND lemmi.conversation_memories.privacy_revision=EXCLUDED.privacy_revision`;
+          await tx`DELETE FROM lemmi.conversation_memories WHERE profile_id=${snapshot.profileId} AND session_id NOT IN (SELECT session_id FROM lemmi.conversation_memories WHERE profile_id=${snapshot.profileId} ORDER BY updated_at DESC LIMIT 10)`;
+        }
       }
       for (const raw of supportSelections) {
         const selection = SupportSelectionSchema.parse(raw);

@@ -26,6 +26,22 @@ function request(
 function token() {
   return `lemmi_conversation_lock=preview.${crypto.randomUUID()}`;
 }
+
+test('participant lock blocks profile context, pictures and memory reads and writes', async () => {
+  await local(async () => {
+    for (const path of [
+      'profile-context',
+      'profile-context-update',
+      'profile-memory-forget',
+      'profile-demo-fill',
+      'profile-image-upload',
+      'profile-image-read',
+    ])
+      expect(conversationExitGuard(request(`/v1/demo/${path}`, 'POST', {}, token()))?.status).toBe(
+        403,
+      );
+  });
+});
 async function local(work: () => Promise<void>) {
   const previous = process.env.LEMMI_MODE;
   process.env.LEMMI_MODE = 'mock';

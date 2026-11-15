@@ -19,6 +19,7 @@
   let photoJournal = $state<Journal | null>(null);
   import { previewProfiles } from '@lemmi/contracts/fixtures';
   import LiveProfilePanel from '#lib/features/LiveProfilePanel.svelte';
+  import ProfileContextForm from '#lib/features/ProfileContextForm.svelte';
   import type { PageData } from './$types';
   let { data, preview = false }: { data: PageData; preview?: boolean } = $props();
   let overview = $state<OperationOutput<'overview.load'> | null>(null);
@@ -26,8 +27,6 @@
   let liveProfiles = $state<ParticipantProfile[]>([]);
   let selectedProfile = $state<ParticipantProfile | null>(null);
   let creating = $state(false);
-  let newAvatar = $state<ParticipantProfile['avatarId']>('lemming');
-  let newName = $state('');
   let busy = $state(false);
   let openingProfile = $state<string | null>(null);
   async function openParticipant(profile: ParticipantProfile, activity = false) {
@@ -53,28 +52,9 @@
       openingProfile = null;
     }
   }
+
   const displayedProfiles = $derived(data.live ? liveProfiles : overview ? [overview.profile] : []);
   const previews = $derived(data.live ? previewProfiles : (overview?.previews ?? []));
-  async function createProfile(event: SubmitEvent) {
-    event.preventDefault();
-    if (preview) {
-      message = 'Visual preview only. No profile is created or saved.';
-      return;
-    }
-    if (busy || !newName.trim()) return;
-    busy = true;
-    const result = await setup.create(newName.trim(), newAvatar);
-    busy = false;
-    if (result.ok) {
-      liveProfiles = [...liveProfiles, result.data];
-      newName = '';
-      newAvatar = 'lemming';
-      search = '';
-      selectedProfile = result.data;
-      creating = false;
-      message = '';
-    } else message = result.error.message;
-  }
   let message = $state('Loading profiles…');
   let search = $state('');
   let profileOpen = $state(false);
@@ -206,7 +186,7 @@
         </label>
         <div class="create-profile-control">
           <button
-            disabled={!data.live || !data.demoEnrollment || busy}
+            disabled={!data.live || !data.demoEnrollment}
             onclick={() => (creating = !creating)}
             aria-describedby="create-unavailable"
             ><span aria-hidden="true">＋</span> Create profile</button
@@ -218,26 +198,15 @@
           </p>
         </div>
       </div>
-      {#if creating}<form class="card" onsubmit={createProfile}>
-          <label for="new-profile-name">Fictional participant name</label>
-          <input
-            id="new-profile-name"
-            bind:value={newName}
-            maxlength="80"
-            required
-            autocomplete="off"
-          />
-          <label for="new-profile-avatar">Animal avatar</label>
-          <select id="new-profile-avatar" bind:value={newAvatar} disabled={busy}>
-            {#each Object.entries(avatarArtwork) as [id, artwork]}<option value={id}
-                >{artwork.label}</option
-              >{/each}
-          </select>
-          <button disabled={busy || !newName.trim()}
-            >{busy ? 'Creating…' : 'Create fictional profile'}</button
-          >
-          <button type="button" class="quiet" onclick={() => (creating = false)}>Cancel</button>
-        </form>{/if}
+      {#if creating}<ProfileContextForm
+          close={() => (creating = false)}
+          {preview}
+          saved={(profile) => {
+            liveProfiles = [...liveProfiles, profile];
+            selectedProfile = profile;
+            creating = false;
+          }}
+        />{/if}
       <p class="profile-scope">
         {data.live
           ? 'Live fictional profiles. Journals, camera and games remain unavailable or labeled previews.'

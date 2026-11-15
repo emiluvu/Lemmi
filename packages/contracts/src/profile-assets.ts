@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { SessionSnapshotSchema } from './session';
 import {
+  ProfileContextSchema,
+  ConversationMemorySchema,
+  ProfileContextUpdateSchema,
+  ProfileImageUploadSchema,
+  ProfileImageReadSchema,
+} from './profile-context';
+import {
   AvatarIdSchema,
   CaregiverProfileSchema,
   ConversationRedirectsSchema,
@@ -16,6 +23,9 @@ export const ApprovedFactSchema = z.strictObject({
   source: z.literal('caregiver_provided'),
 });
 export const ProfileDetailSchema = CaregiverProfileSchema.extend({
+  context: ProfileContextSchema.optional(),
+  summaryMemoryEnabled: z.boolean().optional(),
+  memories: z.array(ConversationMemorySchema).max(10).optional(),
   privacyRevision: RevisionSchema,
   policyRevision: RevisionSchema,
   approvedFacts: z.array(ApprovedFactSchema).max(10),
@@ -29,6 +39,8 @@ const ProfilePatchSchema = z
     sensitiveTopicGuidance: z.string().max(1000).optional(),
     conversationRedirects: ConversationRedirectsSchema.optional(),
     approvedFacts: z.array(ApprovedFactSchema).max(10).optional(),
+    context: ProfileContextSchema.optional(),
+    summaryMemoryEnabled: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Provide an explicit profile change')
   .refine(
@@ -116,6 +128,8 @@ export const DataRequestSchema = z.discriminatedUnion('operation', [
 export const ProfileCreateSchema = z.strictObject({
   preferredName: z.string().trim().min(1).max(80),
   avatarId: AvatarIdSchema.default('lemming'),
+  context: ProfileContextSchema.optional(),
+  summaryMemoryEnabled: z.boolean().optional(),
 });
 // Fictional setup may edit public identity only; private caregiver fields stay protected.
 export const DemoProfileUpdateSchema = z.strictObject({
@@ -129,6 +143,25 @@ export const DemoProfileUpdateSchema = z.strictObject({
 });
 export type DemoProfileUpdate = z.infer<typeof DemoProfileUpdateSchema>;
 export const DemoSetupRequestSchema = z.discriminatedUnion('operation', [
+  z.strictObject({ operation: z.literal('profile.context.read'), profileId: IdSchema }),
+  z.strictObject({
+    operation: z.literal('profile.context.update'),
+    input: ProfileContextUpdateSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('profile.context.forget'),
+    profileId: IdSchema,
+    expectedRevision: RevisionSchema,
+    commandId: IdSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('profile.context.fill'),
+    profileId: IdSchema,
+    expectedRevision: RevisionSchema,
+    commandId: IdSchema,
+  }),
+  z.strictObject({ operation: z.literal('profile.image.upload'), input: ProfileImageUploadSchema }),
+  z.strictObject({ operation: z.literal('profile.image.read'), input: ProfileImageReadSchema }),
   z.strictObject({ operation: z.literal('profile.list') }),
   z.strictObject({ operation: z.literal('profile.update'), input: DemoProfileUpdateSchema }),
   z.strictObject({

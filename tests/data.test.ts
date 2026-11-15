@@ -24,6 +24,7 @@ import {
   ParticipantProfileSchema,
   createClients,
   createHttpTransport,
+  ProfileContextSchema,
   type Fetcher,
 } from '@lemmi/contracts';
 import { startControlGateway } from '../apps/realtime/src/control';
@@ -146,6 +147,59 @@ dbtest('migrations are repeatable, checksummed and only Alex is seeded', async (
     code: 'FORBIDDEN',
   });
 });
+
+dbtest(
+  'profile summaries require opt-in and current revisions; forget blocks stale checkpoints',
+  async () => {
+    await reset();
+    const c = new SessionCoordinator('live');
+    c.acceptPersistentProfile(await repo.approvedProfile(caregiver.subject));
+    c.handle('session.start', {
+      profileId: 'profile-alex',
+      endpoint: 'robot',
+      commandId: randomUUID(),
+    });
+    const snapshot = c.snapshot()!;
+    const memory = {
+      summary: 'Participant discussed gardens.',
+      profileRevision: 0,
+      privacyRevision: 0,
+    };
+    await repo.saveSession(snapshot, [], undefined, [], memory);
+    expect((await sql`SELECT * FROM lemmi.conversation_memories`).length).toBe(0);
+    const enabled = await repo.update(
+      caregiver,
+      update(0, {
+        summaryMemoryEnabled: true,
+        context: ProfileContextSchema.parse({ career: 'Librarian' }),
+      }),
+      () => {},
+    );
+    const current = { ...snapshot, profileRevision: enabled.revision };
+    await repo.saveSession(current, [], undefined, [], {
+      ...memory,
+      profileRevision: enabled.revision,
+    });
+    expect((await repo.approvedProfile(caregiver.subject)).memories?.length).toBe(1);
+    const participant = await repo.profile({ ...caregiver, kind: 'caregiver' }, 'profile-alex');
+    expect(participant).not.toHaveProperty('memories');
+    expect(participant).not.toHaveProperty('context');
+    await repo.update(
+      caregiver,
+      update(enabled.revision, { summaryMemoryEnabled: false }),
+      () => {},
+    );
+    await repo.saveSession(current, [], undefined, [], {
+      ...memory,
+      profileRevision: enabled.revision,
+    });
+    expect((await sql`SELECT * FROM lemmi.conversation_memories`).length).toBe(0);
+    await sql`UPDATE lemmi.profiles SET is_demo=false WHERE id='profile-alex'`;
+    await expect(repo.profile(caregiver, 'profile-alex', true, true)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  },
+);
 dbtest('redirect settings persist privately with revision checks and caregiver scope', async () => {
   await reset();
   const settings = { awayFrom: ['old job'], toward: ['flowers'] };

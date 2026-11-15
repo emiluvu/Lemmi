@@ -6,6 +6,7 @@ import {
   ParticipantProfileSchema,
   ProfileDetailSchema,
   type Result,
+  ProfileContextViewSchema,
 } from '@lemmi/contracts';
 import { DataRequestSchema, DemoSetupRequestSchema } from '../../../contracts/src/profile-assets';
 import { DataRepository, DataError, type DataPrincipal } from './repository';
@@ -13,6 +14,7 @@ import { DatabaseDeviceAuthority } from './device-authority';
 import { PrivateMedia } from './private-media';
 import { database } from './database';
 import type { SessionCoordinator } from '../session-coordinator';
+import { fillDemoContext } from '../profile-context';
 type ProfileSessions = Pick<
   SessionCoordinator,
   'acceptPersistentProfile' | 'persistenceSnapshot'
@@ -91,6 +93,8 @@ export class PersistentData {
         }),
         this.devices.bootId,
         snapshot.supportSelections,
+        snapshot.memory,
+        snapshot.forgetMemory,
       );
     };
     const result = this.checkpoints.then(work);
@@ -168,6 +172,109 @@ export class PersistentData {
     }
     if (request.operation === 'profile.list')
       return ok(await this.repository.listProfiles(this.subject, true));
+    if (
+      request.operation === 'profile.context.read' ||
+      request.operation === 'profile.context.update' ||
+      request.operation === 'profile.context.fill' ||
+      request.operation === 'profile.context.forget' ||
+      request.operation === 'profile.image.read' ||
+      request.operation === 'profile.image.upload'
+    ) {
+      const id = 'input' in request ? request.input.profileId : request.profileId;
+      const principal: DataPrincipal = {
+        kind: 'caregiver',
+        subject: this.subject,
+        profileId: id,
+        bootId: this.devices.bootId,
+      };
+      const current = ProfileDetailSchema.parse(
+        await this.repository.profile(principal, id, true, true),
+      );
+      const view = (profile: typeof current) =>
+        ProfileContextViewSchema.parse({
+          profileId: profile.id,
+          revision: profile.revision,
+          preferredName: profile.preferredName,
+          avatarId: profile.avatarId,
+          communicationSupport: profile.communicationSupport,
+          context: {
+            ...profile.context,
+            avoidTopics: profile.conversationRedirects?.awayFrom.length
+              ? profile.conversationRedirects.awayFrom
+              : (profile.context?.avoidTopics ?? []),
+            comfortableTopics: profile.conversationRedirects?.toward.length
+              ? profile.conversationRedirects.toward
+              : (profile.context?.comfortableTopics ?? []),
+          },
+          summaryMemoryEnabled: profile.summaryMemoryEnabled ?? false,
+          memories: profile.memories ?? [],
+        });
+      if (request.operation === 'profile.context.read') return ok(view(current));
+      if (request.operation === 'profile.image.upload') {
+        const image = request.input;
+        return ok(
+          await this.repository.createAsset(
+            principal,
+            {
+              profileId: id,
+              expectedRevision: image.expectedRevision,
+              commandId: image.commandId,
+              dataBase64: image.dataBase64,
+              kind: 'image',
+              mediaType: 'image/png',
+              caption: image.description,
+              discussionContext: null,
+              entityIds: ['profile:approved-photo'],
+              source: 'Fictional demo caregiver upload',
+              permission: 'Uploader approved for fictional demo conversation',
+              approved: true,
+            },
+            true,
+          ),
+        );
+      }
+      if (request.operation === 'profile.image.read') {
+        if (!current.context?.photos.some((photo) => photo.assetId === request.input.assetId))
+          throw new DataError('FORBIDDEN', 'Photo is not attached to this profile');
+        const asset = await this.repository.asset(principal, request.input.assetId, true, true);
+        return ok({
+          mediaType: 'image/png',
+          dataBase64: Buffer.from(asset.bytes!).toString('base64'),
+        });
+      }
+      const command = request.operation === 'profile.context.update' ? request.input : request;
+      const patch =
+        request.operation === 'profile.context.update'
+          ? {
+              preferredName: request.input.preferredName,
+              avatarId: request.input.avatarId,
+              communicationSupport: request.input.communicationSupport,
+              context: request.input.context,
+              summaryMemoryEnabled: request.input.summaryMemoryEnabled,
+              conversationRedirects: {
+                awayFrom: request.input.context.avoidTopics,
+                toward: request.input.context.comfortableTopics,
+              },
+            }
+          : request.operation === 'profile.context.fill'
+            ? { context: fillDemoContext(current.context!) }
+            : { summaryMemoryEnabled: false };
+      const result = await this.handle(
+        {
+          operation: 'profile.update',
+          input: {
+            profileId: id,
+            expectedRevision: command.expectedRevision,
+            commandId: command.commandId,
+            patch,
+          },
+        },
+        this.subject,
+        undefined,
+        true,
+      );
+      return result.ok ? ok(view(ProfileDetailSchema.parse(result.data))) : result;
+    }
     if (request.operation === 'profile.create') {
       const profile = await this.repository.createProfile(
         this.subject,
@@ -385,6 +492,7 @@ export class PersistentData {
       case 'asset.read':
         return ok(await this.repository.asset(principal, request.data.assetId, request.data.bytes));
     }
+    throw new DataError('UNAVAILABLE', 'This data operation is not available');
   }
 }
 export function dataFailure(error: unknown): Result<never> {

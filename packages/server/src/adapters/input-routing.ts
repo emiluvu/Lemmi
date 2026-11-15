@@ -55,7 +55,11 @@ export function routeParticipantText(text: string): InputRoute {
     )
   )
     return 'topic_refusal';
-  if (/^(?:don't|do not) (?:write that down|record (?:me|that)|save (?:this|that))$/.test(value))
+  if (
+    /^(?:please )?(?:don't|do not) (?:write that down|record (?:me|that)|save (?:this|that)|remember (?:this|that|our conversations))$/.test(
+      value,
+    )
+  )
     return 'privacy_refusal';
   if (/^(i need|ich brauche)$/.test(value)) return 'incomplete_need';
   if (/^(i (?:do not|don't) feel well|i feel unwell|mir geht es nicht gut)$/.test(value))

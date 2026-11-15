@@ -36,8 +36,15 @@ server {
     }
 
     # Explicit fictional demo/browser routes, independently authorized by the app.
-    location ~ ^/(participant(/(conversation|photo-story))?|caregiver(/(settings|check-in|sign-in))?|_app/.*|v1/demo/(profiles|profile-update|conversation-lock|conversation-exit|enroll|current|release|photo-assets/(photo-story-garden|photo-story-park)))?$ {
-        client_max_body_size 4k;
+    location = /v1/demo/profile-image-upload {
+        client_max_body_size 1500k;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host YOUR_DOMAIN;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+    }
+    location ~ ^/(participant(/(conversation|photo-story))?|caregiver(/(settings|check-in|sign-in))?|_app/.*|v1/demo/(profiles|profile-update|profile-context|profile-context-update|profile-memory-forget|profile-demo-fill|profile-image-upload|profile-image-read|conversation-lock|conversation-exit|enroll|current|release|photo-assets/(photo-story-garden|photo-story-park)))?$ {
+        client_max_body_size 32k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;
         proxy_set_header X-Forwarded-Proto https;

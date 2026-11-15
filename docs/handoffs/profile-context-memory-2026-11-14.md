@@ -1,0 +1,33 @@
+# Profile context and optional conversation memory
+
+Branch: `codex/profile-context-memory`, based on integrated `origin/main` (`9257de1`). This is source work, not a deployment. Unrelated local observer/session wording/test edits remain in the named Git stash created before this branch.
+
+## Behaviour
+
+The live fictional caregiver dashboard uses one modal for create and Edit profile: name, five avatars, support preset, career, biography, familiar people/relationships, activities, pets, eight favourites, comfortable/avoided topics, optional portrait and other pictures. Only the name is required. Support retains the existing save-versus-apply contract. Context changes pause conversation; explicit continuation is required. The mock dashboard retains its existing mock editor; `/preview/profile` is a local visual-only preview of the new modal.
+
+Uploads accept PNG/JPG/WebP, resize to at most 1024 pixels, re-encode plain PNG without ancillary metadata, and use existing scoped private storage. Maximum five pictures including one portrait; descriptions are optional. Only entered descriptions reach conversation generation. No image interpretation, face identification or external image upload. Removing an attached dedicated picture deletes its asset row and then its private bytes; failed physical cleanup is retried by startup reconciliation. Interrupted unattached upload drafts are reconciled on gateway restart. Profile-context pictures do not automatically become an activity album.
+
+Profile context becomes bounded caregiver-provided facts for ordinary conversation. Word overlap selects relevant facts from all fields; this is simple local retrieval, not embeddings. Up to ten approved-fact records continue to work alongside this context. No vector service was added.
+
+**Save short conversation summaries for future chats** is a new explicit, separate permission, default off. This task intentionally adds permission to retain short paraphrased topic summaries even when journal excerpts are off; without this permission the original no-paraphrase rule remains. No transcripts/audio persist. Enabled ordinary successful turns ask the existing chat adapter for a rolling summary (maximum 300 characters, at most two additional seconds). One summary per session, ten latest per profile. Summary failure never substitutes a fake summary or prevents a normal reply. Teaching/photo turns, redirects and fixed safety replies do not create summaries. Prior sessions are selected by word overlap with recency as a tie-breaker, at most three, labeled unreviewed AI context. They can support a natural callback but never change approved biography or imply certain recall. Journal and preference permissions remain separate.
+
+Turning summary memory off or Forget deletes saved summaries; re-enabling starts empty. Context/fact/redirect corrections invalidate dependent summaries. Unchanged identity/support edits preserve saved summaries at the new revision. Existing explicit privacy-refusal routing disables memory and clears it in the next durable checkpoint. Profile/privacy revisions and active session cancellation fence late summary writes. Caregiver summary review remains visibly AI-origin and unreviewed; there is no approval-to-biography action.
+
+New setup endpoints remain private-gate, same-origin, fictional-demo-only and blocked by the participant conversation lock. Transactional `is_demo` checks prevent reading/writing real profile context through this bridge. This demo gate/exit keypad is not production caregiver authentication. Existing independently authorized resource APIs continue to apply outside this demo bridge. Participant projections never return context or memory records.
+
+## Backend rollout (Anay)
+
+1. Review data/access/cancellation boundaries. Integrate this branch into the normal deployment branch; do not switch the active `/home/anayn/project/Lemmi` checkout away from `backend-deploy`.
+2. Back up the database and private media together. Use Bun 1.4.4 and `bun install --frozen-lockfile`.
+3. Stop gateway/web for maintenance; run `bun run db:migrate`. Migration `006_profile_context_memory.sql` adds context/permission columns and the profile/session-scoped memory table. Existing profiles start with summary memory **off**.
+4. To fill missing details for all assigned fictional testing profiles, run `bun scripts/database.ts fill-demo-context` using the existing protected server configuration. It requires the gateway ownership lock to be free, rechecks demo scope inside each write, preserves nonempty values/photos/permission choices, and is repeatable. Real and preview-only profiles are excluded. No identities from the reference images are copied. The per-profile **Fill missing demo details** control is also available. No remote database was modified in this coding session.
+5. Review the exact six `profile-*` additions in `deploy/nginx.conf.template`: image upload gets 1500k, other demo requests 32k. Keep internal endpoints and unlisted paths blocked. No public image storage route is introduced.
+6. Build and restart both web/gateway together. No Jev enablement or provider configuration change is needed. Summary generation uses the configured chat model and its existing privacy flags; providers may retain processing independently of application deletion.
+7. In an isolated PostgreSQL `_test` database run the full suite, including memory opt-in/forget/stale checkpoint and non-demo denial checks. Then exercise actual create/edit/refresh, two isolated fictional profiles, portrait/other image upload/reload/removal, cross-profile image denial, participant-locked denial, enabled and disabled memory across a gateway restart, and concurrent Stop/permission changes. Inspect storage for absent transcripts and deleted dependent records. Verify optional summary timeout still delivers the ordinary response. Review mobile, keyboard and actual human speech separately.
+
+Migration is additive. A source rollback must not restore revoked permissions or deleted memories/media. Do not down-migrate or restore an old data backup as a routine rollback.
+
+## Local acceptance
+
+The five focused profile tests passed: preserving fictional fills, relevant older retrieval, context grounding with memory off, cross-session memory/privacy refusal, and revocation during summary generation. Browser preview: all sections present; multiline comfortable topics survived, familiar-person rows added, preview Save did not persist, Escape closed the modal. Database/provider/robot and live upload checks require the isolated/backend environments above. Final local check/build/full-suite outcomes are recorded in the build plan.

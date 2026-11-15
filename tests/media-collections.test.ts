@@ -78,6 +78,7 @@ dbtest(
       '003_persistent_device_credentials.sql',
       '004_endpoint_revocations.sql',
       '005_conversation_redirects.sql',
+      '006_profile_context_memory.sql',
     ]);
     expect(
       (await sql`SELECT sha256 FROM public.lemmi_migrations WHERE name='001_foundation.sql'`)[0]

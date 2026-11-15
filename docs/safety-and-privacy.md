@@ -1,5 +1,11 @@
 # Lemmi — Safety and privacy specification
 
+## November 14 addition: separately permitted short conversation memory
+
+The requested profile increment adds **Save short conversation summaries for future chats**, off by default and separate from journal excerpts and structured preferences. Only this explicit permission permits retaining short paraphrased conversation topics when excerpts are off. No transcript/audio retention is authorized. Retain at most ten rolling session summaries, maximum 300 characters each, until Forget, disablement, dependent-context correction or profile deletion. Summaries stay labeled unreviewed AI context and cannot rewrite biography, score ability or establish reported statements as verified facts. Use relevant summaries gently without testing recall. Existing explicit no-saving input stops new saving and requests deletion at the next durable checkpoint; prior provider processing cannot be undone. Disabled memory/excerpts permit no persisted utterances/paraphrases. Sensitive redirects, teaching/photo turns and fixed safety replies do not become summary sources.
+
+Recheck profile/privacy permission under the profile transaction lock before writes; late work after revocation cannot recreate summaries. New demo context/media endpoints accept only assigned fictional demo profiles and remain private-gate/same-origin/conversation-lock protected. Re-encode image uploads without ancillary metadata; use entered descriptions only, never infer identities from pixels. External LLM provider retention is independent of application deletion. See [implementation, limits and pending review](handoffs/profile-context-memory-2026-11-14.md).
+
 **Status:** Draft for team review  
 **Version:** 0.4  
 **Scope:** Hackathon prototype; fictional profiles, team rehearsal and optional supervised live demo
@@ -167,7 +173,7 @@ The following are proposed defaults. The technical specification must map each i
 ### Retention and sharing choices
 
 - Raw audio saving is disabled throughout this build and has no enable control.
-- Before a session, offer **Save statement excerpts for the demo journal**, off by default. When off, do not persist utterance text or paraphrases of that text in summaries. Summaries may describe only retained activity events and separately entered caregiver observations.
+- Before a session, offer **Save statement excerpts for the demo journal**, off by default. When off, do not persist utterance text or paraphrases in journal summaries. Journal summaries may describe only retained activity events and separately entered caregiver observations. The separately authorized short conversation-memory feature below has its own explicit permission; it does not enable journal excerpts.
 - Turning excerpt saving off clears any unsaved excerpt queue. Removing existing excerpts also removes or regenerates summaries that depend on them. A no-saving request applies even if a caregiver previously enabled saving.
 - No public sharing, routine automatic family updates, exports, advertising analytics, voiceprints, or emotion recognition in the demo. Explicit help notifications and preauthorized recognized-concern alerts are permitted only to verified recipients. Do not attach the general journal or conversation history.
 - Journal entries are visible in the supervised caregiver view. Explain that the demo role switch does not protect against another person using the same device.
@@ -217,7 +223,7 @@ These checks are required behavior examples for implementation, not evidence tha
 | Remote caregiver help | With no helper beside the participant, an opted-in test contact receives a fictional request; accepted/delivered/acknowledged remain distinct. Exercise backup, terminal failure, no response, missing receipts, and offline failure. |
 | Request integrity | Duplicate taps and retries do not create unbounded sends; invalid callbacks and link previews cannot acknowledge. Stop preserves routing, cancellation ends future attempts, and late acknowledgments do not restart capture. |
 | Simulated help | Every state says no real message is sent; simulation is isolated from real delivery and cannot satisfy the real-contact check. |
-| Excerpts disabled | After a spoken session, storage, logs, and summaries contain no utterance text or paraphrases; no raw audio files exist. |
+| Excerpts and summary memory disabled | After a spoken session, storage, logs, and summaries contain no utterance text or paraphrases; no raw audio files exist. |
 | Excerpts enabled and revoked | Saved excerpts retain source labels; revocation stops saving; requested removal clears dependent summaries. |
 | Journal interpretation | Assistance and technical failures are factual events; no mood diagnoses, cognition scores, or decline claims appear. |
 | Correction and deletion | Corrected profile takes effect; deletion survives reload/reconnection and delayed model completion cannot recreate records. |
