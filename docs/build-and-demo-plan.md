@@ -1149,3 +1149,46 @@ Refresh/reconnect the participant browser, select Alex and explicitly Start.
 Open Photo Story to use the saved album. Human microphone/speaker, spoken
 acknowledgment/tone and hardware Stop acceptance remain pending. [Photo Story
 handoff](handoffs/alex-photo-story-pack.md).
+
+
+## Conversation startup recovery deployed — November 15, 2026
+
+**Web runtime `9b218b9`**, gateway `c44f092` and speech/tunnel retained.
+User reported missing avatar and Tilde/Tilda stuck on “Loading your companion”.
+Refresh restored the avatar/German controls. Public checks confirmed200 PNG
+avatar assets, visible SVG artwork on desktop/mobile and caregiver navigation,
+and intact exact-ID German mapping with `device.ready.language=de` and German
+conversation controls. No profile, language mapping or avatar asset repair was
+needed; the original tab's failed request was not captured, so its exact trigger
+is unproven. Earlier acceptance used fresh sessions and missed failed startup.
+
+Fixed the confirmed recovery defect: failed initial setup now ends in an
+explicit unavailable state with **Retry profile connection**, rather than an
+indefinite loading placeholder. Retry performs bounded existing reads, validates
+assigned browser/requested profile, resolves optional safe profile metadata and
+connects capture-off. It never enrolls, Starts, unmutes or restores listening
+intent. Epoch/disposal guards reject late results and changed-profile setup.
+Preview and Photo Story composition are retained. No backend API/configuration,
+German mapping, credentials, photo content or speech change.
+
+Actual public Chromium on its own disposable fixture passed forced setup503 →
+visible unavailable/Retry → connected visible SVG avatar, with zero Start/capture
+requests from Retry. Desktop/mobile photo containment, keyboard controls,
+image failure→Pause, image retry without Resume/capture, and Stop also passed;
+zero runtime errors, no screenshots/audio retained. Type/Svelte zero errors/
+warnings, production build, formatting/whitespace and17 targeted tests/90
+expectations passed. Full450-test suite belongs to the preceding Photo Story
+release and was not rerun for this frontend-only change. Web-only rollout
+retained gateway/speech/tunnel PID/start state. Protected prior web build/source
+pointer `.data/profile-recovery-rollback-path` is available.
+
+Debug cleanup: automatic approval review initially rejected removal of an
+uncertain browser enrollment because ownership was not conclusively proven.
+It was left intact until the user explicitly approved removal and accepted a
+possible disconnect. The exact recorded row was then revoked/removed with ID,
+credential, profile and unchanged-row guards; Tilde profile/photos/language and
+original endpoints were not changed. Reopen Conversation from the caregiver
+workspace if a browser credential needs recovery. All other owned debug fixture
+profiles/endpoints were cleaned. Transport diagnostics remain off/evidence saved.
+
+Refresh before continuing testing. Human speech/K151 acceptance remains separate.

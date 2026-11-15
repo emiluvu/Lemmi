@@ -1,5 +1,10 @@
 # Lemmi
 
+**Conversation recovery deployed — web `9b218b9`:** failed profile setup now
+shows Retry instead of staying on “Loading your companion”. Refresh to load
+the update. Avatar assets and Tilde/Tilda German mapping are intact.
+[Observed checks and limits](docs/backend-status.md).
+
 **Alex Photo Story deployed — web/gateway `c44f092`:** Alex now uses the five saved
 caregiver photos; Start/Resume speaks first and retains the current picture.
 Refresh/reconnect, select Alex and explicitly Start. [Checks and handoff](docs/handoffs/alex-photo-story-pack.md).
