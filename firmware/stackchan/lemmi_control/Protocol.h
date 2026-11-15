@@ -69,7 +69,7 @@ inline bool grantShape(const cJSON* grant, const cJSON* session) {
     (equal(field(grant,"language"),"en") || equal(field(grant,"language"),"de")) &&
     expiry(field(grant,"expiresAt"))>0 && equal(field(session,"phase"),"listening") && cJSON_IsFalse(field(session,"micMuted"));
 }
-inline bool eventChecked(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bool& heartbeat, const char*& reason) {
+inline bool eventChecked(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bool& heartbeat, const char*& reason, bool acceptAudio=false) {
   reason="envelope";
   const char* names[] = {"protocol_version","event_id","session_id","turn_id","generation","sequence","type","payload"};
   if (!keys(root, names, 8) || cJSON_GetArraySize(root) != 8 || !number(field(root,"protocol_version")) || field(root,"protocol_version")->valuedouble != 1 || !string(field(root,"event_id"),100) || !number(field(root,"generation")) || !number(field(root,"sequence"))) return false;
@@ -83,8 +83,11 @@ inline bool eventChecked(cJSON* root, ControlPolicy& state, time_t credentialExp
   heartbeat = false;
   if (equal(type,"device.ready")) {
     reason="ready_fields";
-    const char* allowed[] = {"mode","deviceId","profileId","credentialExpiresAt","audio","camera","textChat","teaching","photoStory","controls"};
-    if (state.ready || !keys(p,allowed,10) || !equal(field(p,"mode"),"live")) return false;
+    const char* allowed[] = {"mode","deviceId","profileId","language","credentialExpiresAt","audio","camera","textChat","teaching","photoStory","controls"};
+    if (state.ready || !keys(p,allowed,11) || !equal(field(p,"mode"),"live")) return false;
+    auto language=field(p,"language");
+    if(language&&!equal(language,"en")&&!equal(language,"de"))return false;
+    strcpy(state.language,language?language->valuestring:"en");
     reason="ready_binding";
     if (!equal(field(p,"deviceId"),"stackchan-alex") || !equal(field(p,"profileId"),"profile-alex") || !credentialExpiryMatches(field(p,"credentialExpiresAt"),credentialExpiry)) return false;
     reason="ready_media";
@@ -113,7 +116,7 @@ inline bool eventChecked(cJSON* root, ControlPolicy& state, time_t credentialExp
     auto s = field(p,"session");
     if (cJSON_IsNull(s)) {
       if (!cJSON_IsNull(sid) || field(root,"generation")->valuedouble!=0) return false;
-      state.session[0]=state.owner[0]=state.lease[0]=0; state.ownsEndpoint=true;
+      state.session[0]=state.owner[0]=state.lease[0]=0; state.ownsEndpoint=true; state.hasGrant=false;
       strcpy(state.phase,"none"); state.generation=0; state.snapshot=true; return true;
     }
     if (!unique(s) || !string(field(s,"id"),100) || !equal(field(s,"mode"),"live") || !phase(field(s,"phase")) || !number(field(s,"generation")) || !number(field(s,"profileRevision")) || !number(field(s,"privacyRevision")) || !number(field(s,"policyRevision")) || !string(field(s,"leaseId"),100) || !cJSON_IsBool(field(s,"micMuted")) || (!equal(field(s,"endpoint"),"robot") && !equal(field(s,"endpoint"),"browser"))) return false;
@@ -130,7 +133,25 @@ inline bool eventChecked(cJSON* root, ControlPolicy& state, time_t credentialExp
     auto grant=field(s,"captureGrant");
     // A valid grant to another owner is observable metadata, never our permission.
     // This target never negotiated audio and must reject any grant to itself.
-    if (!cJSON_IsNull(grant) && (state.ownsEndpoint || !owner || !strcmp(owner->valuestring,"stackchan-alex") || !grantShape(grant,s))) return false;
+    if (!cJSON_IsNull(grant) && (!grantShape(grant,s) ||
+        (acceptAudio&&state.ownsEndpoint&&!equal(field(grant,"language"),state.language))||
+        (!acceptAudio && (state.ownsEndpoint || !owner || !strcmp(owner->valuestring,"stackchan-alex"))))) return false;
+    if(acceptAudio && !strcmp(state.session,field(s,"id")->valuestring) &&
+       (field(s,"generation")->valuedouble<double(state.generation)||
+        field(s,"profileRevision")->valuedouble<double(state.profileRevision)||
+        field(s,"privacyRevision")->valuedouble<double(state.privacyRevision)||
+        field(s,"policyRevision")->valuedouble<double(state.policyRevision)))return false;
+    state.profileRevision=uint64_t(field(s,"profileRevision")->valuedouble);
+    state.privacyRevision=uint64_t(field(s,"privacyRevision")->valuedouble);
+    state.policyRevision=uint64_t(field(s,"policyRevision")->valuedouble);
+    state.serverMuted=cJSON_IsTrue(field(s,"micMuted"));
+    state.hasGrant=state.ownsEndpoint&&!cJSON_IsNull(grant);
+    state.grantTurn[0]=state.grantStream[0]=0;state.grantExpires=0;
+    if(state.hasGrant) {
+      strcpy(state.grantTurn,field(grant,"turnId")->valuestring);
+      strcpy(state.grantStream,field(grant,"streamId")->valuestring);
+      state.grantExpires=expiry(field(grant,"expiresAt"));
+    }
     strcpy(state.session,field(s,"id")->valuestring); strcpy(state.phase,field(s,"phase")->valuestring);
     state.generation=uint64_t(field(s,"generation")->valuedouble); state.snapshot=true;
     if (!strcmp(state.phase,"ended") || !state.ownsEndpoint) state.stop();
@@ -150,9 +171,9 @@ inline bool eventChecked(cJSON* root, ControlPolicy& state, time_t credentialExp
 }
 // Commit a mirror/sequence only after the entire message validates. The worker
 // never reconciles Stop or replies using a partially rejected server message.
-inline bool event(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bool& heartbeat, const char** rejection=nullptr) {
+inline bool event(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bool& heartbeat, const char** rejection=nullptr, bool acceptAudio=false) {
   ControlPolicy next=state; bool nextHeartbeat=false; const char* reason="envelope";
-  bool valid=eventChecked(root,next,credentialExpiry,nextHeartbeat,reason);
+  bool valid=eventChecked(root,next,credentialExpiry,nextHeartbeat,reason,acceptAudio);
   if (valid) { state=next; heartbeat=nextHeartbeat; }
   else heartbeat=false;
   if (rejection) *rejection=valid?"ok":reason;

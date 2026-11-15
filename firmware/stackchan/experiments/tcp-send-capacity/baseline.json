@@ -1,0 +1,45 @@
+{
+  "status": "bounded-16k-installed-three-turn-rehearsal-passed-this-run",
+  "selectedCandidate": {
+    "CONFIG_LWIP_TCP_SND_BUF_DEFAULT": 16384,
+    "TCP_SNDLOWAT": 2873,
+    "TCP_SND_QUEUELEN": 23,
+    "TCP_SNDQUEUELOWAT": 11,
+    "evidenceDirectory": "build/tcp-send-capacity-bounded-16k",
+    "policy": "bounded-16k",
+    "firmwareVersion": "lemmi-voice/0.12-diag1-tcp16",
+    "referenceConnectedIdleFreeBytes": 73156,
+    "localPreparationOnly": false,
+    "hardwareAcceptance": "three-completed-turns-pause-resume-stop-passed-this-run-longer-reliability-unverified"
+  },
+  "boardCore": "m5stack:esp32@3.3.10",
+  "fqbn": "m5stack:esp32:m5stack_cores3:PSRAM=disabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M",
+  "installedSdk": {
+    "builderCommit": "43a8f6d",
+    "idfVersion": "v5.5.4",
+    "idfCommit": "735507283d",
+    "arduinoCommit": "6cb835025",
+    "tinyusbCommit": "5004a24b2",
+    "versionsSha256": "ab876c613d81668a77e309c7cbd231f88fd3d6ce6f83b5fe66cfad39d2f0305c",
+    "variantConfigSha256": "521e1cf5600185d2f814b0e5954111a9ea3cc2884c13de8cc807cb834f7ec124",
+    "lwipArchiveSha256": "7b462c08c39aaaf0baea8a07ab8bac5c87cd311a379bdfaa460b8530c57e678e"
+  },
+  "candidate": {
+    "CONFIG_LWIP_TCP_SND_BUF_DEFAULT": 16384,
+    "status": "built-preserved-rejected-by-ram-budget-do-not-flash",
+    "TCP_SNDLOWAT": 8192,
+    "TCP_SND_QUEUELEN": 46,
+    "TCP_SNDQUEUELOWAT": 23
+  },
+  "baseline": {
+    "CONFIG_LWIP_TCP_SND_BUF_DEFAULT": 5744,
+    "TCP_SNDLOWAT": 2873,
+    "TCP_SND_QUEUELEN": 16,
+    "TCP_SNDQUEUELOWAT": 8
+  },
+  "payloadCapacityDeltaPerSocket": 10640,
+  "observedConnectedHeapBytes": {
+    "min": 75988,
+    "max": 76188
+  }
+}

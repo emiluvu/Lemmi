@@ -1,5 +1,13 @@
 # Selected avatar and playback presentation foundation
 
+Current integration: the separate [voice test](../lemmi_voice/README.md) uses
+actual mic/PCM/speaker adapters and shared audio light policy. The installed
+0.12 bounded TCP candidate passed a three-turn conversation/Pause/Resume/Stop
+rehearsal; some playback buffering and longer reliability checks remain.
+Selected-avatar/profile rendering and connected petting remain unintegrated;
+preserve the accepted offline display. Earlier helper preparation notes below
+are historical, not a live-avatar pass.
+
 ## Status lights — prepared, no upload
 
 Follow-up: shared policy also supports yellow for an active camera, ahead of

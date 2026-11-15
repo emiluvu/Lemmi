@@ -1,5 +1,71 @@
 # Offline PCM framing
 
+**Current transport (0.10):** [voice firmware](../lemmi_voice/README.md) now uses
+`PendingWrite.h` for one resumable nonblocking write and `SendScope.h` for
+per-attempt session/revision/grant/epoch validation. Immutable TLS WANT retries,
+continued inbound processing, original 240 ms capture-age/queue limits and
+safe whole-turn cancellation replace the blocking 100 ms batch loop. A possibly
+buffered partial/WANT write still closes on cancellation. VoiceBridge playback
+receipts now carry their actual enqueue timestamp. No new media contract,
+backend, queue capacity or recording is added. Nine sanitizer programs, 27
+Python tests, native builds and idle boot pass; physical voice acceptance is
+pending. Earlier version notes below are historical.
+
+**Integration update:** these helpers are now consumed by the opt-in
+[`voice` firmware test target](../lemmi_voice/README.md), including strict wire
+validation, explicit grant-driven capture, zeroing bounded queues and actual
+speaker mixer callbacks. Earlier offline-only descriptions below describe the
+helper preparation. Voice compiles/tests locally but has no physical acceptance
+yet: 0.2 reached real capture and a physically heard but choppy reply, then
+disconnected, so physical playback failed. Voice 0.3 is now uploaded with
+incremental TLS-frame reads and two-slot/prebuffered playback; idle boot is
+observed, but new authenticated transport/speech/Stop results remain pending.
+
+## Bounded speech playback preparation
+
+`PlaybackWindow.h` now provides the complementary four-chunk output window for
+decoded mono PCM s16le. It validates the shared native output-rate/size rules,
+including 882-byte frames at 22,050 Hz and a short final chunk. It accepts only
+sequential chunks, never grows beyond the robot's four-chunk negotiated window,
+and copies up to two requests into stable caller-owned speaker memory. It does not
+count reception or submission as consumption. The adapter must call `consumed`
+only on actual consumption, and require both explicit stream end and all consumed
+chunks before sending completed. No automatic capture or playback restart.
+
+All methods require one serialized owner and separately validated current
+session/generation/turn/lease/stream/revisions/local restrictions. Strictly
+increasing local epochs reject stale starts and callbacks; they are not server
+authorization. Cancel wipes the window while preserving the last epoch. It
+intentionally cannot wipe a Block that a driver may still reference: the owner
+must invalidate first, stop/drain the driver, then clear its Block and pending
+callback queue before reuse. Wrong/stale operations return false; the caller
+must handle current-stream protocol errors explicitly rather than drop audio.
+
+The installed SDK documents that `playRaw` success means queued, `isPlaying`
+reflects software slots, and the buffer-release callback may precede I2S drain.
+None alone is an audible-completion receipt. A real speaker adapter must resolve
+that boundary and physical Stop behavior before advertising audio support. This
+helper does not call those APIs, receive WSS, open the mic or play speech.
+
+Host ASan/UBSan checks pass all five native rates, maximum 30-second outputs,
+endianness/signed samples, exact final tails, window overflow/reordering,
+submission versus consumption, end-before-drain, cancellation, driver-owned
+memory preservation, duplicate/stale callbacks and epoch exhaustion. Run:
+
+```sh
+c++ -std=c++11 -Wall -Wextra -Werror -fsanitize=address,undefined firmware/stackchan/tests/playback_window.cpp -o /tmp/lemmi-playback-window
+/tmp/lemmi-playback-window
+python3 firmware/stackchan/tools/build.py --target playback
+```
+
+The new playback target is a compile-only probe with no upload target. Pinned
+ESP32 compile passed: 309,444 program bytes / 31,856 static globals. Window size
+is bounded to 7,800 host bytes plus a caller Block of at most 1,952 bytes;
+SDK/DMA buffers and WSS/base64 memory are additional; the live test owns TWO
+such Blocks. The separate control-only target remains 0.9 with audio unsupported.
+Secure F13 remains required before integrating
+petting polish; the accepted offline avatar/petting target stays preserved.
+
 `PcmPacketizer.h` prepares the proposed microphone payload: mono signed 16-bit
 little-endian PCM, 16 kHz, 320 samples / 20 ms / 640 bytes per frame. This is a
 firmware helper, not a new wire protocol or session authority. It has no hardware,

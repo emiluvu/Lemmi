@@ -2,6 +2,111 @@
 
 Switching accounts or resuming? Read [Emilia’s restart handoff](../../docs/handoffs/emilia-resume.md).
 
+**Latest 0.12 result (10:30–10:32UTC): repeated-turn rehearsal passed this run.**
+Three9–11s captures/replies, user-confirmed Pause/Resume and Stop during last
+reply proceeded without unexpected auto-stop/disconnect. Memory limits held
+(minimum41340); queued speech stopped without false consumption credit. Some
+playback rebuffering remains (4/3/2 waits); longer/network-loss/venue and physical
+latency acceptance remain unrun. Preserve this exact capped-policy build and
+stopped session; no more speculative changes or backend diagnostics.
+
+**Current installed: `0.12-diag1-tcp16`, November 15, 10:27 UTC.** A new
+measured-bottleneck candidate uses 16KB TCP send capacity, 23-pbuf cap and the
+original 2873-byte writable threshold. It differs from the original rejected
+46-pbuf 16KB image. App capture queues/240ms age/security/controls unchanged.
+Matching builds, 29 Python tests, ten sanitizer programs, exact SDK/ABI/link/
+RAM checks and protected upload/idle selftest pass. Connected memory and real
+multi-turn/Stop acceptance are pending; backend untouched. Explicit selection:
+`--target voice_diag --tcp-policy bounded-16k`. See
+[current policy and budget](experiments/tcp-send-capacity/README.md).
+
+**Latest 0.11 result (10:15 UTC): multi-turn reliability failed.** Capture
+stopped automatically during speech on a 240 ms send-age fault. Actual TCP
+snapshot: 711 send bytes free, four queued pbufs, peer window open, unacked data
+and zero ACK-byte advance over the sampled stalled window. No memory-limit
+breach. The existing Stop was delivered and the session ended **without
+disconnecting**; connection recovery is observed, voice reliability remains
+unmet. Preserve current build/evidence and leave stopped; no blind retest,
+buffer/timeout change or backend diagnostics. See restart handoff for details.
+
+**Latest observed result (November 15, 10:12 UTC):** one short real conversation
+on installed 0.11-diag1 went well by Emilia's report. About 6.71s capture, reply
+playback, 322 received/consumed output chunks and applied Stop/ended snapshot;
+no send fault/disconnect or memory-limit breach in this turn. Two playback
+buffer waits remain. Preserve this exact image/source and stopped session;
+longer/multi-turn, physical Stop latency and failure recovery remain unverified.
+This is not full P0 acceptance or proof of the prior stall's cause. No backend
+diagnostics or more experimental flashes. Earlier preparation statuses follow.
+
+**Current installed: `lemmi-voice/0.11-diag1`, final idle boot 10:10 UTC.**
+0.10's live turn failed (92 writes, capture age expired, Stop delivery also
+blocked); voice remains unaccepted. 0.11 measures robot-side TCP queues/window/
+ACK progress locally and permits bounded nonblocking Stop recovery after capture
+is already off. No larger buffers, longer capture, new protocol or backend
+diagnostics. Both builds, 28 Python tests, ten sanitizer executables, exact hook/
+SDK checks and protected four-image upload/boot selftest pass. Private provision/
+Connect, live TCP evidence and voice/physical Stop checks remain pending. See
+[current 0.11 diagnostic notes](lemmi_voice_diag/README.md); older statuses below
+are historical.
+
+**Current installed: `lemmi-voice/0.10-diag1` (November 15, 09:57 UTC).**
+Resumable nonblocking writes on the unchanged stock TCP SDK replace the failed
+8192 buffer experiment. Both builds, 27 Python tests, nine sanitizer programs,
+protected four-image upload and idle boot selftest pass. Microphone/camera off;
+connected memory/nonblocking setup and physical voice/Stop/mute acceptance are
+pending private provisioning/local Connect. No backend diagnostics or restart.
+Use ordinary `--target voice_diag`, without the experiment flag. See
+[0.10 behavior and bounds](lemmi_voice/README.md); earlier statuses are history.
+
+**Latest voice result (November 15, 09:38 UTC): FAILED.** Selected 8192-byte
+candidate disconnected about 0.6 seconds after Speak/capture-on. Probe again
+shows five zero socket-writability polls and no TLS writer call in the failed
+batch. No reply playback; no recorded memory/stack limit breach. Keep stopped/
+disconnected and do not retry or reflash this experiment. See the restart
+handoff for exact evidence. No backend diagnostic session was run.
+
+**Latest installed (November 15, 09:34 UTC):** selected isolated 8192-byte voice
+candidate, exact application hash in the restart handoff. Protected four-image
+upload and idle startup selftest pass; capture/camera off. Connected memory,
+short conversation and physical Stop/mute checks remain pending after private
+RAM provisioning. No backend diagnostic run or service change.
+
+**Current local preparation (November 15):** selected isolated TCP send-capacity
+candidate is **8192**, with a matching rebuilt 5744 baseline. The earlier 16384
+candidate fails conservative RAM budgeting and must not be flashed. Both selected
+pair builds/link checks pass; no flash or hardware test performed. See the
+[experiment budget and exact upload selection](experiments/tcp-send-capacity/README.md).
+Special backend diagnostic runs are no longer requested. Latest documented
+installed firmware remains stopped `lemmi-voice/0.9-diag1`; older statuses below
+are historical.
+
+**Latest preparation: voice 0.7.** 0.6 diagnostic confirmed a full microphone
+send queue (45ms longest send); that capture test failed. 0.7 combines each
+masked WebSocket send into one TLS write and bounds input at 240ms plus a
+reserved Finished slot. Host/native checks pass; fresh capture/smoothness/Stop
+acceptance is pending. See [voice target](lemmi_voice/README.md).
+
+**Latest installed: voice 0.5.** Coordinated 240ms (12 chunks) negotiation with
+four-chunk fallback, bounded queues and paced consumption receipts passes host
+checks/native build and four-image upload verification. Idle boot is observed;
+actual negotiated 12-frame connection, connected heap, smooth speech and Stop
+under playback remain pending. See [voice notes](lemmi_voice/README.md).
+
+**Current integration checkpoint:** control 0.9 was restored to `stackchan-alex`;
+Connect/Start/Pause/Resume/Stop, capture-off Unmute and stopped reconnect are
+observed in the filtered helper log. New opt-in [voice 0.4 test target](lemmi_voice/README.md)
+adds the real mic/PCM/playback wire adapter using the same session/control code.
+Host protocol/driver/cancellation/privacy checks, ESP32 compile and private-backup
+upload dry-run pass. After fixing a 0.1 stack defect, 0.2 reached real capture
+and a physically heard but very choppy reply, then disconnected: playback
+acceptance failed. The current build retains 0.3's incremental TLS-frame reads
+and two-slot/prebuffered speech. 0.4 accepts the backend's new validated
+English/German ready field; its upload/hash verification and idle boot are observed.
+Authenticated transport/smoothness/Stop retests await Emilia's return. The existing
+avatar/petting UI remains the final presentation direction; the intermediate
+voice target keeps it disabled during media bring-up. Image activities require
+a companion screen, camera relay remains unavailable, and servo work stays off.
+
 **Latest accepted test:** Emilia reports feasibility 0.8 upload PASS and confirms
 audible tone → blue lights → lights off. Speaker-blue regression is resolved in
 this user-observed retest. Installed firmware remains the offline test menu;
@@ -183,3 +288,12 @@ Then test display/touch/Wi-Fi/camera together and audio→camera→audio transit
 `packages/contracts/src/device.ts` and `scripts/fake-device.ts` are starting transport examples only. The documented deployed gateway supports scoped certificate-verified WSS controls and optional voice; the original loopback mock token and `ws://` URL are development-only. Backend-deploy documentation/source and control-checks distinguish current device compatibility from unverified voice/camera integration. Kylie supplies art after measured display/export limits.
 
 Sources: [M5Stack Arduino setup](https://docs.m5stack.com/en/arduino/stackchan/program), [display example/build requirements](https://docs.m5stack.com/en/arduino/stackchan/display), [StackChan BSP](https://github.com/m5stack/StackChan-BSP), [factory recovery](https://docs.m5stack.com/en/StackChan#restore-factory-firmware).
+
+### Uplink diagnostic variant
+
+The separate [`voice_diag` target](lemmi_voice_diag/README.md) observes the exact
+SDK socket-poll/TLS-write return paths using verified linker wrappers. It keeps
+normal voice 0.9 and all audio limits intact. This is diagnostic preparation,
+not a fix or physical voice acceptance. Diagnostic installation and capture-off
+boot were checked; provisioning and one UTC-marked capture test remain pending.
+Coordinate counterpart review before integrated merge.

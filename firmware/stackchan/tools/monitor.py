@@ -29,8 +29,21 @@ allowed = {
     "event=display_stop capture=off camera=off",
     "firmware=lemmi-display/0.7 capture=off camera=off",
 }
-boot = re.compile(r"firmware=(?:lemmi-foundation/0\.1|lemmi-feasibility/0\.[2345678]|lemmi-petting/0\.[12]|lemmi-control/0\.[12345678]) display=\d{2,4}x\d{2,4} capture=off camera=off")
+boot = re.compile(r"firmware=(?:lemmi-foundation/0\.1|lemmi-feasibility/0\.[2345678]|lemmi-petting/0\.[12]|lemmi-control/0\.[123456789]|lemmi-voice/0\.[123456789]|lemmi-voice/0\.9-diag1|lemmi-voice/0\.(?:10|11)(?:-diag1)?|lemmi-voice/0\.12-diag1-tcp16) display=\d{2,4}x\d{2,4} capture=off camera=off")
 diagnostics = re.compile(
+    r"event=voice_tcp_probe samples=\d{1,10} snd_free=\d{1,10} snd_min=\d{1,10} queued=\d{1,10} peer_wnd=\d{1,10} cwnd=\d{1,10} ack_bytes=\d{1,10} retransmits=\d{1,10} unacked=[01] unsent=[01] camera=off|"
+    r"event=voice_send_failed reason=(?:2|3|4|6) status=[0-3] result=-?\d{1,10} bytes=\d{1,5} send_max_ms=\d{1,10} capture_sent=\d{1,10} camera=off|"
+    r"event=voice_fault code=(?:[0-9]|1[0-2]) send_max_ms=\d{1,10} capture_sent=\d{1,10} heap_free=\d{1,10} camera=off|"
+    r"event=voice_transport_probe polls=\d{1,10} poll_zero=\d{1,10} poll_error=\d{1,10} poll_max_us=\d{1,10} writes=\d{1,10} write_zero=\d{1,10} write_want=\d{1,10} write_error=\d{1,10} write_max_us=\d{1,10} camera=off|"
+    r"event=voice_link nodelay=1 wifi_sleep=0(?: nonblocking=1)? camera=off|"
+    r"event=voice_ready audio=[01] output_window=(?:4|12) language=(?:en|de) camera=off|"
+    r"event=voice_stream received=\d{1,4} consumed=\d{1,4} buffer_waits=\d{1,4} camera=off|"
+    r"event=voice_boot reset=\d{1,3} heap_free=\d{1,10} loop_min=\d{1,10} camera=off|"
+    r"event=voice_memory loop_min=\d{1,10} worker_min=\d{1,10} heap_free=\d{1,10}(?: internal_free=\d{1,10} internal_min=\d{1,10} internal_largest=\d{1,10})? camera=off|"
+    r"event=voice_(?:audio capture=(?:on|off) playback=(?:on|off)|state phase=(?:none|ready|listening|processing|speaking|waiting|paused|unavailable|ended) stopped=[01] owner=[01]|ack applied=[01]) camera=off|"
+    r"event=voice_control_(?:handoff_requested|audio_error|selftest_passed|selftest_failed|boot|ready|local_stop|queue_full|mic_muted|mic_unmuted|connect_failed|claim_failed|wifi_ready|expired|watchdog|protocol_error|disconnected) camera=off|"
+    r"event=voice_reject stage=(?:envelope|sequence|ready_fields|ready_binding|ready_media|ready_controls|before_ready|event_shape|state_fields|state_binding|state_owner|state_capture|reply_binding|unsupported_event) camera=off|"
+    r"event=voice_transport_exit stage=(?:wifi|wifi_test|claim|tls_init|ws_init|headers|connect|hello|link|expiry|watchdog|stop_send|heartbeat_send|control_send|poll|close|read|partial|frame|message|auth) result=-?\d{1,10} opcode=\d{1,3} upgrade=\d{1,3} errno=-?\d{1,10} wifi=\d{1,3} reason=\d{1,3} ready=[01] age_ms=\d{1,10} camera=off|"
     r"event=servo_probe battery_mv=-?\d{1,5} yaw=(?:ok|value|timeout_empty|timeout_partial|reply|write|tx_wait|rx_flush|rx_error|not_ready) pitch=(?:ok|value|timeout_empty|timeout_partial|reply|write|tx_wait|rx_flush|rx_error|not_ready) off=[01] capture=off camera=off|"
     r"event=motion_fault stage=(?:uart_init|power_on|power_missing|yaw_probe|yaw_torque_value|yaw_torque_off|pitch_torque_off|yaw_limit_low|yaw_limit_high|yaw_position|pose_bounds|hold_goal|yaw_torque_on|move_bounds|move_goal|return_position|finish_torque_off|power_off) transport=(?:none|uart_busy|uart_install|uart_config|not_ready|rx_pending|rx_flush|rx_error|tx_wait|write|timeout|timeout_empty|timeout_partial|reply|ok) capture=off camera=off|"
     r"event=control_transport_exit stage=(?:wifi|wifi_test|claim|tls_init|ws_init|headers|connect|hello|link|expiry|watchdog|stop_send|heartbeat_send|control_send|poll|close|read|partial|frame|message|auth) result=-?\d{1,10} opcode=\d{1,3} upgrade=\d{1,3} errno=-?\d{1,10} wifi=\d{1,3} reason=\d{1,3} ready=[01] age_ms=\d{1,10} capture=off camera=off|"

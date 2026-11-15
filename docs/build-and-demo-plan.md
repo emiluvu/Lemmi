@@ -1,5 +1,147 @@
 # Lemmi — Build and demo plan
 
+November15,10:30–10:32UTC: **bounded16KB/0.12 repeated-turn rehearsal passes
+this run by user report and logs.** Three completed capture/reply turns of
+~9.97s/~11.40s/~9.17s, plus a user-confirmed accidental Pause and explicit
+Resume/fresh Speak, without auto-stop/send fault/disconnect. First two replies
+returned to waiting (424/424,445/445 received/consumed). User Stop during last
+reply: off/applied ack/ended snapshot;350 received/345 consumed, remainder not
+credited after Stop. Playback buffer waits4/3/2 remain. Internal heap minimum
+41340, sampled largest31732, loop-worker1180/14376; limits held, connection up,
+media off after Stop. Preserve exact installed candidate hash
+`79f049512c3d87261e39b0a8012542ca372d074e68a9d02ab2fef0da7bca5384`.
+This supports the targeted capture-stop fix under this bounded rehearsal;
+physical Stop latency, longer/venue/soak/loss reliability and full P0/independent
+use remain unverified. No more changes/flashes/backend diagnostics after pass;
+substantive review still required before an integrated merge.
+
+November15,10:29:14UTC: bounded16KB candidate connected preflight passes.
+Ready/audio=1/window=12/nonblocking=1; ended/stopped/owner=1 before Start.
+Current free low75220 vs72968 model requirement; minimum67352/largest31732,
+loop-worker1180/14376. Three8–10s fictional-content voice turns and Stop during
+third reply requested; actual rehearsal/Stop acceptance remains pending.
+
+November15,10:27UTC: installed `0.12-diag1-tcp16`, a new measured-bottleneck
+candidate: TCP send capacity16384, byte low-water2873, queue cap23, queue
+low-water11. Old rejected 16KB/46-pbuf image remains rejected. Capture queues/
+240ms age/PCM/protocol/security/local controls unchanged. Matching 93-unit
+baseline/candidate builds, all source/toolchain/SDK/ABI/library/macro checks,
+three hook edges, stack guard, 29 Python tests, ten sanitizer programs and
+protected four-image upload/idle selftest pass. RAM model total72968 including
+32768 reserve, reference73156 gives188 beyond reserve; live connected memory
+and multi-turn speech/Stop remain pending. No backend operation or diagnostics.
+Exact image/rationale: [bounded policy](../firmware/stackchan/experiments/tcp-send-capacity/README.md).
+
+November 15, 10:15 UTC: **multi-turn reliability FAILED; stopped-turn connection
+recovery observed.** Rehearsal capture/reply returned to waiting (338/338 chunks,
+two buffer waits), then next capture stopped automatically while user spoke.
+Capture-on=10:15:30.441943; 240 ms batch-age fault/local Stop at 10:15:37.327;
+capture off at .531933. TCP samples=33/free=711/min=711/queued=4,
+peer window=65535/cwnd=49477/ACK-byte advance=0/retry counter=0,
+unacked=1/unsent=0; 32 zero polls/no TLS calls. This shows real low send-space
+with unacknowledged data, not observed zero peer window/pbuf-limit pressure.
+Wi-Fi/AP/WAN/TLS-peer location remains unknown; no ACK advance is not proof
+that no ACK packets arrived. No new buffer size is established by this sample.
+Stop ack and ended/stopped state at 10:15:38.555, connection retained. Heap
+minimum=48816/largest=31732/loop-worker=1180-14376; limits maintained.
+Keep stopped with exact 0.11 artifact/evidence; no new firmware/backend trial.
+Earlier one-turn success does not establish longer conversation readiness.
+
+November 15, 10:12 UTC: **one short real 0.11 conversation succeeds by user
+report** ("went pretty well"). Capture 10:12:17.946683–24.658500 (~6.71s),
+reply playback from 10:12:26.907936, local Stop 10:12:33.820675 followed by
+playback off, applied acknowledgment and ended/stopped snapshot. Post-turn
+received/consumed=322/322, buffer_waits=2; no send fault/disconnect observed.
+Internal heap minimum=48816, sampled largest=31732, loop/worker=1180/14376;
+test limits maintained. Preserve installed SHA-256
+`4d56d3d5ccf5cb84d5a7edd1ed849368fe452446b2128b44502f29d147cb29f7`.
+This passes only the short conversation/user-audible/Stop-reconciliation slice:
+no measured physical Stop latency, proven natural completion, long/multi-turn
+reliability, independent-use acceptance, root-cause isolation or full P0 claim.
+Two rebuffer waits remain. No further flash/backend diagnostics; keep stopped.
+
+November 15, 10:11:37 UTC, 0.11 connected preflight: ready/audio=1/window=12,
+nonblocking=1, session paused/stopped/owner=1. Free/minimum/largest internal
+heap=75408/67168/31732, loop/worker=1180/14376; test limits pass. One local
+Resume/Unmute/Speak measurement attempt is requested; live TCP evidence,
+speech and actual Stop acceptance remain pending. No backend diagnostics.
+
+November 15, current installed version is 0.11-diag1, final idle boot 10:10 UTC.
+0.10's one live turn FAILED: capture ran ~2.17s/92 completed writes, hit the
+240 ms age limit and stopped; ensuing Stop delivery also timed out before TLS,
+then transport closed. Minimum heap=50656; no recorded memory/stack limit breach.
+0.11 adds robot-only numeric TCP queue/window/ACK evidence and permits existing
+input.stop one six-second watchdog interval of nonblocking recovery with media
+already off. Capture remains 240 ms; PCM/protocol/buffers/security unchanged.
+28 Python checks, ten ASan/UBSan executables, both builds, exact stock SDK and
+three linker-hook edges, stack guard, protected upload and final idle selftest
+pass. Idle internal free/minimum/largest=177376/175844/126964, loop=1180,
+worker=0 before connection. Connected/live TCP/voice/physical Stop checks remain
+pending; this is not an accepted audio fix. No backend diagnostics or service
+changes. See [diagnostic notes](../firmware/stackchan/lemmi_voice_diag/README.md).
+
+November 15, 09:59 UTC, 0.10 connected preflight passes: authenticated audio=1,
+window=12, verified nonblocking=1. Connected current internal free low=75268,
+minimum=67244, largest=31732; loop/worker watermarks=1180/14392. No fault or
+disconnect; local Unmute left capture off. Stock full-queue/transient/reserve
+model leaves 13556 bytes against observed current-free low. One short explicit
+voice/Stop trial can proceed; no actual speech/Stop acceptance recorded yet.
+
+November 15, 09:57 UTC: firmware 0.10-diag1 installed with protected four-image
+hash verification and passing idle boot/selftest. Resumable nonblocking writes
+on unchanged stock TCP SDK retain 240 ms capture age/queue bounds, continue
+inbound processing and use existing input.stop for safely unsent failed turns;
+potentially buffered/partial TLS cancellation still closes. Both firmware builds,
+27 Python checks, nine ASan/UBSan executables, intended stock library/config,
+hook edges, stack guard and upload dry run pass. Combined host capture rehearsal
+handles a synthetic 150 ms zero-progress stall and cancels/wipes permanent
+stall without a false audio.end. This is not a TCP scheduler/hardware proof.
+Boot internal free/minimum/largest=177424/175892/126964; loop=1180, worker=0
+before connection. Connected nonblocking/memory check, real speech and physical
+Stop/mute remain pending. No backend operation, special diagnostics, protocol
+change or integrated merge. See [0.10 notes](../firmware/stackchan/lemmi_voice/README.md).
+
+November 15, 09:38:03 UTC, selected 8192 candidate voice acceptance FAILED.
+User pressed Speak: capture-on at .065712, send failure at .681622, capture-off/
+disconnect at .887. Bounded write timeout after 24 completed writes; probe
+polls=5/all zero, TLS writes=0. No output frames received/consumed. Minimum
+internal heap=55020 and loop/worker watermarks=1180/14400; no recorded test-limit
+breach. This attempt did not fix the prior pre-TLS writability stall. Keep
+stopped/disconnected; no repeated Speak, buffer/timeout escalation or reflash.
+No backend diagnostic window, restart, correlation request or further test run.
+One short hardware trial authorization is consumed; underlying cause unresolved.
+
+November 15, 09:36:55–09:37:26 UTC connected preflight: user privately provisioned
+and connected selected 8192 image; ready/audio=1/window=12 confirmed, initially
+ended/stopped/nonowner before Start. Connected internal free low=74396,
+minimum-since-boot=67940, largest=32756; loop/worker watermarks=1180/14400.
+Reassessed observed current-free low against the unchanged queue/transient/
+32768-reserve model: 1428 bytes of remaining model margin. No fault observed;
+one short speech trial permitted, actual capture/playback/Stop remains unrun.
+Only existing filtered local log read; no backend or serial operation performed.
+
+November 15, 09:34 UTC, Emilia authorized selected 8192 candidate installation:
+protected backup/device/security preflight and four-image hash verification pass.
+Filtered idle boot/selftest passes, capture/camera off. Internal free/minimum/
+largest = 178168/176636/126964 bytes, loop watermark=1180; worker=0 before
+connection. USB observer ended. Private provisioning, connected memory review,
+short conversation and actual local Stop/mute acceptance remain unrun. No
+backend diagnostic session, restart or configuration change was performed.
+
+November 15, Emilia local audio preparation: isolated rebuilt 5744/8192 TCP
+send-capacity pair compiles and passes intended-library, matching SDK/toolchain/
+M5 source-input, macro/ABI, diagnostic-hook and audio stack checks. Conservative
+RAM accounting rejects the preserved 16384 candidate; selected 8192 candidate
+has 3020 bytes of model margin after full queue/transient accounting and a
+32768-byte runtime reserve against a historical connected sample. This is local
+preparation for one supervised short test, not a measured memory/speech pass.
+Numeric-only USB status now includes internal free/minimum/largest heap.
+26 Python tests, Python compilation, protected upload dry run and whitespace
+checks pass; dry run rechecks the original backup and four candidate images.
+Special backend diagnostic runs are no longer requested. No backend operation,
+flash, serial open, speech or physical Stop/mute acceptance was performed.
+See [reproducible budget and selected build](../firmware/stackchan/experiments/tcp-send-capacity/README.md).
+
 Feasibility 0.8 hardware retest: Emilia reports upload PASS and confirms audible
 speaker tone, blue lights and lights off afterward. Speaker/blue/off passes by
 user report, resolving the reported regression in this test. No measured root
@@ -209,6 +351,112 @@ The user intends a supervised live demo with Grandma. Her health status is unspe
 Emilia’s early experiment combines camera/display/touch/Wi-Fi and sequential audio→camera→audio operation on the chosen firmware, preserving local controls under load. Share measured format, memory/frame limits and Stop latency with Anay/Kylie before media-contract freeze or full art exports. Failed camera remains disabled and an unmet F13 criterion; browser conversation does not satisfy it.
 
 ## 7. Acceptance tracker
+
+### Restored K151 control path — November 15, 2026 UTC
+
+0.8 actual capture again failed with outgoing queue-full (code=2), 76 frames
+sent/max write72ms at 06:05:09 UTC. Local capture ended/disconnected. 0.9
+candidate groups up to four unchanged WS messages/TLS write, bounded 60ms gather
+and 8KiB storage, with per-message cancellation tokens. Host sustained-capture
+rehearsal with 72ms write stalls passes >200 ordered frames, age bound/Finished;
+batch byte/limit/privacy and TLS cancellation tests pass. This is synthetic
+validation only, not a physical capture/playback acceptance pass.
+
+0.7 physical capture began at 05:59:17 UTC, then send-path disconnect after
+~2.8s while Emilia was speaking. No mic fault/new boot/parser rejection logged;
+TLS result absent, cause unresolved. 0.8 bounded-write candidate adds exact
+short-write/transient handling, per-attempt cancellation and numeric send
+failure diagnostics. Host sanitizer/driver/schema and 19 Python checks pass;
+this is not a physical capture/playback acceptance pass.
+
+0.6 diagnostic physical result: Speak/grant/capture-on then code=2 (outgoing
+queue full), eight frames sent, longest send=45ms, heap=83,476; local Stop and
+capture-off/disconnect followed. Confirmed capture buffering failure; no new
+speaker acceptance. 0.7 candidate uses combined masked TLS writes and bounded
+240ms input queue with reserved Finished slot/age rejection. Host frame/buffer/
+cancellation sanitizers, 19 Python checks, fetched schemas and native voice
+compile/stack guard pass. Physical cause mitigation/speech/Stop retest pending.
+
+0.5 physical follow-up: actual ready confirms 12-frame/240ms grant at 05:45:38
+UTC, TCP_NODELAY/Wi-Fi sleep configuration verified. Resume/Unmute accepted.
+Speak at 05:46:44 opened capture, but local generic audio fault stopped capture
+and disconnected ~250ms later. Capture acceptance FAILED; no smooth output test
+completed. First-fault diagnostic 0.6 retains queue limits; host failure/privacy
+regressions/native compile/stack guard and actual four-image upload pass. Local
+fault cause and physical resolution are pending the next diagnostic turn.
+
+0.5 coordinated 240ms firmware increment: 12-chunk request/actual 4|12 grant,
+fixed ring/ingress bounds, two speaker blocks and 40ms consumed receipt pacing.
+19 Python checks, host protocol/window/driver/cancellation sanitizers and exact
+backend `f3e3b41` fixtures pass; native voice/control builds pass. Voice uses
+129,612 static global bytes (connected heap unmeasured). Direct four-image
+upload/hash verification passes. This does not upgrade the choppy playback
+failure; real negotiated credit, sound and full-buffer Stop retests are pending.
+
+0.3 reconnect at 05:00:25 UTC rejected ready_fields after HTTPS/WSS upgrade.
+Backend-deploy `5ef554a` adds ready.language; 0.4 accepts only en/de (legacy
+absent→en), retains strict unknown/duplicate checks and binds Speak to that
+negotiated value. Host/schema/cancellation regressions, 19 Python checks,
+native builds/stack guard and four-image upload verification passed. A 12-second
+observer confirmed 0.4 idle boot at 05:04:43 UTC with no streams/capture/output.
+New handshake/voice/under-load Stop and German speech hardware checks are unrun.
+
+While Emilia was away, 0.3 native builds/stack guard, C++ decoder/two-slot driver/
+window/latency-rehearsal sanitizers, 19 Python checks and exact backend-deploy
+`ddecdc9` fixtures passed. Direct upload verified four images; a 20-second
+observer at 04:38:40–04:38:54 UTC saw 0.3 boot and stable idle samples (loop
+low-water free=1276 bytes, heap free=235064 bytes; no streams/capture/output).
+Device remains stopped/unprovisioned after reset. This is idle acceptance only;
+new real-network speech quality, under-load Stop/mute and F13/F14 are unrun.
+
+First actual 0.2 speech attempt: Start/Unmute applied, capture on at 04:25:32,
+capture off/processing after Finished at 04:25:36, then physical reply beginning
+heard by Emilia. She reports very choppy sound, followed by disconnect at
+04:25:42 (SDK read -1, opcode NONE). Playback switched off locally. **Voice
+playback acceptance FAILED**; no full reply/completion or under-load Stop pass.
+Prepared 0.3 incremental TLS-frame reader and two-slot speaker/prebuffer changes
+with host checks; actual transport/smoothness results remain pending. See
+[joint audio-window handoff](handoffs/anay-stackchan-audio-window.md) for the
+unchanged four-chunk robot window and synthetic latency limits.
+
+Hardware continuation: 0.1 provisioning/Connect returned to Provision via USB
+with no authenticated-ready receipt. Native analysis found a known 8,544-byte
+audio call path exceeding the 8,192-byte loop stack. 0.2 moves scratch storage
+off nested stacks; the same path is 1,552 bytes and a build guard adds 2,048 bytes
+of reserve. All 19 Python checks and driver sanitizer regression pass. 0.2
+compiled (1,420,219 program bytes / 93,164 globals), passed backup preflight and
+was directly uploaded/hash-verified through the newly approved CLI USB access.
+The 04:18:35–04:18:49 UTC observer saw 0.2 boot and three stable idle memory
+samples, no repeated boot. This is upload/idle evidence only; reprovisioning,
+authenticated voice, live PCM, Stop under media load and F13/F14 remain pending.
+
+Next isolated firmware increment: optional `voice` target now wires actual
+microphone/PCM/speaker drivers to the existing speech/control protocol. Host
+real-cJSON and driver-mock sanitizer checks, exact fetched-backend fixtures,
+zeroing/concurrent queue checks and 16 provisioning/privacy tests pass. Voice
+ESP32 compile is 1,416,979 program bytes / 86,188 static globals; backup/image
+upload dry-run passes. No new upload or physical voice acceptance yet. Final
+speaker drain uses a provisional 100 ms guard after mixer consumption; hardware
+completion/latency/load tests remain required. See [voice test notes](../firmware/stackchan/lemmi_voice/README.md).
+
+Continuation in the same filtered log: Unmute at 03:33:06 left capture/camera
+off with no restart; explicit Disconnect at 03:33:29 ended transport; explicit
+Connect at 03:34:37 returned to ended/stopped with capture/camera off. Reconnect
+control gate observed, not a network-failure watchdog or audio gate. Subsequent
+firmware-only playback-window preparation passes host ASan/UBSan and pinned
+compile-only ESP32 probe; it is not yet wired into live firmware or uploaded.
+
+Emilia reports four-image hash-verified control 0.9 upload. Existing private
+`stackchan-alex` provisioning and explicit Connect reached authenticated ready
+at 03:29:40 UTC. Filtered helper log confirms Start → ready/local owner,
+Pause → paused (03:30:01), explicit Resume → ready (03:30:15), and local Stop →
+applied acknowledgment/ended/stopped (03:32:20). Capture/camera stayed off.
+This is physical device/control evidence only: no microphone transmission,
+speech playback, camera relay, measured Stop latency, reconnect/watchdog or
+integrated F13/F14 acceptance. The USB helper's bounded nonsecret probe retry
+passed host checks and was followed by successful provisioning; earlier probe
+failure cause remains unconfirmed. See [restart handoff](handoffs/emilia-resume.md)
+and [integration audit](handoffs/emilia-hardware-integration-audit.md).
 
 All results start pending. Add a reproduction note, actual configuration and observed result when checked. Unsafe or broken features are fixed/disabled with an honest fallback, not marked passed because a prompt contains a rule.
 
@@ -698,3 +946,32 @@ cJSON parser checks pass; all 12 provisioning/privacy checks and fetched backend
 schema fixture/hello/handoff validation pass. Display 0.7 pinned compile and
 backup/image/esptool upload preflight passed during preparation. Whitespace check
 passes. No real speech/provider/camera or independent-use acceptance is implied.
+
+### Emilia: uplink diagnostic preparation after controlled retest
+
+Origin correlation at backend commit `67188b3` records 164 accepted frames,
+zero rejections, and a later heartbeat close following the robot's bounded-send
+failure; this is not successful physical voice acceptance or proof against
+short network stalls. See [send-stall handoff](handoffs/stackchan-send-stall-investigation.md).
+A separate `voice_diag` target now records the actual SDK socket-poll versus
+TLS-write return counters, preserving existing buffers and limits. Pinned voice
+and diagnostic builds, 22 Python tests, five native sanitizer programs, exact
+linker-hook checks and backup/image upload dry run pass. No new flash/capture.
+Anay's counterpart review and a coordinated installation/one local hardware
+attempt remain pending; camera, petting and motion integration remain disabled
+in the voice target. Do not mark smooth conversation or local latency accepted.
+
+Subsequent isolated installation: all four diagnostic images were written and
+hash-verified on the matched backed-up device; boot at 07:17:08 UTC confirmed
+`lemmi-voice/0.9-diag1`, self-test passed, capture/camera off. RAM provisioning
+cleared after reset. No speech or network attempt performed. Counterpart review
+before merge, reprovisioning and measured capture remain pending. This updates
+the earlier preparation-only/no-flash status above.
+
+Diagnostic hardware attempt at 07:20 UTC: after 33 completed frame writes,
+failed bounded write recorded five socket polls, all timed out, zero TLS writer
+calls (max poll 21,090 us). This separates socket-writability timeout from TLS
+retry/zero return for that failure. It does not establish ACK/loss/peer-window
+cause or a fix. Capture-off/disconnect observed; Stop-during-capture latency
+not measured. No repeat requested; Anay origin correlation and robot-facing
+transport investigation pending. See send-stall handoff for exact timestamps.

@@ -9,11 +9,21 @@ struct ControlPolicy {
   char session[101] = {};
   char owner[101] = {}, lease[101] = {};
   char phase[16] = "none";
+  char language[3] = "en";
+  uint8_t outputWindowChunks=4;
   uint64_t generation = 0, serverSequence = 0;
+  uint64_t profileRevision = 0, privacyRevision = 0, policyRevision = 0;
+  bool audioSupported = false, serverMuted = true, hasGrant = false;
+  char grantTurn[101] = {}, grantStream[101] = {};
+  int64_t grantExpires = 0;
   bool seenSequence = false;
   uint32_t heartbeatAt = 0;
   void disconnected() {
     stopped = true; ready = snapshot = seenSequence = false;
+    audioSupported=false; hasGrant=false; serverMuted=true;
+    strcpy(language,"en");
+    outputWindowChunks=4;
+    grantTurn[0]=grantStream[0]=0; grantExpires=0;
     session[0] = owner[0] = lease[0] = 0; ownsEndpoint=true; handoffSupported=false; strcpy(phase, "none"); generation = 0;
   }
   void stop() { stopped = true; }
@@ -26,6 +36,7 @@ struct ControlPolicy {
     stopped = false; return true;
   }
   bool active() const { return ready && snapshot && session[0] && strcmp(phase,"ended"); }
+  bool micIsMuted(bool local)const{return local||(active()&&serverMuted);}
   bool ordinary() const { return active() && ownsEndpoint && !stopped; }
   bool canResume() const { return active() && ownsEndpoint && !strcmp(phase,"paused"); }
   bool canHandoff() const { return active() && handoffSupported && !ownsEndpoint; }
