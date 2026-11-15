@@ -1318,3 +1318,22 @@ Stackchan transport diagnostics are off; evidence and rollback pointers remain
 saved. No further code change, deployment, restart or test was performed for
 this final handoff. Next session should reproduce the user's remaining bugs
 against these exact revisions before choosing another fix.
+
+
+## Photo Story and conversation debugging candidate — November 15, 2026
+
+`fix/photo-story-conversation-stalls`, source `5d1cece`, integration `0bcc44d` through
+`backend-deploy/435b73a`, is prepared without deploying/restarting existing services.
+Reproduced missed Photo Story phrase dispatch, desktop image clipping and obsolete
+async failures published into newer authority. Covered model display claims now
+become honest offers. Initial complete local gate: 461 tests/6,787 expectations,
+zero failures/skips on five disposable PostgreSQL databases; separate production
+HTTPS/WSS/private-PNG smoke; type/Svelte/build/format/whitespace; 15 Python fixture
+checks. Chromium landscape/portrait at three viewport sizes, image failure Pause
+and keyboard retry without capture passed. A paced 30-turn gateway/controller
+fixture crossed Photo Story entry/exit. Combined verification after merging the
+latest greetings/teaching/branding is in progress; see the
+[completion and server handoff](handoffs/photo-story-conversation-stalls.md).
+These checks do not upgrade human speech, live-provider, public-network or hardware
+acceptance. Anay reviews gateway/data boundaries; Kylie image layout; Lukas activity
+routing; Emilia actual endpoint/local controls before integrated release.
