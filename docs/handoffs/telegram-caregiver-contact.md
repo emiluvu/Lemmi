@@ -1,5 +1,30 @@
 # Telegram caregiver contact
 
+## Backend-server integration review — ready candidate, not deployed
+
+November 15: source through `af7ef12` was merged with working checkpoint `a15e9cf`.
+The `lemmi-working-conversation-2026-11-15` tag and browser noise behavior are
+preserved. **545 tests / 13,380 expectations passed with zero skips/failures** on
+seven dedicated disposable PostgreSQL databases. Frozen Bun1.4.4 install,
+type/Svelte, build, formatting and whitespace passed; three preexisting photo-alt
+warnings remain. Six live Jev classification cases passed without a Telegram send.
+
+Review fixed no-session Get help, live HTTP hook coverage, neutral trusted-contact
+copy for safe routing, stale contact-save error delivery, final pre-send authority
+cancellation including backup, and safe release of known-unsent work when the
+service stops. Conversation Stop retains already initiated contact requests.
+Production Chromium/TLS/WSS and managed-auth HTTP fixtures passed keyboard help
+before Start, deduplication, truthful sending/acceptance/failure, scoped actions,
+GET non-acknowledgment and access denials with zero capture/browser errors.
+
+The prepared Nginx configuration passes syntax validation but is not installed.
+Migrations007/008 and the matching web/gateway rollout still need the protected
+host release procedure. This server has no Telegram credentials yet; the user
+chose secure configuration and confirmation of an opted-in teammate recipient.
+Two fictional real-send checks remain required after that configuration. Earlier
+real-send statements below describe the source workstation, not this server.
+[Complete reviewed-candidate record](../backend-status.md#telegram-caregiver-contact-reviewed--candidate-ready-not-deployed).
+
 Branch: `feat/telegram-caregiver-contact`. Persistent worktree:
 `/home/chaos/projects/Lemmi/.worktrees/telegram-caregiver-contact`.
 This is a source increment; it does not by itself update the running deployment.

@@ -1,5 +1,52 @@
 # Lemmi backend status
 
+## Telegram caregiver contact reviewed — candidate ready, not deployed
+
+November 15, 2026. Integrated source `feat/telegram-caregiver-contact/af7ef12`
+with working browser release record `a15e9cf`; the existing
+`lemmi-working-conversation-2026-11-15` checkpoint tag is preserved. This reviewed
+candidate has **not** changed the running deployment. The independently authorized
+isolated manual-help rehearsal reached Telegram acceptance on this host. The browser noise fix remains included.
+
+Independent host verification: **545 tests passed, zero skips/failures, 13,380
+expectations**, using seven dedicated disposable PostgreSQL databases. Bun 1.4.4
+frozen install, type/Svelte, production build, formatting and whitespace passed;
+three existing generic-photo-alt warnings remain. Six actual Jev classification
+cases passed with **zero Telegram messages**. Earlier source-workstation real
+manual/Jev sends are historical evidence, not acceptance of this server.
+
+Integration review fixed the primary Get help button before Start, the web
+security hook's new protected help routes, and neutral trusted-contact status
+wording for safe-alternate routing. Delayed contact-save failures are fenced from
+newer conversation authority. Invalid authority at the final pre-send check now
+cancels the request and future backup work. Stopping the service before known
+unsent network I/O releases that attempt to pending rather than inventing unknown
+delivery. Conversation Stop still does not cancel an initiated contact request.
+
+Actual production Chromium over isolated TLS/WSS and managed-identity fixture
+HTTP passed: keyboard Get help without a conversation, duplicate coalescing,
+durable sending, honest accepted/failure wording, explicit authenticated POST
+acknowledgment/resolution, GET/link-preview non-acknowledgment, and missing outer
+gate/invalid identity/foreign caregiver/cross-profile denial. No capture or Start
+was requested, with zero browser errors or mobile overflow. Telegram responses
+were fixtures; no real notification was sent. Test-owned databases were cleaned.
+
+Rollout requires additive migrations **007** and **008**, protected backups,
+matching web/gateway deployment, and the prepared Nginx help-route allowlist.
+Nginx syntax validation passed; its prepared configuration is not installed.
+Private Telegram credentials are configured. The user explicitly confirmed the
+opted-in teammate recipient and authorized two fictional test alerts. The first
+isolated real manual-help smoke reached Telegram acceptance; human receipt remains
+unconfirmed. Deployment and the second public Jev alert are still pending. The two
+fictional real-send checks and actual rollout remain pending that configuration;
+no missing credential or failed live request may become fixture success.
+
+Provider acceptance is separate from delivery, reading, acknowledgment and human
+arrival. Request-detail/acknowledgment UI remains a frontend handoff; the protected
+API exists. Safeguarding uses only the separately verified safe alternate and
+never falls back to the ordinary caregiver. No real-person, physical-device or
+unattended-care acceptance follows. [Handoff and remaining rollout steps](handoffs/telegram-caregiver-contact.md).
+
 ## Browser noise endpointing deployed — November 15, 2026
 
 **Web `405f5a3`**, deployed at **17:20:20 UTC**. Gateway/local speech remain

@@ -1,5 +1,12 @@
 # Lemmi
 
+**Telegram caregiver contact: reviewed candidate ready, not deployed.** Source
+`af7ef12` is integrated with the working `a15e9cf` browser checkpoint. All 545
+host tests passed without skips/failures; fixture-backed production browser and
+protected HTTP checks passed. Secure Telegram configuration, two opted-in fictional
+real-send checks, migrations007/008 and rollout remain pending. No real alert was
+sent from this server. [Current review and rollout status](docs/backend-status.md#telegram-caregiver-contact-reviewed--candidate-ready-not-deployed).
+
 **Browser noise endpointing deployed — web `405f5a3`:** local Silero detection
 replaces the noise-sensitive endpointing path. Public synthetic speech under the
 reproduced hum submitted automatically after 1.40 seconds; response began 1.96

@@ -1,5 +1,24 @@
 # Lemmi — Build and demo plan
 
+## Backend integration gate — Telegram candidate ready, not deployed
+
+November 15, 2026: integrated `af7ef12` with working `a15e9cf`; preserved the
+working-conversation checkpoint tag and noise-aware browser. **545 passed / zero
+skipped / zero failed, 13,380 expectations** used seven dedicated disposable
+PostgreSQL databases. Bun1.4.4 frozen/type/build/format/whitespace passed; three
+existing photo-alt warnings remain. Production Chromium/TLS/WSS/managed-auth HTTP
+fixtures passed keyboard no-session help, deduplication, honest statuses,
+POST acknowledgment/resolution, GET non-acknowledgment, resource/gate denials and
+zero capture/runtime errors. Six live Jev cases passed with no Telegram sends.
+
+Substantive server review fixed UI/hook integration, safe-alternate neutral copy,
+stale async error fencing, pre-send invalid-authority cancellation and known-unsent
+service-stop release. Nginx preparation is syntax-checked but not installed.
+Secure host credentials/opted-in recipient confirmation, two fictional real-send
+checks, protected backups, migrations007/008 and matching web/gateway deployment
+remain pending. No real Telegram send or production rollout occurred here.
+[Actual reviewed state](backend-status.md#telegram-caregiver-contact-reviewed--candidate-ready-not-deployed).
+
 ## Local conversation reliability candidate — November 15, 2026
 
 Branch `fix/lemmi-conversation-reliability`, integrating fetched backend release
