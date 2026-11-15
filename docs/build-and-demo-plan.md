@@ -1,8 +1,48 @@
 # Lemmi — Build and demo plan
 
+## Participant greeting and teaching integration — validated candidate, November 15, 2026
+
+Reviewed handoff `1037fe1` against the newer deployed startup-recovery and
+saved-photo releases. Integrated in an isolated checkout; rollout pending.
+The direct merge would launch two Start speech jobs. Retained the existing
+revision-checked `speakSessionPrompt` path and browser opening/Resume state
+machine, with the requested short fixed English/German introduction. Kept
+failed-profile Retry, exact profile language, saved-photo scope and same-picture
+Resume. Added typed eligible teaching choices, deliberate selection and visible
+Finish; a paused Photo Story can finish without releasing its pause.
+
+Review also bounded unselected-menu text receipts at the existing 256-turn limit
+(Stop still bypasses capacity), and reserved mobile status space after Chromium
+measured a five-pixel caption shift. No migration, dependency, provider/model,
+private configuration, notification, firmware or credential replacement.
+
+Pinned Bun 1.4.4 frozen install, type/Svelte, formatting/whitespace and isolated
+production build passed. **462 tests / 6,784 expectations, zero failures/skips**
+used five newly created disposable PostgreSQL databases, removed after testing.
+Production HTTP/certificate-verified TLS/WSS participant/private-photo smoke
+passed on another disposable database. Initial saved test URLs pointed to a
+retired listener; rerun used the current database server with new test databases.
+Sandbox socket/build-worker restrictions required escalation, not code fallback.
+
+Actual Chromium with the candidate production build and isolated gateway/database
+passed desktop 1280×900, mobile 390×844 and 390×650: mounted captions stable
+through synthetic speaking/waiting changes, keyboard teaching selection/Finish,
+visible 48px Finish, no horizontal overflow, paused photo Finish, failed startup
+Retry without Start/capture, contained photos, image failure Pause and retry
+without Resume/capture, and Stop. Fresh profiles correctly had no eligible topics;
+only the test's own fictional profile received reviewed topic IDs. The harness's
+initial injected sequence zero correctly closed its connection; corrected the
+fixture to preserve monotonic sequences. Zero browser runtime errors; capture
+and playback disabled, no screenshots, microphone or recordings. Real human
+speech/speaker quality and physical K151 controls remain unrun.
+
 ## November 14 Photo Story Start/Resume source acceptance
 
 `codex/photo-story-start-resume` updated against main `f3e3b41`: greeting/reorientation finishes before fresh browser listening, server-resolved English/German prompts and capture-off text fallback preserve newer memory/Jev/Stackchan behavior. Same-scene/question Resume and scoped image/avatar recovery remain. Observed: **435 pass / zero fail or skips / 6,607 expectations** on five isolated PostgreSQL databases; Bun 1.4.4 frozen install, type/Svelte, production build, full format/whitespace, 15 Python fixtures and production HTTP/verified TLS/WSS participant/Photo Story smoke passed. No deployment or current human microphone/speaker/visual/K151 acceptance. Server deploy agent receives the pushed branch and [review/rollout/rehearsal handoff](handoffs/photo-story-start-resume-2026-11-14.md). Anay reviews cancellation/data, Lukas scene continuity, Kylie merged listening/layout/keyboard, Emilia device controls/credit.
+
+### Participant usability candidate — November 14, 2026 (local, not deployed)
+
+`codex/participant-greetings-exit`, based on main `f3e3b41`, adds fixed spoken conversation/activity greetings, an eligible spoken/visible teaching menu and typed selection, stable captions, and a persistent Finish activity button. Photo leave can preserve an existing pause. No firmware, migration, dependency or provider change. Observed on Bun 1.4.4: frozen install, type/Svelte checks (0 errors/warnings), **382 tests passed / 42 skipped / 0 failed**, 6,037 expectations, production build, formatting and diff whitespace. Headless Chromium fictional transport checks at desktop and two mobile sizes verified stable caption bounds, keyboard topic/Finish controls, a visible 48 px Finish target and no unintended capture request. Database checks remain skipped without configuration; actual microphone/speaker/K151 and deployment are unrun. Anay/Lukas/Kylie/Emilia review the shared boundaries before integration. [Exact behavior, compatibility, observed checks and handoff](handoffs/participant-greetings-exit.md).
 
 ### Activity routing repair — November 14, 2026 (local, not deployed)
 

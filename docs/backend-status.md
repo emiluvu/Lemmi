@@ -1,5 +1,41 @@
 # Lemmi backend status
 
+## Participant greeting and teaching integration — validated candidate, November 15, 2026
+
+Reviewed handoff `1037fe1` against the newer deployed startup-recovery and
+saved-photo releases. Integrated in an isolated checkout; rollout pending.
+The direct merge would launch two Start speech jobs. Retained the existing
+revision-checked `speakSessionPrompt` path and browser opening/Resume state
+machine, with the requested short fixed English/German introduction. Kept
+failed-profile Retry, exact profile language, saved-photo scope and same-picture
+Resume. Added typed eligible teaching choices, deliberate selection and visible
+Finish; a paused Photo Story can finish without releasing its pause.
+
+Review also bounded unselected-menu text receipts at the existing 256-turn limit
+(Stop still bypasses capacity), and reserved mobile status space after Chromium
+measured a five-pixel caption shift. No migration, dependency, provider/model,
+private configuration, notification, firmware or credential replacement.
+
+Pinned Bun 1.4.4 frozen install, type/Svelte, formatting/whitespace and isolated
+production build passed. **462 tests / 6,784 expectations, zero failures/skips**
+used five newly created disposable PostgreSQL databases, removed after testing.
+Production HTTP/certificate-verified TLS/WSS participant/private-photo smoke
+passed on another disposable database. Initial saved test URLs pointed to a
+retired listener; rerun used the current database server with new test databases.
+Sandbox socket/build-worker restrictions required escalation, not code fallback.
+
+Actual Chromium with the candidate production build and isolated gateway/database
+passed desktop 1280×900, mobile 390×844 and 390×650: mounted captions stable
+through synthetic speaking/waiting changes, keyboard teaching selection/Finish,
+visible 48px Finish, no horizontal overflow, paused photo Finish, failed startup
+Retry without Start/capture, contained photos, image failure Pause and retry
+without Resume/capture, and Stop. Fresh profiles correctly had no eligible topics;
+only the test's own fictional profile received reviewed topic IDs. The harness's
+initial injected sequence zero correctly closed its connection; corrected the
+fixture to preserve monotonic sequences. Zero browser runtime errors; capture
+and playback disabled, no screenshots, microphone or recordings. Real human
+speech/speaker quality and physical K151 controls remain unrun.
+
 ## Conversation startup recovery deployed — November 15, 2026
 
 **Web runtime `9b218b9`**, gateway `c44f092` and speech/tunnel retained.

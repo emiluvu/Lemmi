@@ -688,12 +688,13 @@ export class VoiceClient {
     );
     this.update({ pending: true, message: 'Microphone off. Preparing a reply…' });
   }
-  command(type: string) {
+  command(type: string, payload: Record<string, unknown> = {}) {
     this.completedQuestion = null;
     if (['stop', 'pause', 'mute', 'teaching.finish', 'handoff', 'help'].includes(type))
       this.cancelAutomatic();
     this.awaitingPrompt = [
       'teaching.start',
+      'teaching.select',
       'teaching.next',
       'teaching.not_sure',
       'teaching.avoid',
@@ -709,7 +710,7 @@ export class VoiceClient {
     try {
       this.send(
         `input.${type === 'unmute' ? 'mute' : type}`,
-        micOnly ? { muted: type === 'mute' } : {},
+        micOnly ? { muted: type === 'mute' } : payload,
       );
     } catch {
       this.fail('Control could not reach the backend. Audio stopped locally.');

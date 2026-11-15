@@ -237,11 +237,16 @@ test('teaching eligibility, owner handoff and deadline sweeping stay isolated af
     await Promise.all([alex.hello(), browser.hello(), casey.hello()]);
     await alex.apply('input.start', null);
     await casey.apply('input.start', null);
-    const teaching = await alex.apply('input.teaching.start');
-    expect(teaching.teaching?.entityId).toBe('topic:gardening');
+    let teaching = await alex.apply('input.teaching.start');
+    expect(teaching.teaching?.choosingTopic).toBe(true);
+    expect(teaching.teaching?.choices?.map((choice) => choice.entityId)).toContain(
+      'topic:gardening',
+    );
+    teaching = await alex.apply('input.teaching.select', teaching, { entityId: 'topic:gardening' });
     const sparse = await casey.apply('input.teaching.start');
     expect(sparse.teaching?.entityId).toBeNull();
-    expect(sparse.teaching?.prompt).toBeNull();
+    expect(sparse.teaching?.choices).toEqual([]);
+    expect(sparse.teaching?.prompt).toContain('No eligible');
     expect(await browser.rejected('input.teaching.next', teaching)).toBe('FORBIDDEN');
     const handoff = await browser.apply('input.handoff', teaching);
     expect(handoff.phase).toBe('paused');

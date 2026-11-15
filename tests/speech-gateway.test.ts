@@ -242,6 +242,18 @@ async function device(
     send,
     session: () => session!,
     completeOutput,
+    async startTeaching() {
+      send('input.teaching.start');
+      await until(() => events.some((e) => e.type === 'response.start'));
+      expect(session?.teaching?.choosingTopic).toBe(true);
+      expect(session?.teaching?.prompt).toContain('gardening');
+      expect(session?.teaching?.prompt).toContain('beaches');
+      for (let i = events.length - 1; i >= 0; i--)
+        if (events[i]!.type.startsWith('response.') || events[i]!.type.startsWith('audio.'))
+          events.splice(i, 1);
+      send('input.teaching.select', { entityId: 'topic:gardening' });
+      await until(() => events.some((e) => e.type === 'response.start'));
+    },
     async capture() {
       send('input.speak', { language: 'en' });
       await until(() => session?.phase === 'listening');
@@ -319,7 +331,7 @@ test('explicit Start speaks first, Photo Story introduces its scene, Resume repe
     d.send('input.start');
     await d.completeOutput();
     expect(prompts[0]).toContain("I'm Lemmi");
-    expect(prompts[0]).toContain('?');
+    expect(prompts[0]).toBe("Hi, I'm Lemmi. We can take our time.");
     expect(d.session().captureGrant).toBeNull();
     d.events.length = 0;
     d.send('input.photo.start');
@@ -418,7 +430,7 @@ test('teaching commands share the authorized gateway and read reviewed prompts w
       'teaching',
       true,
     );
-    d.send('input.teaching.start');
+    await d.startTeaching();
     await d.until(() => d.events.some((e) => e.type === 'response.start'));
     expect(d.session().teaching?.entityId).toBe('topic:gardening');
     expect(d.session().captureGrant).toBeNull();
@@ -452,7 +464,7 @@ test('teaching voice explanation reaches the existing STT/model/TTS path with on
     },
   });
   try {
-    d.send('input.teaching.start');
+    await d.startTeaching();
     await d.until(() => d.events.some((e) => e.type === 'response.start'));
     const first = d.events.find((e) => e.type === 'response.start')!;
     if (first.type !== 'response.start') throw new Error('Missing prompt');
@@ -512,7 +524,7 @@ test('spoken teaching Next crosses WSS with a fresh generation and audible repla
     },
   });
   try {
-    d.send('input.teaching.start');
+    await d.startTeaching();
     await d.until(() => d.events.some((e) => e.type === 'response.start'));
     d.send('input.pause');
     await d.until(() => d.session().phase === 'paused');
@@ -726,6 +738,7 @@ test('urgent voice guidance uses the paused generation, audible PCM and receipts
     },
   });
   try {
+    const concernAfter = d.events.length;
     const capture = await d.capture(),
       oldGeneration = d.session().generation;
     capture.finish();
@@ -778,6 +791,7 @@ test('urgent voice guidance uses the paused generation, audible PCM and receipts
     expect(pcm.every((x) => x === 0)).toBe(true);
     expect(
       d.events
+        .slice(concernAfter)
         .filter((e) => e.type === 'state.changed')
         .every(
           (e) =>
@@ -1077,7 +1091,7 @@ for (const language of ['en', 'de'] as const)
                 ? 'Hallo'
                 : 'Wir sind wieder'
               : type === 'input.start'
-                ? 'Hello'
+                ? 'Hi'
                 : "We're back",
           );
           expect(d.events.some((e) => ['response.start', 'audio.chunk'].includes(e.type))).toBe(

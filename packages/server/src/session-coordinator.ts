@@ -46,6 +46,9 @@ import {
   applyActivitySystemInput,
   nextTeachingTopic,
   teachingTopics,
+  eligibleTeachingTopics,
+  requestedTeachingTopic,
+  teachingChoicePrompt,
   teachingTextIntent,
   teachingInstructions,
   teachingReplyWithinTopic,
@@ -208,6 +211,10 @@ export class SessionCoordinator {
       t = s?.teaching;
     if (!s || !t) return;
     const eligible = this.eligibleForTeaching();
+    const choices = eligibleTeachingTopics(eligible).map(({ entityId, label }) => ({
+      entityId,
+      label,
+    }));
     const topic = teachingTopics.find(
       (item) =>
         item.entityId === t.entityId &&
@@ -221,20 +228,35 @@ export class SessionCoordinator {
         ...t,
         entityId: topic?.entityId ?? null,
         topicLabel: topic?.label ?? null,
-        prompt: topic?.invitations[s.communicationSupport.preset] ?? null,
+        prompt: t.choosingTopic
+          ? teachingChoicePrompt(choices, s.communicationSupport.preset)
+          : (topic?.invitations[s.communicationSupport.preset] ?? null),
+        choices,
         presentationId: crypto.randomUUID(),
         revision: t.revision + 1,
         policyRevision: s.policyRevision,
-        phase: s.phase === 'paused' ? 'paused' : topic ? 'ready' : 'unavailable',
+        phase:
+          s.phase === 'paused'
+            ? 'paused'
+            : topic || (t.choosingTopic && choices.length)
+              ? 'ready'
+              : 'unavailable',
       },
     };
   }
-  private chooseTeachingTopic() {
+  private chooseTeachingTopic(entityId?: string, offerChoices = false) {
     const s = this.session!,
       run = this.teachingRun!;
-    const topic = nextTeachingTopic(this.eligibleForTeaching(), run.seen, [
-      ...this.teachingPreferred,
-    ]);
+    const eligible = this.eligibleForTeaching();
+    const choices = eligibleTeachingTopics(eligible).map(({ entityId, label }) => ({
+      entityId,
+      label,
+    }));
+    const topic = offerChoices
+      ? null
+      : entityId
+        ? (eligibleTeachingTopics(eligible).find((topic) => topic.entityId === entityId) ?? null)
+        : nextTeachingTopic(eligible, run.seen, [...this.teachingPreferred]);
     if (topic) run.seen.push(topic.entityId);
     this.session = {
       ...s,
@@ -247,15 +269,19 @@ export class SessionCoordinator {
         entityId: topic?.entityId ?? null,
         assetId: null,
         topicLabel: topic?.label ?? null,
-        prompt: topic?.invitations[s.communicationSupport.preset] ?? null,
+        prompt: offerChoices
+          ? `Hi! We're playing Teach Lemmi. ${teachingChoicePrompt(choices, s.communicationSupport.preset)}`
+          : (topic?.invitations[s.communicationSupport.preset] ?? null),
+        choices,
+        choosingTopic: offerChoices,
         presentationId: crypto.randomUUID(),
         revision: (s.teaching?.revision ?? -1) + 1,
         policyRevision: s.policyRevision,
-        phase: topic ? 'ready' : 'unavailable',
+        phase: topic || (offerChoices && choices.length) ? 'ready' : 'unavailable',
       },
     };
     // No eligible topic is waiting for an explicit choice, not active conversation time.
-    if (!topic) this.freezeTeaching();
+    if (!topic && (!offerChoices || !choices.length)) this.freezeTeaching();
     else if (run.since === null) run.since = this.now();
   }
   private readonly speech?: SpeechTurns;
@@ -318,6 +344,7 @@ export class SessionCoordinator {
     if (view?.activityId !== 'photo_album' || !view.currentAssetId)
       return fail('UNAVAILABLE', 'No current approved picture');
     const text = [
+      "Hi! We're playing Photo Story.",
       view.caption,
       this.session?.communicationSupport.preset === 'quiet'
         ? ''
@@ -340,15 +367,10 @@ export class SessionCoordinator {
     const german = this.language() === 'de';
     const view = this.photoView();
     const words = (en: string, de: string) => (german ? de : en);
-    let text = quiet
-      ? words(
-          "Hello, I'm Lemmi. We can take our time.",
-          'Hallo, ich bin Lemmi. Wir können uns Zeit lassen.',
-        )
-      : words(
-          "Hello, I'm Lemmi, your AI companion. Would you like to talk about your day?",
-          'Hallo, ich bin Lemmi, deine KI-Begleitung. Möchtest du über deinen Tag sprechen?',
-        );
+    let text = words(
+      "Hi, I'm Lemmi. We can take our time.",
+      'Hallo, ich bin Lemmi. Wir können uns Zeit lassen.',
+    );
     if (resume) {
       if (s.teaching)
         text = s.teaching.prompt
@@ -1094,7 +1116,7 @@ export class SessionCoordinator {
             sessionId: this.session.id,
             expectedGeneration: this.session.generation,
             commandId: selectionCommandId,
-            action: { type: 'teaching.start' },
+            action: { type: 'teaching.start', offerChoices: true },
           });
         } else if (activityChoice === 'photo') {
           changed = this.startPhoto(selectionCommandId);
@@ -1137,6 +1159,7 @@ export class SessionCoordinator {
             ? (this.session?.teaching?.prompt ??
               'No eligible teaching topics are available right now.')
             : [
+                "Hi! We're playing Photo Story.",
                 view?.activityId === 'photo_album' ? view.caption : '',
                 this.session?.communicationSupport.preset === 'quiet'
                   ? ''
@@ -1163,20 +1186,40 @@ export class SessionCoordinator {
     const teachingIntent = session.teaching
       ? teachingTextIntent(input.text, session.teaching.entityId ?? undefined)
       : 'explanation';
-    if (teachingIntent !== 'explanation') {
-      const action = `teaching.${teachingIntent}` as
-        | 'teaching.next'
-        | 'teaching.not_sure'
-        | 'teaching.prefer'
-        | 'teaching.avoid';
+    const refusedMenuTopic =
+      session.teaching?.choosingTopic && route === 'ordinary'
+        ? (session.teaching.choices ?? []).find(
+            (choice) => teachingTextIntent(input.text, choice.entityId) === 'avoid',
+          )?.entityId
+        : null;
+    const selectedTopic =
+      refusedMenuTopic ??
+      (session.teaching && route === 'ordinary' ? requestedTeachingTopic(input.text) : null);
+    if (selectedTopic || teachingIntent !== 'explanation') {
+      const action = selectedTopic
+        ? 'teaching.select'
+        : (`teaching.${teachingIntent}` as
+            | 'teaching.next'
+            | 'teaching.not_sure'
+            | 'teaching.prefer'
+            | 'teaching.avoid');
       let changed: Result<unknown> = fail('REVISION_CONFLICT', 'Teaching transition was canceled');
       const apply = () => {
         changed = this.handle('session.command', {
           sessionId: session.id,
           expectedGeneration: session.generation,
-          commandId: input.commandId,
-          action: { type: action },
+          commandId: refusedMenuTopic ? crypto.randomUUID() : input.commandId,
+          action: selectedTopic
+            ? { type: 'teaching.select', entityId: selectedTopic }
+            : { type: action },
         });
+        if (changed.ok && refusedMenuTopic)
+          changed = this.handle('session.command', {
+            sessionId: this.session!.id,
+            expectedGeneration: this.session!.generation,
+            commandId: input.commandId,
+            action: { type: 'teaching.avoid' },
+          });
         return changed.ok;
       };
       const replyTurnId = speechOwner
@@ -1204,6 +1247,29 @@ export class SessionCoordinator {
       });
       this.lastChat = { commandId: input.commandId, result };
       if (speechOwner) this.onFixedReply();
+      return result;
+    }
+    if (session.teaching?.choosingTopic) {
+      if (this.chatIds.size >= 256)
+        return fail('UNAVAILABLE', 'Text turn capacity reached; start a new session');
+      // A menu is a deliberate choice, not permission to guess a subject from an explanation.
+      this.cancelChat(false, speechOwner);
+      this.session = { ...this.session!, phase: 'waiting', captureGrant: null };
+      const result = ok<ConversationTextResult>({
+        kind: 'reply',
+        reply: {
+          turnId: input.commandId,
+          language: input.language,
+          source: 'fixed',
+          text: teachingChoicePrompt(
+            session.teaching.choices ?? [],
+            session.communicationSupport.preset,
+          ),
+        },
+        session: this.snapshot()!,
+      });
+      this.chatIds.set(input.commandId, fingerprint);
+      this.lastChat = { commandId: input.commandId, result };
       return result;
     }
     if (
@@ -1756,6 +1822,7 @@ export class SessionCoordinator {
           [
             'resume',
             'teaching.start',
+            'teaching.select',
             'teaching.next',
             'teaching.not_sure',
             'teaching.prefer',
@@ -1966,7 +2033,19 @@ export class SessionCoordinator {
               return fail('REVISION_CONFLICT', 'Resume or leave the current activity first');
             this.cancelChat();
             this.teachingRun = { elapsed: 0, since: this.now(), seen: [] };
-            this.chooseTeachingTopic();
+            this.chooseTeachingTopic(undefined, action.offerChoices ?? false);
+            break;
+          case 'teaching.select':
+            if (!this.teachingRun || !this.session.teaching || this.session.phase === 'paused')
+              return fail('REVISION_CONFLICT', 'Use a current active teaching presentation');
+            if (
+              !eligibleTeachingTopics(this.eligibleForTeaching()).some(
+                (topic) => topic.entityId === action.entityId,
+              )
+            )
+              return fail('FORBIDDEN', 'Choose a currently eligible reviewed topic');
+            this.cancelChat();
+            this.chooseTeachingTopic(action.entityId);
             break;
           case 'teaching.next':
           case 'teaching.not_sure':
@@ -2082,7 +2161,10 @@ export class SessionCoordinator {
         if (op === 'activities.submit') {
           if (input.expectedRevision !== this.activity.revision)
             return fail('REVISION_CONFLICT', 'Reload current activity');
-          if (this.session.phase === 'paused' || this.session.phase === 'ended')
+          if (
+            this.session.phase === 'ended' ||
+            (this.session.phase === 'paused' && input.action.type !== 'activity.leave')
+          )
             return fail('REVISION_CONFLICT', 'Session cannot advance');
           const validated = validateActivityCommandContext(input, this.activity, this.context);
           if (!validated.ok) return validated;
