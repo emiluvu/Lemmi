@@ -172,7 +172,9 @@ function socketClient(
     const state = [...events].reverse().find((event) => event.type === 'state.changed');
     return state?.type === 'state.changed' ? state.payload.session : null;
   };
+  let negotiatedAudio = false;
   async function hello(audio = false) {
+    negotiatedAudio = audio;
     await opened;
     send('device.hello', null, {
       ...controlHelloFixture.payload,
@@ -202,6 +204,8 @@ function socketClient(
     const state = await wait((event) => event.type === 'state.changed', events.indexOf(ack) + 1);
     if (state.type !== 'state.changed' || !state.payload.session)
       throw new Error('Missing session');
+    if (!negotiatedAudio && ['input.start', 'input.resume'].includes(type))
+      await wait((e) => e.type === 'response.text' && e.payload.turnId === id, after);
     return state.payload.session;
   }
   async function rejected(
@@ -300,7 +304,7 @@ test('distinct robots connect concurrently and conversation, forged controls and
     await alex.closed;
     await casey.wait((event) => event.type === 'state.changed', before);
     expect(casey.latest()?.id).toBe(resumed.id);
-    expect(casey.latest()?.phase).toBe('ready');
+    expect(casey.latest()?.phase).toBe('waiting');
     expect(casey.latest()?.generation).toBe(resumed.generation);
   } finally {
     await h.close();
@@ -338,7 +342,7 @@ test('one robot and browser share a profile while explicit handoff rotates owner
     robot.send('heartbeat');
     await robot.wait((event) => event.type === 'heartbeat');
     expect(robot.latest()?.generation).toBe(active.generation);
-    expect(robot.latest()?.phase).toBe('ready');
+    expect(robot.latest()?.phase).toBe('waiting');
     const nextBrowser = h.connect(browserCredential, 'browser');
     await nextBrowser.hello();
     const oldTurn = robot.send('input.text', robot.latest(), {
@@ -413,7 +417,7 @@ test('revocation and heartbeat timeout close only their assigned device/profile'
     expect(revoked.response.status).toBe(200);
     await alex.closed;
     expect(casey.socket.readyState).toBe(WebSocket.OPEN);
-    expect(casey.latest()?.phase).toBe('ready');
+    expect(casey.latest()?.phase).toBe('waiting');
     const browser = h.connect(await h.issue('browser-alex', 'profile-alex'), 'browser');
     await browser.hello();
     await browser.apply('input.start', null);
@@ -424,7 +428,7 @@ test('revocation and heartbeat timeout close only their assigned device/profile'
     expect(casey.socket.readyState).toBe(WebSocket.OPEN);
     expect(casey.latest()?.id).toBe(other.id);
     expect(casey.latest()?.generation).toBe(other.generation);
-    expect(casey.latest()?.phase).toBe('ready');
+    expect(casey.latest()?.phase).toBe('waiting');
   } finally {
     await h.close();
   }
@@ -488,6 +492,39 @@ test('concurrent speech output is delivered only to each profile owner, never an
     const observer = h.connect(await h.issue('browser-alex', 'profile-alex'), 'browser');
     await Promise.all([alex.hello(true), casey.hello(true), observer.hello(true)]);
     await Promise.all([alex.apply('input.start', null), casey.apply('input.start', null)]);
+    await Promise.all(
+      [alex, casey].map(async (client) => {
+        const first = await client.wait((event) => event.type === 'response.start');
+        if (first.type !== 'response.start') throw new Error('Missing greeting');
+        const meta = first.payload;
+        await client.wait((event) => event.type === 'audio.end' && event.turn_id === meta.turnId);
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          { leaseId: meta.leaseId, streamId: meta.streamId, status: 'started', playedChunks: 0 },
+          meta.turnId,
+        );
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          {
+            leaseId: meta.leaseId,
+            streamId: meta.streamId,
+            status: 'completed',
+            playedChunks: meta.chunkCount,
+          },
+          meta.turnId,
+        );
+        await client.wait(
+          (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+        );
+        client.events.splice(
+          0,
+          client.events.length,
+          ...client.events.filter((event) => event.type === 'state.changed'),
+        );
+      }),
+    );
     await Promise.all([
       alex.apply('input.mute', alex.latest(), { muted: false }),
       casey.apply('input.mute', casey.latest(), { muted: false }),
@@ -606,9 +643,12 @@ test('revoking an observing browser rejects its reconnect without canceling the 
     const stale = h.connect(token, 'browser', publicOrigin);
     await expect(stale.opened).rejects.toThrow('Endpoint upgrade rejected');
     finish(ok({ text: 'Hello from your companion.', language: 'en' }));
-    await robot.wait((event) => event.type === 'response.text' && event.payload.turnId === turn);
+    const reply = await robot.wait(
+      (event) => event.type === 'response.text' && event.payload.turnId === turn,
+    );
     await robot.wait(
       (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+      robot.events.indexOf(reply) + 1,
     );
     expect(robot.latest()?.phase).toBe('waiting');
     expect(robot.latest()?.generation).toBe(started.generation);
@@ -677,9 +717,20 @@ test('public Photo Story uses scoped browser ownership, reviewed captions and cu
         event.type === 'activity.changed' && event.payload.activity?.activityId === 'photo_album',
       startedAfter,
     );
+    const automaticOpening = await browser.wait(
+      (event) => event.type === 'response.text',
+      startedAfter,
+    );
+    expect(automaticOpening.type === 'response.text' && automaticOpening.payload.text).toContain(
+      'Roses',
+    );
+    await browser.wait(
+      (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+      browser.events.indexOf(automaticOpening) + 1,
+    );
     const garden = latestPhoto(browser);
     expect(garden.currentAssetId).toBe('photo-story-garden');
-    expect(garden.viewingMode).toBe('just_look');
+    expect(garden.viewingMode).toBe('talk');
     expect(inputs).toHaveLength(0);
     const openingAfter = browser.events.length;
     await browser.apply('input.photo.action', browser.latest(), {
@@ -745,6 +796,22 @@ test('public Photo Story Stop cancels an in-flight opening and suppresses a late
   let signal: AbortSignal | undefined;
   const h = harness({
     demoEnrollment: true,
+    profiles: profiles.map((profile) =>
+      profile.id === 'profile-alex'
+        ? ProfileDetailSchema.parse({
+            ...profile,
+            context: {
+              photos: [
+                {
+                  assetId: 'f1000000-0000-4000-8000-000000000001',
+                  description: 'Alex tending a garden.',
+                  portrait: false,
+                },
+              ],
+            },
+          })
+        : profile,
+    ),
     chatAdapter: {
       complete(_input, currentSignal) {
         signal = currentSignal;
@@ -765,6 +832,14 @@ test('public Photo Story Stop cancels an in-flight opening and suppresses a late
       (event) =>
         event.type === 'activity.changed' && event.payload.activity?.activityId === 'photo_album',
       startAfter,
+    );
+    const automaticOpening = await browser.wait(
+      (event) => event.type === 'response.text',
+      startAfter,
+    );
+    await browser.wait(
+      (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+      browser.events.indexOf(automaticOpening) + 1,
     );
     const garden = latestPhoto(browser);
     const openingId = browser.send('input.photo.action', browser.latest(), {
@@ -846,6 +921,38 @@ test('device readiness, text and capture use isolated server-resolved profile la
     expect(germanReady?.type === 'device.ready' && germanReady.payload.photoStory).toBe(false);
     expect(alexReady?.type === 'device.ready' && alexReady.payload.language).toBe('en');
     await Promise.all([alex.apply('input.start', null), german.apply('input.start', null)]);
+    // Consume each localized greeting before testing ordinary text and capture.
+    await Promise.all(
+      [alex, german].map(async (client) => {
+        const first = await client.wait((e) => e.type === 'response.start');
+        if (first.type !== 'response.start') throw new Error('Missing localized greeting');
+        const meta = first.payload;
+        await client.wait((e) => e.type === 'audio.end' && e.turn_id === meta.turnId);
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          { leaseId: meta.leaseId, streamId: meta.streamId, status: 'started', playedChunks: 0 },
+          meta.turnId,
+        );
+        const after = client.events.length;
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          {
+            leaseId: meta.leaseId,
+            streamId: meta.streamId,
+            status: 'completed',
+            playedChunks: meta.chunkCount,
+          },
+          meta.turnId,
+        );
+        await client.wait(
+          (e) => e.type === 'state.changed' && e.payload.session?.phase === 'waiting',
+          after,
+        );
+      }),
+    );
+
     expect(
       await german.rejected('input.text', german.latest(), { text: 'Hello', language: 'en' }),
     ).toBe('VALIDATION_ERROR');

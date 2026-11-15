@@ -6,6 +6,7 @@ import type { ChatAdapter } from './adapters/types';
 import type { ConversationDecisionAdapter } from './adapters/conversation-decisions';
 import type { SpeechAdapters } from './speech-turns';
 import { SessionCoordinator } from './session-coordinator';
+import { alexProfilePhotoPack } from './profile-photo-pack';
 
 // One gateway authority, with isolated coordinator state per authorized profile.
 export class SessionRegistry {
@@ -45,6 +46,8 @@ export class SessionRegistry {
       .map(([, coordinator]) => coordinator);
   }
   acceptPersistentProfile(profile: ProfileDetail, contextChanged?: boolean) {
+    const alexPack =
+      this.publicPhotoStory && profile.id === 'profile-alex' ? alexProfilePhotoPack(profile) : null;
     this.retired.delete(profile.id);
     let coordinator = this.entries.get(profile.id);
     if (!coordinator) {
@@ -58,15 +61,20 @@ export class SessionRegistry {
         this.publicPhotoStory
           ? {
               publicDemo: true,
+              profilePhotos: !!alexPack,
               profileId: profile.id,
-              pack: publicPhotoStoryPack,
-              availableAssetIds: ['photo-story-garden', 'photo-story-park'],
+              pack: alexPack ?? publicPhotoStoryPack,
+              availableAssetIds:
+                alexPack?.activityId === 'photo_album'
+                  ? alexPack.entries.map((entry) => entry.assetId)
+                  : ['photo-story-garden', 'photo-story-park'],
             }
           : undefined,
         this.decisions,
       );
       this.entries.set(profile.id, coordinator);
     }
+    if (alexPack) coordinator.replaceProfilePhotoPack(profile.id, alexPack);
     coordinator.acceptPersistentProfile(
       { ...profile, language: this.languageForProfile(profile.id) },
       contextChanged,

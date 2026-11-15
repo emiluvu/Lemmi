@@ -58,13 +58,26 @@ function fixture(initial: SessionSnapshot | null = null) {
     canceled: () => canceled,
   };
 }
-test('one Start sequences session Start, unmute acknowledgment and a fresh capture request', async () => {
+test('one Start waits for greeting playback, then unmute acknowledgment and a fresh capture request', async () => {
   const f = fixture();
   await f.c.start();
   expect(f.sent).toEqual([{ type: 'input.start', payload: {}, independent: true }]);
   expect(f.requests()).toBe(0);
-  f.state({ micMuted: true });
-  f.state({ micMuted: true });
+  f.state({ phase: 'processing', micMuted: true });
+  f.state({ phase: 'ready', micMuted: true });
+  expect(f.sent.some((x) => x.type === 'input.mute')).toBe(false);
+  f.audio.hasOutput = true;
+  const output = f.state({ phase: 'speaking' });
+  f.c.receive({
+    type: 'response.start',
+    session_id: output.id,
+    generation: output.generation,
+  } as ServerEvent);
+  f.audio.hasOutput = false;
+  f.c.playbackCompleted(output);
+  expect(f.requests()).toBe(0);
+  f.state({ phase: 'waiting', micMuted: true });
+  f.state({ phase: 'waiting', micMuted: true });
   expect(f.sent.filter((x) => x.type === 'input.mute')).toEqual([
     { type: 'input.mute', payload: { muted: false }, independent: undefined },
   ]);
@@ -174,13 +187,24 @@ test('observers cannot acquire an endpoint and cancellation during permission pr
   f.state({ generation: f.session.generation + 1 });
   expect(f.enabled.at(-1)).toBe(false);
 });
-test('an explicit resume requests ready first; unmute alone does not opt into conversation', async () => {
+test('an explicit resume waits for reorientation playback; unmute alone does not opt into conversation', async () => {
   const f = fixture();
   f.connection.session = { ...f.session, phase: 'paused', micMuted: true };
   await f.c.start();
   expect(f.sent[0]?.type).toBe('input.resume');
   expect(f.requests()).toBe(0);
-  f.state({ phase: 'ready' });
+  f.state({ phase: 'processing' });
+  expect(f.requests()).toBe(0);
+  f.audio.hasOutput = true;
+  const output = f.state({ phase: 'speaking' });
+  f.c.receive({
+    type: 'response.start',
+    session_id: output.id,
+    generation: output.generation,
+  } as ServerEvent);
+  f.audio.hasOutput = false;
+  f.c.playbackCompleted(output);
+  f.state({ phase: 'waiting' });
   f.state({ micMuted: false });
   expect(f.requests()).toBe(1);
   f.c.stop();
@@ -206,3 +230,43 @@ test('late failure of an old capture request cannot disable a newly started conv
   expect(f.errors).toEqual([]);
   f.c.stop();
 });
+
+for (const resume of [false, true]) {
+  test(`${resume ? 'Resume' : 'Start'} text fallback ends the listening attempt without requesting microphone access`, async () => {
+    const f = fixture();
+    if (resume) f.connection.session = { ...f.session, phase: 'paused' };
+    await f.c.start();
+    f.state({ phase: 'processing' });
+    f.state({ phase: 'waiting' });
+    expect(f.requests()).toBe(0);
+    const current = f.connection.session!;
+    f.c.receive({
+      type: 'response.text',
+      session_id: current.id,
+      generation: current.generation,
+      payload: { source: 'fixed', text: 'An approved prompt.' },
+    } as ServerEvent);
+    f.state({ phase: 'waiting' });
+    expect(f.requests()).toBe(0);
+    expect(f.enabled.at(-1)).toBe(false);
+  });
+  test(`${resume ? 'Resume' : 'Start'} Quiet greeting and interrupted opening never open capture`, async () => {
+    for (const interrupt of [false, true]) {
+      const f = fixture();
+      if (resume) f.connection.session = { ...f.session, phase: 'paused' };
+      await f.c.start();
+      f.state({ phase: 'processing', communicationSupport: { preset: 'quiet', configVersion: 1 } });
+      const output = f.state({ phase: 'speaking' });
+      f.c.receive({
+        type: 'response.start',
+        session_id: output.id,
+        generation: output.generation,
+      } as ServerEvent);
+      if (interrupt) f.c.stop();
+      f.c.playbackCompleted(output);
+      f.state({ phase: 'waiting' });
+      expect(f.requests()).toBe(0);
+      expect(f.enabled.at(-1)).toBe(false);
+    }
+  });
+}

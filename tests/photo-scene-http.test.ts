@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { handlePhotoScene } from '../packages/server/src/photo-scene';
 import { controlSessionFixture } from '@lemmi/contracts/fixtures';
+import { DataError } from '../packages/server/src/data/repository';
 import { GET } from '../apps/web/src/routes/v1/demo/photo-assets/[assetId]/+server';
 
 const credential = 'photo-scene-test-credential-'.padEnd(43, 'x');
@@ -124,6 +125,63 @@ test('same-profile browser observers can read the selected scene during ordinary
   expect(await response.text()).toContain('<svg');
 });
 
+const privateId = 'f1000000-0000-4000-8000-000000000001';
+test('current Alex photo uses attached private storage with scoped revision guards', async () => {
+  const f = fixture();
+  f.data.repository.asset = async (
+    principal: any,
+    id: string,
+    bytes: boolean,
+    demoOnly: boolean,
+    guard: any,
+  ) => {
+    expect(principal.profileId).toBe('profile-alex');
+    expect(id).toBe(privateId);
+    expect(bytes).toBe(true);
+    expect(demoOnly).toBe(true);
+    expect(guard.token.profileRevision).toBe(0);
+    expect(guard.current()).toBe(true);
+    return {
+      metadata: { profileId: 'profile-alex', kind: 'image', mediaType: 'image/png' },
+      bytes: Buffer.from('private-test-image'),
+    };
+  };
+  const response = await handlePhotoScene({ ...input, assetId: privateId }, f.data, f.sessions);
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-type')).toBe('image/png');
+  expect(response.headers.get('cache-control')).toContain('no-store');
+  expect(await response.text()).toBe('private-test-image');
+});
+test('private reads deny other profiles, removed/retired assets and late session changes', async () => {
+  const wrong = fixture();
+  wrong.state.identity.profileId = 'profile-casey';
+  expect(
+    (await handlePhotoScene({ ...input, assetId: privateId }, wrong.data, wrong.sessions)).status,
+  ).toBe(403);
+  const gone = fixture();
+  gone.data.repository.asset = async () => {
+    throw new DataError('NOT_FOUND', 'Asset unavailable');
+  };
+  expect(
+    (await handlePhotoScene({ ...input, assetId: privateId }, gone.data, gone.sessions)).status,
+  ).toBe(404);
+  const stale = fixture();
+  stale.data.repository.asset = async () => {
+    stale.state.snapshot.generation++;
+    return {
+      metadata: { profileId: 'profile-alex', kind: 'image', mediaType: 'image/png' },
+      bytes: Buffer.from('must-not-return'),
+    };
+  };
+  const response = await handlePhotoScene(
+    { ...input, assetId: privateId },
+    stale.data,
+    stale.sessions,
+  );
+  expect(response.status).toBe(409);
+  expect(await response.text()).not.toContain('must-not-return');
+});
+
 async function configured(work: () => Promise<void>) {
   const values = {
     LEMMI_MODE: 'live',
@@ -202,5 +260,30 @@ test('photo HTTP route passes credentials only to the private gateway and bounds
     const denied = await GET(request());
     expect(denied.status).toBe(401);
     expect(await denied.text()).toBe('');
+  });
+});
+
+test('private UUID proxy serves bounded PNG only with protected response headers', async () => {
+  await configured(async () => {
+    const id = 'f1000000-0000-4000-8000-000000000001';
+    globalThis.fetch = (async (_url: string, options: RequestInit) => {
+      expect(JSON.parse(String(options.body)).assetId).toBe(id);
+      return new Response(new Uint8Array([137, 80, 78, 71]), {
+        headers: { 'content-type': 'image/png', 'set-cookie': 'untrusted=1' },
+      });
+    }) as any;
+    const response = await GET(request(id));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(response.headers.has('set-cookie')).toBe(false);
+    globalThis.fetch = (async () =>
+      new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } })) as any;
+    expect((await GET(request(id))).status).toBe(503);
+    globalThis.fetch = (async () =>
+      new Response(new Uint8Array(5 * 1024 * 1024 + 1), {
+        headers: { 'content-type': 'image/png' },
+      })) as any;
+    expect((await GET(request(id))).status).toBe(503);
   });
 });

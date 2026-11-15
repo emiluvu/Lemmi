@@ -218,12 +218,14 @@ This table governs firmware, browser and server behavior. Local capture/output r
 | --- | --- | --- | --- | --- |
 | Mic mute | Immediately stop capture/transmission, discard unsent capture and cancel its pending turn/results | Existing approved speech/music may finish or continue; mute does not itself stop output | No camera consent/state change; does not advance or pause the activity | Remain capture-off |
 | Mic unmute | Clear mute setting only; never open capture | No output restart | No camera/activity change | A fresh explicit Speak now or valid explicit start is required |
-| Pause | Stop capture and cancel pending turns | Stop/flush speech/music and invalidate queued effects | Pause activity at its position; does not authorize or end an already active camera check-in | Explicit Resume returns to ready; capture/playback requires a fresh action |
+| Pause | Stop capture and cancel pending turns | Stop/flush speech/music and invalidate queued effects | Pause activity at its position; does not authorize or end an already active camera check-in | Explicit Resume may request one fresh reviewed reorientation; browser listening intent still needs consumed output/current waiting and a fresh capture grant; Quiet/text fallback remain capture-off |
 | Global Stop | Stop/flush capture and cancel all pending turns | Stop/flush speech/music and queued motion | End camera locally and end session/activity | New explicit session start only; initiated help requests remain independent |
 | Stop camera | Keep capture off | Keep speech/music off | End camera locally, clear frames, leave activity paused | Explicit Resume, then a fresh speak/play action |
 | Get help | Stop capture and cancel pending turns | Stop/flush ordinary speech/music; only current fixed help-status output may run afterward | End camera locally and pause activity; initiate fixed contact routing | No automatic resume; request cancellation is separate |
 
 Disconnect/watchdog stops capture, output, camera and motion locally, invalidates stale work, and requires explicit continuation after reconciliation. Mic mute must not be used as a substitute for Pause/Stop or advertised as camera-off. If a capture turn caused pending model/TTS work, muting cancels that work; unrelated already-approved playback is governed by its own output token. Tests must distinguish these cases.
+
+The undeployed [Photo Story Start/Resume candidate](handoffs/photo-story-start-resume-2026-11-14.md) uses existing approved-output authority for a new greeting/reorientation on explicit Start/Resume. This is coordinator-owned output, not replay of reducer effects. Server-resolved English/German is authoritative; unavailable/failed playback returns current approved text with capture off. German activities remain unavailable. Reminders are transient and revision-bound; newer robot/browser output credit and local-control requirements remain.
 
 ### Fixed speech while interaction remains paused
 

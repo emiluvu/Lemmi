@@ -412,7 +412,9 @@ export class PersistentData {
               },
               demoOnly,
             );
-            coordinator.acceptPersistentProfile(profile, contextChanged);
+            // Route accepted changes through the profile registry so derived
+            // per-profile activity packs are refreshed with the saved context.
+            this.coordinator.acceptPersistentProfile(profile, contextChanged);
             return ok(profile);
           } catch (error) {
             if (began) {
@@ -420,7 +422,7 @@ export class PersistentData {
               // actual authorized row before allowing any explicit continuation.
               try {
                 const actual = await this.repository.profile(principal, input.profileId, true);
-                coordinator.acceptPersistentProfile(
+                this.coordinator.acceptPersistentProfile(
                   actual as import('@lemmi/contracts').ProfileDetail,
                   contextChanged,
                 );

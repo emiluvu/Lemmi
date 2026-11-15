@@ -2,6 +2,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { deflateSync } from 'node:zlib';
 import { database, migrate, PrivateMedia, DataRepository } from '@lemmi/server';
 import { ServerEventSchema, ok, type ServerEvent } from '@lemmi/contracts';
 import { startControlGateway } from '../apps/realtime/src/control';
@@ -19,6 +20,32 @@ let proxy: ReturnType<typeof Bun.serve<{ upstream: WebSocket }>> | undefined;
 const clients: WebSocket[] = [];
 function check(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
+}
+function fixturePng(value: number) {
+  const chunk = (type: string, data: Buffer) => {
+    const bytes = Buffer.alloc(data.length + 12);
+    bytes.writeUInt32BE(data.length);
+    bytes.write(type, 4);
+    data.copy(bytes, 8);
+    let crc = 0xffffffff;
+    for (const byte of bytes.subarray(4, -4)) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+    bytes.writeUInt32BE((crc ^ 0xffffffff) >>> 0, bytes.length - 4);
+    return bytes;
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(1);
+  header.writeUInt32BE(1, 4);
+  header[8] = 8;
+  header[9] = 2;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.from([0, value, 120, 140]))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
 }
 async function until(predicate: () => boolean | Promise<boolean>) {
   const deadline = Date.now() + 10000;
@@ -90,7 +117,7 @@ try {
         }
       }
       if (
-        !/^\/(access(?:\/logout)?|participant|caregiver|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|profile-update|conversation-lock|conversation-exit|enroll|current|release|photo-assets\/(?:photo-story-garden|photo-story-park)))$/.test(
+        !/^\/(access(?:\/logout)?|participant|caregiver|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|profile-update|conversation-lock|conversation-exit|enroll|current|release|photo-assets\/(?:photo-story-garden|photo-story-park|[0-9a-fA-F-]+)))$/.test(
           path,
         )
       )
@@ -121,6 +148,53 @@ try {
   });
   origin = `https://127.0.0.1:${proxy.port}`;
   const repo = new DataRepository(sql, await PrivateMedia.create(join(directory, 'private-media')));
+  // This script requires its own disposable database above. Seed approved
+  // generated pixels, never copy the hosted Alex album or private photo bytes.
+  await repo.bootstrap('fixture-caregiver');
+  const fixtureAssets = [];
+  for (let index = 0; index < 2; index++) {
+    fixtureAssets.push(
+      await repo.createAsset(
+        { kind: 'caregiver', subject: 'fixture-caregiver', profileId: 'profile-alex' },
+        {
+          profileId: 'profile-alex',
+          commandId: crypto.randomUUID(),
+          expectedRevision: 0,
+          kind: 'image',
+          mediaType: 'image/png',
+          source: 'Generated fictional smoke-test pixel',
+          permission: 'Team fixture',
+          caption: `Fictional picture ${index + 1}`,
+          discussionContext: 'Generated fixture with no personal history.',
+          entityIds: ['profile:approved-photo'],
+          approved: true,
+          dataBase64: fixturePng(80 + index).toString('base64'),
+        },
+        true,
+      ),
+    );
+  }
+  await repo.update(
+    { kind: 'caregiver', subject: 'fixture-caregiver', profileId: 'profile-alex' },
+    {
+      profileId: 'profile-alex',
+      commandId: crypto.randomUUID(),
+      expectedRevision: 0,
+      patch: {
+        context: {
+          photos: fixtureAssets.map((asset, index) => ({
+            assetId: asset.id,
+            description: `Fictional picture ${index + 1}`,
+            portrait: false,
+          })),
+        },
+      },
+    },
+    () => {},
+    true,
+  );
+  const firstPhotoId = fixtureAssets[0]!.id,
+    secondPhotoId = fixtureAssets[1]!.id;
   function start(port: number) {
     return startControlGateway({
       publicOrigin: origin,
@@ -344,10 +418,11 @@ try {
     function send(type: string, payload: unknown = {}) {
       const session = [...events].reverse().find((event) => event.type === 'state.changed');
       const current = session?.type === 'state.changed' ? session.payload.session : null;
+      const commandId = crypto.randomUUID();
       socket.send(
         JSON.stringify({
           protocol_version: 1,
-          event_id: crypto.randomUUID(),
+          event_id: commandId,
           session_id: type === 'input.start' ? null : (current?.id ?? null),
           generation: type === 'input.start' ? 0 : (current?.generation ?? 0),
           turn_id: null,
@@ -356,6 +431,7 @@ try {
           payload,
         }),
       );
+      return commandId;
     }
     send('device.hello', {
       firmwareVersion: 'participant-smoke',
@@ -372,18 +448,34 @@ try {
     { 'x-lemmi-access-key': accessKey, authorization: `Bearer ${robot.data.credential}` },
     'robot',
   );
-  browser.send('input.start');
-  device.send('input.start');
+  const browserStart = browser.send('input.start');
+  const robotStart = device.send('input.start');
   await until(() =>
-    [browser, device].every((client) =>
-      client.events.some(
-        (event) => event.type === 'state.changed' && event.payload.session?.phase === 'ready',
-      ),
+    (
+      [
+        [browser, browserStart],
+        [device, robotStart],
+      ] as const
+    ).every(([client, id]) =>
+      client.events.some((event) => event.type === 'response.text' && event.payload.turnId === id),
     ),
   );
-  browser.send('input.text', { text: 'Hello fictional garden', language: 'en' });
-  await until(() => browser.events.some((event) => event.type === 'response.text'));
-  check(!device.events.some((event) => event.type === 'response.text'), 'Cross-profile reply leak');
+  check(
+    !browser.events.some((e) => e.type === 'response.text' && e.payload.turnId === robotStart) &&
+      !device.events.some((e) => e.type === 'response.text' && e.payload.turnId === browserStart),
+    'Cross-profile opening leak',
+  );
+  const robotBoundary = device.events.length;
+  const greeting = browser.send('input.text', { text: 'Hello fictional garden', language: 'en' });
+  await until(() =>
+    browser.events.some(
+      (event) => event.type === 'response.text' && event.payload.turnId === greeting,
+    ),
+  );
+  check(
+    !device.events.slice(robotBoundary).some((event) => event.type === 'response.text'),
+    'Cross-profile reply leak',
+  );
   let boundary = browser.events.length;
   browser.send('input.text', { text: 'Start Photo Story', language: 'en' });
   await until(() => browser.events.slice(boundary).some((event) => event.type === 'response.text'));
@@ -400,33 +492,50 @@ try {
   browser.send('input.text', { text: 'Back to conversation', language: 'en' });
   await until(() => browser.events.slice(boundary).some((event) => event.type === 'response.text'));
   // Public Photo Story uses the existing browser identity and scoped current-scene read.
-  browser.send('input.photo.start');
+  const photoStart = browser.send('input.photo.start');
+  await until(() =>
+    browser.events.some(
+      (event) => event.type === 'response.text' && event.payload.turnId === photoStart,
+    ),
+  );
   await until(() =>
     browser.events.some(
       (event) =>
         event.type === 'activity.changed' &&
         event.payload.activity?.activityId === 'photo_album' &&
-        event.payload.activity.currentAssetId === 'photo-story-garden',
+        event.payload.activity.currentAssetId === firstPhotoId,
     ),
   );
   const scene = await request(
-    '/v1/demo/photo-assets/photo-story-garden',
+    `/v1/demo/photo-assets/${firstPhotoId}`,
     'GET',
     undefined,
     browserCookie,
   );
   check(
-    scene.status === 200 && scene.headers.get('content-type') === 'image/svg+xml',
+    scene.status === 200 && scene.headers.get('content-type') === 'image/png',
     `Scoped current photo scene failed: status ${scene.status}, media type ${scene.headers.get('content-type')}`,
   );
-  check((await scene.text()).includes('<svg'), 'Reviewed scene bytes missing');
   check(
-    (await request('/v1/demo/photo-assets/photo-story-park', 'GET', undefined, browserCookie))
+    Buffer.from(await scene.arrayBuffer()).equals(fixturePng(80)),
+    'Approved fixture PNG bytes missing',
+  );
+  check(
+    scene.headers.get('cache-control')?.includes('no-store'),
+    'Private photo caching was enabled',
+  );
+  check(
+    (await request('/v1/demo/photo-assets/photo-story-garden', 'GET', undefined, browserCookie))
+      .status === 404,
+    'Alex album fell back to the generic garden scene',
+  );
+  check(
+    (await request(`/v1/demo/photo-assets/${secondPhotoId}`, 'GET', undefined, browserCookie))
       .status === 404,
     'Noncurrent scene was exposed',
   );
   check(
-    (await request('/v1/demo/photo-assets/photo-story-garden', 'GET', undefined, gateCookie))
+    (await request(`/v1/demo/photo-assets/${firstPhotoId}`, 'GET', undefined, gateCookie))
       .status === 401,
     'Gate key alone read participant media',
   );
@@ -459,7 +568,7 @@ try {
     ),
   );
   check(
-    (await request('/v1/demo/photo-assets/photo-story-garden', 'GET', undefined, browserCookie))
+    (await request(`/v1/demo/photo-assets/${firstPhotoId}`, 'GET', undefined, browserCookie))
       .status === 404,
     'Ended photo scene remained accessible',
   );
@@ -498,7 +607,7 @@ try {
   const after = await request('/v1/demo/current', 'GET', undefined, browserCookie);
   check(after.status === 403, 'Revoked browser cookie accepted');
   console.info(
-    'PASS: production caregiver profile creation, enrollment before conversation, selected-profile entry/exit controls, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release; scoped public Photo Story media/opening/Stop and gate-only/noncurrent/ended denials. Model and clients are fixtures; no real microphone or speaker.',
+    'PASS: production caregiver profile creation, enrollment before conversation, selected-profile entry/exit controls, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release; scoped private Photo Story PNG media/opening/Stop and gate-only/noncurrent/ended denials. Model and clients are fixtures; no real microphone or speaker.',
   );
 } finally {
   for (const client of clients) client.close();

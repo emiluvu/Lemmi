@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+## November 14 Photo Story Start/Resume source acceptance
+
+`codex/photo-story-start-resume` updated against main `f3e3b41`: greeting/reorientation finishes before fresh browser listening, server-resolved English/German prompts and capture-off text fallback preserve newer memory/Jev/Stackchan behavior. Same-scene/question Resume and scoped image/avatar recovery remain. Observed: **435 pass / zero fail or skips / 6,607 expectations** on five isolated PostgreSQL databases; Bun 1.4.4 frozen install, type/Svelte, production build, full format/whitespace, 15 Python fixtures and production HTTP/verified TLS/WSS participant/Photo Story smoke passed. No deployment or current human microphone/speaker/visual/K151 acceptance. Server deploy agent receives the pushed branch and [review/rollout/rehearsal handoff](handoffs/photo-story-start-resume-2026-11-14.md). Anay reviews cancellation/data, Lukas scene continuity, Kylie merged listening/layout/keyboard, Emilia device controls/credit.
+
 ### Activity routing repair — November 14, 2026 (local, not deployed)
 
 Candidate `fix/conversation-activity-routing` from main/backend-deploy `0f299c4` fixes natural reviewed teaching/photo commands and connects optional semantic requests to an application-owned confirmation using existing session/speech transitions. Activity-only scope separates this from the broader failing recap/redirect gate. Actual Jev 1.14 activity-only evaluation: **71/71 matched, zero unavailable/false activity positives, p50/p95 169/248 ms**, unchanged 0.85 threshold and strict provider privacy flags. Final unseen 20-case verification independently passed 20/20 (156/270 ms). Full-conversation evaluation still missed two of 51; do not enable that scope.
@@ -1083,3 +1087,7 @@ IDFv5.5.4/735507283d, builder43a8f6d; earlier v5.5.1 source inspection was not a
 exact binary provenance check. No backend/protocol/configuration/service change,
 SDK build, flash or capture performed. Diagnostics remain enabled; robot stopped.
 [Counterpart review and Emilia's next build handoff](handoffs/stackchan-uplink-backend-investigation.md#send-capacity-proposal-review--3c37f83).
+
+# Alex Photo Story album source acceptance — November 14, 2026
+
+User-authorized backend integration on `codex/alex-photo-story-pack` uses saved Alex photos/descriptions; data upload confirmed in hosted caregiver editor. Focused78 tests/848 assertions passed, full local suite395 pass/42 skip/4 environmental failures. Full check/build, dedicated PostgreSQL race checks, deployment, live voice and hardware acceptance remain pending. No P0/hardware gate marked complete. Anay reviews media/revision transactions before rollout; Lukas checks photo transitions and Kylie checks natural image framing. [Evidence and handoff](handoffs/alex-photo-story-pack.md).

@@ -128,6 +128,31 @@ function fixture(options = {}) {
     },
   };
 }
+test('playback preparation opens output without microphone permission or a capture request', async () => {
+  const f = fixture();
+  try {
+    await f.audio.prepare();
+    expect(f.context).toBeDefined();
+    expect(f.processors).toHaveLength(0);
+    expect(f.sent).toHaveLength(0);
+    expect(f.session.captureGrant).toBeNull();
+    f.audio.receive(event('response.start', meta), 'browser');
+    f.audio.receive(
+      event('audio.chunk', {
+        leaseId: 'lease',
+        streamId: 'output',
+        chunkIndex: 0,
+        data: Buffer.alloc(882, 1).toString('base64'),
+      }),
+      'browser',
+    );
+    expect(f.listeners).toHaveLength(1);
+    expect(f.sent.some(([type]) => type === 'input.speak')).toBe(false);
+  } finally {
+    f.restore();
+  }
+});
+
 function event(type, payload, overrides = {}) {
   return { type, payload, session_id: 'session', generation: 1, turn_id: 'turn', ...overrides };
 }

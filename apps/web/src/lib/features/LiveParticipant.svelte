@@ -13,6 +13,7 @@
     appendConversationTurn,
     type ConversationTranscriptEntry,
   } from '#lib/conversation-transcript.ts';
+  import ScopedPhoto from './ScopedPhoto.svelte';
   import AvatarArt from './AvatarArt.svelte';
   import SpeechBubble from './SpeechBubble.svelte';
   import ActivityVoicePhrases from './ActivityVoicePhrases.svelte';
@@ -166,12 +167,15 @@
     const requestsOutput =
       type.startsWith('input.teaching.') ||
       type === 'input.start' ||
+      type === 'input.resume' ||
+      type === 'input.photo.start' ||
       type === 'input.photo.repeat' ||
       (type === 'input.photo.action' &&
         !!payload &&
         typeof payload === 'object' &&
         'action' in payload &&
         (payload.action as ActivityAction).type === 'photo.talk');
+    if (requestsOutput) void audio?.prepare();
     if (!preserveCaption) replyBlocked = !requestsOutput;
     // Microphone mute preserves unrelated approved playback. Other controls cancel it locally.
     if (type !== 'input.mute') {
@@ -308,6 +312,7 @@
     if (preview || !connected) return;
     if (!speechAvailable) {
       if (!session || session.phase === 'ended') control('input.start', {}, true);
+      else if (session.phase === 'paused') control('input.resume');
       message = wording(
         'Microphone unavailable. Choose Type instead.',
         'Das Mikrofon ist nicht verfügbar. Wähle Stattdessen schreiben.',
@@ -525,6 +530,7 @@
 <section
   lang={language}
   class="conversation-screen"
+  class:photo-story={!!photo && photo.phase !== 'ended'}
   class:captioning={speaking && !!(reply || session?.teaching?.prompt)}
   aria-labelledby="conversation-title"
 >
@@ -542,19 +548,24 @@
   {@render safetyControls()}
   <div class="companion-scene">
     <div class="scene-portrait">
+      {#if photo && photo.phase !== 'ended' && photo.currentAssetId}
+        {#key [assignment?.deviceId, session?.id, session?.leaseId, session?.profileRevision, session?.privacyRevision, session?.policyRevision, photo.instanceId, photo.currentAssetId].join(':')}
+          <ScopedPhoto
+            assetId={photo.currentAssetId}
+            caption={photo.caption ?? 'Reviewed picture'}
+            loaded={() => {
+              photoLoadError = false;
+            }}
+            failed={() => {
+              photoLoadError = true;
+              audio?.cancel();
+              if (ownsEndpoint && session?.phase !== 'paused') control('input.pause');
+            }}
+          />
+        {/key}
+      {/if}
       <div class="scene-art">
-        {#if photo && photo.phase !== 'ended' && photo.currentAssetId}
-          {#key photo.currentAssetId}<img
-              class="scene-photo"
-              src={`/v1/demo/photo-assets/${encodeURIComponent(photo.currentAssetId)}`}
-              alt={photo.caption ?? 'Reviewed picture'}
-              onerror={() => {
-                photoLoadError = true;
-                audio?.cancel();
-                if (ownsEndpoint) control('input.pause');
-              }}
-            />{/key}
-        {:else if currentProfile}
+        {#if currentProfile}
           <AvatarArt
             avatarId={currentProfile.avatarId}
             animated
@@ -563,15 +574,15 @@
           />
         {:else}<p>{wording('Loading your companion…', 'Lemmi wird geladen…')}</p>{/if}
       </div>
-      {#if speaking && (reply || session?.teaching?.prompt)}
-        <div class="caption-anchor">
+      <div class="caption-anchor">
+        {#if (speaking || (photo && photo.phase !== 'ended')) && (reply || session?.teaching?.prompt)}
           <SpeechBubble
             text={reply || session?.teaching?.prompt || ''}
             side
             readFull={() => replyDialog.showModal()}
           />
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
     <h2 class:sr-only={speaking}>
       {german && listening
@@ -673,7 +684,10 @@
             Photo Story · Say “Next photo” or “Back to conversation”.
           </p>{/if}
         {@const visibleReply = reply || session.teaching?.prompt || ''}
-        {#if visibleReply && !speaking}<p class="reply" aria-live="polite">
+        {#if visibleReply && !speaking && (!photo || photo.phase === 'ended')}<p
+            class="reply"
+            aria-live="polite"
+          >
             {visibleReply.length > 120 ? visibleReply.slice(0, 120) + '…' : visibleReply}
           </p>
           {#if visibleReply.length > 70}<button
@@ -920,12 +934,6 @@
     height: min(360px, 68vw, 40dvh);
     flex: none;
   }
-  .scene-photo {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    border-radius: 20px;
-  }
   .companion-scene h2 {
     margin: 0;
     font-size: clamp(22px, 3vw, 28px);
@@ -1031,6 +1039,32 @@
   .has-reply :global(.activity-phrases .helper) {
     display: none;
   }
+  .photo-story {
+    justify-content: flex-start;
+    padding-top: 80px;
+    overflow-y: auto;
+  }
+  .photo-story .companion-scene h2 {
+    display: none;
+  }
+  .photo-story .scene-portrait {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    width: min(760px, 100%);
+  }
+  .photo-story .scene-art {
+    width: 100%;
+    height: min(280px, 25dvh);
+  }
+  .photo-story .caption-anchor {
+    position: static;
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 130px;
+    overflow: auto;
+  }
   @media (max-width: 800px) {
     .scene-portrait {
       display: flex;
@@ -1043,10 +1077,8 @@
       left: auto;
       top: auto;
       width: min(440px, calc(100vw - 40px));
-    }
-    .captioning .scene-art {
-      width: min(220px, 52vw, 24dvh);
-      height: min(220px, 52vw, 24dvh);
+      height: 130px;
+      overflow: auto;
     }
     .captioning .conversation-panel :global(.activity-phrases h2),
     .captioning .conversation-panel :global(.activity-phrases .helper) {

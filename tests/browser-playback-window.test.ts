@@ -14,9 +14,11 @@ async function endpoint(
   requested?: 4 | 12,
   approvedPrompt = false,
   outputFrames = 24,
+  openingPrompt = false,
 ) {
   const internal = crypto.randomUUID();
   const output = new Uint8Array(882 * outputFrames).fill(7);
+  let syntheses = 0;
   const gateway = startControlGateway({
     publicOrigin: 'https://window.fixture.invalid',
     internalToken: internal,
@@ -36,7 +38,7 @@ async function endpoint(
       tts: {
         async synthesize() {
           return ok({
-            pcm: output,
+            pcm: !openingPrompt && syntheses++ === 0 ? new Uint8Array(output) : output,
             sampleRate: 22050,
             encoding: 'pcm_s16le',
             channels: 1,
@@ -139,30 +141,76 @@ async function endpoint(
       throw new Error('Audio not negotiated');
     const window = ready.payload.audio.outputWindowChunks;
     await acknowledged(send('input.start'));
-    await until(() => session?.phase === 'ready');
-    await acknowledged(send('input.mute', { muted: false }));
-    if (approvedPrompt) await acknowledged(send('input.teaching.start'));
-    else {
-      await acknowledged(send('input.speak', { language: 'en' }));
-      await until(() => session?.phase === 'listening');
-      const grant = session!.captureGrant!;
-      for (let index = 0; index < 2; index++)
+    if (!openingPrompt) {
+      const first = await (async () => {
+        await until(() => events.some((e) => e.type === 'response.start'));
+        return events.find((e) => e.type === 'response.start')!;
+      })();
+      if (first.type !== 'response.start') throw new Error('Missing greeting');
+      const meta = first.payload;
+      send(
+        'audio.receipt',
+        { leaseId: meta.leaseId, streamId: meta.streamId, status: 'started', playedChunks: 0 },
+        meta.turnId,
+      );
+      let played = 0;
+      while (played < meta.chunkCount) {
+        await until(
+          () =>
+            events.filter((e) => e.type === 'audio.chunk' && e.turn_id === meta.turnId).length >
+            played,
+        );
+        played = events.filter((e) => e.type === 'audio.chunk' && e.turn_id === meta.turnId).length;
+        if (played < meta.chunkCount)
+          send(
+            'audio.receipt',
+            {
+              leaseId: meta.leaseId,
+              streamId: meta.streamId,
+              status: 'progress',
+              playedChunks: played,
+            },
+            meta.turnId,
+          );
+      }
+      await until(() => events.some((e) => e.type === 'audio.end' && e.turn_id === meta.turnId));
+      await acknowledged(
         send(
-          'audio.chunk',
+          'audio.receipt',
           {
-            leaseId: grant.leaseId,
-            streamId: grant.streamId,
-            chunkIndex: index,
-            encoding: 'pcm_s16le',
-            data: Buffer.alloc(640, 1).toString('base64'),
+            leaseId: meta.leaseId,
+            streamId: meta.streamId,
+            status: 'completed',
+            playedChunks: meta.chunkCount,
           },
+          meta.turnId,
+        ),
+      );
+      events.splice(0);
+      await acknowledged(send('input.mute', { muted: false }));
+      if (approvedPrompt) await acknowledged(send('input.teaching.start'));
+      else {
+        await acknowledged(send('input.speak', { language: 'en' }));
+        await until(() => session?.phase === 'listening');
+        const grant = session!.captureGrant!;
+        for (let index = 0; index < 2; index++)
+          send(
+            'audio.chunk',
+            {
+              leaseId: grant.leaseId,
+              streamId: grant.streamId,
+              chunkIndex: index,
+              encoding: 'pcm_s16le',
+              data: Buffer.alloc(640, 1).toString('base64'),
+            },
+            grant.turnId,
+          );
+        send(
+          'audio.end',
+          { leaseId: grant.leaseId, streamId: grant.streamId, chunkCount: 2 },
           grant.turnId,
         );
-      send(
-        'audio.end',
-        { leaseId: grant.leaseId, streamId: grant.streamId, chunkCount: 2 },
-        grant.turnId,
-      );
+      }
     }
     await until(() => events.some((e) => e.type === 'response.start'));
     const event = events.find((e) => e.type === 'response.start')!;
@@ -320,3 +368,28 @@ test('a robot reply shorter than its twelve-frame capacity ends without padding 
     d.close();
   }
 });
+
+for (const kind of ['browser', 'robot'] as const)
+  test(`${kind} Start greeting preserves twelve-frame credit and Stop cancellation without capture`, async () => {
+    const d = await endpoint(kind, 12, false, 24, true);
+    try {
+      expect(d.window).toBe(12);
+      expect(d.count()).toBe(12);
+      expect(d.session().captureGrant).toBeNull();
+      await d.acknowledged(d.receipt('started', 0));
+      await d.barrier();
+      expect(d.count()).toBe(12);
+      await d.acknowledged(d.receipt('progress', 2));
+      await d.until(() => d.count() === 14);
+      await d.acknowledged(d.send('input.stop'));
+      await d.until(() => d.session().phase === 'ended');
+      expect(d.output.every((byte) => byte === 0)).toBe(true);
+      const after = d.count();
+      await d.acknowledged(d.receipt('progress', 4));
+      await d.barrier();
+      expect(d.count()).toBe(after);
+      expect(d.session().captureGrant).toBeNull();
+    } finally {
+      d.close();
+    }
+  });

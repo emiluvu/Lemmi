@@ -7,6 +7,10 @@ writing. Root cause remains unresolved; no repeat requested.
 Web/speech/tunnel retained. No voice fix or physical acceptance is claimed.
 [Test handoff and return to normal logging](docs/handoffs/stackchan-uplink-backend-investigation.md#diagnostic-deployment--november-15-2026).
 
+**Alex photo album source candidate — not deployed:** `codex/alex-photo-story-pack` replaces Alex’s generic garden/park pack with saved, non-portrait caregiver photos and descriptions. The five approved Alex photos are saved in the hosted caregiver profile; using them in hosted Photo Story requires the web/gateway and nginx update. [Review, checks and rollout](docs/handoffs/alex-photo-story-pack.md).
+
+**Undeployed Photo Story Start/Resume candidate:** `codex/photo-story-start-resume` includes current main, opening-before-listening, English/German prompts and capture-off text recovery. [Deploy-agent handoff and combined checks](docs/handoffs/photo-story-start-resume-2026-11-14.md). Existing deployed behavior is recorded below.
+
 **Stackchan gateway update deployed (`264df22`):** [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.
 
 **Profile context/memory + German deployed — runtime `a779c70`:** rich caregiver create/edit/photos, separately opted-in background memory (default off), and Tilda’s exact-ID German pilot are installed. English and German public synthetic speech checks passed; human voice/startup/hardware testing remains. Refresh/reconnect and explicitly Start. [Acceptance, permission behavior and three-integration test reminder](docs/handoffs/profile-german-backend-integration.md).

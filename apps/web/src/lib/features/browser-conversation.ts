@@ -15,7 +15,17 @@ interface Audio {
 export class BrowserConversation {
   private epoch = 0;
   private enabled = false;
-  private stage: 'idle' | 'starting' | 'unmuting' | 'capture' | 'reply' | 'completed' = 'idle';
+  private stage:
+    | 'idle'
+    | 'starting'
+    | 'opening'
+    | 'opening_playback'
+    | 'opening_completed'
+    | 'unmuting'
+    | 'capture'
+    | 'reply'
+    | 'completed' = 'idle';
+  private openingText = false;
   private anchor: SessionSnapshot | null = null;
   private completed: SessionSnapshot | null = null;
   private captureGeneration: number | null = null;
@@ -37,6 +47,7 @@ export class BrowserConversation {
     this.epoch++;
     this.enabled = false;
     this.stage = 'idle';
+    this.openingText = false;
     this.anchor = this.completed = null;
     this.captureGeneration = null;
     if (this.timer) clearTimeout(this.timer);
@@ -68,12 +79,12 @@ export class BrowserConversation {
       return;
     this.enabled = true;
     this.changed(true);
-    this.stage = 'starting';
+    this.stage = !before || ['paused', 'ended'].includes(before.phase) ? 'opening' : 'starting';
     this.anchor = before && before.phase !== 'ended' ? { ...before } : null;
     this.timer = setTimeout(() => {
       this.stop();
       this.error('Listening did not start. Try Start listening again.');
-    }, 8000);
+    }, 25000);
     if (!before || before.phase === 'ended') {
       if (!this.connection.send('input.start', {}, true)) this.failed();
     } else if (before.phase === 'paused') {
@@ -90,18 +101,48 @@ export class BrowserConversation {
       this.stop();
       return;
     }
+    if (event.type === 'response.start' && this.stage === 'opening') {
+      const current = this.connection.session;
+      if (!current || event.session_id !== current.id || event.generation !== current.generation)
+        return;
+      this.anchor ??= { ...current };
+      this.stage = 'opening_playback';
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = null;
+      return;
+    }
+    if (event.type === 'response.text' && this.stage === 'opening') {
+      const current = this.connection.session;
+      if (!current || event.session_id !== current.id || event.generation !== current.generation)
+        return;
+      this.openingText = true;
+      this.advance();
+      return;
+    }
     if (event.type !== 'state.changed') return;
     const session = event.payload.session;
     if (
       !session ||
       session.activeEndpointId !== this.deviceId ||
       (this.anchor && !this.sameContext(this.anchor, session)) ||
-      (['paused', 'ended', 'unavailable'].includes(session.phase) && this.stage !== 'starting')
+      ['ended', 'unavailable'].includes(session.phase) ||
+      (session.phase === 'paused' &&
+        !(
+          this.stage === 'opening' &&
+          this.anchor?.phase === 'paused' &&
+          this.anchor.generation === session.generation
+        ))
     ) {
       this.stop();
       return;
     }
-    if (this.stage !== 'starting' && session.micMuted && this.stage !== 'unmuting') {
+    if (this.stage === 'opening') this.anchor ??= { ...session };
+    if (
+      !['starting', 'unmuting', 'opening', 'opening_playback', 'opening_completed'].includes(
+        this.stage,
+      ) &&
+      session.micMuted
+    ) {
       this.stop();
       return;
     }
@@ -120,13 +161,13 @@ export class BrowserConversation {
   playbackCompleted(token: SessionSnapshot) {
     if (
       !this.enabled ||
-      this.stage !== 'reply' ||
+      !['reply', 'opening_playback'].includes(this.stage) ||
       !this.anchor ||
       !this.sameContext(this.anchor, token)
     )
       return;
     this.completed = token;
-    this.stage = 'completed';
+    this.stage = this.stage === 'opening_playback' ? 'opening_completed' : 'completed';
     this.advance();
   }
   private advance() {
@@ -139,6 +180,26 @@ export class BrowserConversation {
       this.audio.hasOutput
     )
       return;
+    if (this.stage === 'opening') {
+      // A text fallback ends this listening attempt without microphone access.
+      if (this.openingText) this.suspend();
+      return;
+    }
+    if (this.stage === 'opening_completed') {
+      if (
+        !this.completed ||
+        !this.sameContext(this.completed, session) ||
+        this.completed.generation !== session.generation
+      ) {
+        this.stop();
+        return;
+      }
+      if (session.communicationSupport.preset === 'quiet') {
+        this.suspend();
+        return;
+      }
+      this.stage = 'starting';
+    }
     if (this.stage === 'starting' || this.stage === 'unmuting') {
       this.anchor ??= { ...session };
       if (!this.sameContext(this.anchor, session)) {

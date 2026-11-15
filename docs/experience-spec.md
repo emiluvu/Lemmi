@@ -202,7 +202,7 @@ Use the shared control table in [integration contracts section 5](integration-co
 
 ### Pause and resume
 
-Pause immediately halts capture, speech, queued model responses, and activity progression. Preserve the current activity position. Resume returns to a ready state with **Speak now** for conversation or the current activity in a ready state; do not replay queued speech or reopen the microphone automatically.
+Pause immediately halts capture, speech, queued model responses, and activity progression. Preserve the current activity position. The Photo Story Start/Resume candidate schedules one fresh reviewed reorientation on explicit Resume, keeping the current picture/question or conversation/teaching prompt. Start likewise offers one greeting before listening. Neither replays canceled queued work. Conversational/Guided browser Start/Resume listening intent requests a fresh microphone grant only after consumed opening output and current waiting authority; Quiet stays capture-off after the greeting. Typing, missing playback or failed synthesis uses capture-off approved text; text-only Resume remains available. Raw Resume/Unmute and reconnect never reopen the microphone. See the [candidate handoff](handoffs/photo-story-start-resume-2026-11-14.md); this change has not been deployed.
 
 ### Stop and session end
 

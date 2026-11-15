@@ -1,5 +1,6 @@
 import { controlConfig, hasPrivateAccess } from '@lemmi/server';
 import { endpointCookie } from '#lib/server/demo.ts';
+import { AssetIdSchema } from '@lemmi/contracts';
 
 const assets = new Set(['photo-story-garden', 'photo-story-park']);
 const headers = {
@@ -22,7 +23,8 @@ export const GET = async ({
 }): Promise<Response> => {
   if (process.env.LEMMI_MODE !== 'live' || process.env.LEMMI_DEMO_ENROLLMENT !== '1')
     return denied(404);
-  if (!assets.has(params.assetId)) return denied(404);
+  const privatePhoto = AssetIdSchema.safeParse(params.assetId).success;
+  if (!assets.has(params.assetId) && !privatePhoto) return denied(404);
   try {
     const config = controlConfig();
     const url = new URL(request.url);
@@ -56,7 +58,8 @@ export const GET = async ({
       await response.body?.cancel();
       return denied([401, 403, 404, 409, 503].includes(response.status) ? response.status : 503);
     }
-    if (response.headers.get('content-type')?.split(';')[0] !== 'image/svg+xml') {
+    const mediaType = privatePhoto ? 'image/png' : 'image/svg+xml';
+    if (response.headers.get('content-type')?.split(';')[0] !== mediaType) {
       await response.body?.cancel();
       return denied(503);
     }
@@ -69,7 +72,7 @@ export const GET = async ({
         const chunk = await reader.read();
         if (chunk.done) break;
         size += chunk.value.byteLength;
-        if (size > 65536) {
+        if (size > (privatePhoto ? 5 * 1024 * 1024 : 65536)) {
           await reader.cancel();
           return denied(503);
         }
@@ -84,7 +87,9 @@ export const GET = async ({
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    return new Response(bytes, { headers: { ...headers, 'Content-Length': String(size) } });
+    return new Response(bytes, {
+      headers: { ...headers, 'Content-Type': mediaType, 'Content-Length': String(size) },
+    });
   } catch {
     return denied(503);
   }

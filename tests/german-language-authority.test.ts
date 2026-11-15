@@ -289,3 +289,124 @@ test('German recap uses the reviewed German fixed response without model generat
   expect(f.calls).toHaveLength(1);
   expect(f.de.snapshot()?.captureGrant).toBeNull();
 });
+
+function promptCommand(c: ReturnType<typeof fixture>['de'], language: 'en' | 'de') {
+  const { text: _text, ...input } = command(c, language);
+  return input;
+}
+
+for (const preset of ['guided', 'quiet'] as const)
+  test(`German ${preset} Start/Resume uses approved German text with missing or failed playback`, async () => {
+    for (const mode of ['disabled', 'no-playback', 'failed', 'throws'] as const) {
+      const synthesis: { text: string; language: string }[] = [];
+      const f = fixture(
+        mode === 'disabled'
+          ? undefined
+          : {
+              stt: {
+                async transcribe() {
+                  throw new Error('No capture requested');
+                },
+              },
+              tts: {
+                async synthesize(input) {
+                  synthesis.push(input);
+                  if (mode === 'throws') throw new Error('Fixture voice unavailable');
+                  return fail('UNAVAILABLE', 'Fixture German voice unavailable');
+                },
+              },
+            },
+      );
+      f.registry.acceptPersistentProfile({
+        ...caregiverProfile,
+        id: germanId,
+        preferredName: 'Tilda',
+        communicationSupport: { preset, configVersion: 1 },
+        privacyRevision: 0,
+        policyRevision: 0,
+        approvedFacts: [],
+      });
+      value(
+        f.de.handle('session.command', {
+          sessionId: f.de.snapshot()!.id,
+          expectedGeneration: f.de.snapshot()!.generation,
+          commandId: crypto.randomUUID(),
+          action: { type: 'stop' },
+        }),
+      );
+      value(
+        f.de.handle('session.start', {
+          profileId: germanId,
+          endpoint: 'browser',
+          commandId: crypto.randomUUID(),
+        }),
+      );
+      for (const resume of [false, true]) {
+        if (resume)
+          for (const type of ['pause', 'resume'] as const)
+            value(
+              f.de.handle('session.command', {
+                sessionId: f.de.snapshot()!.id,
+                expectedGeneration: f.de.snapshot()!.generation,
+                commandId: crypto.randomUUID(),
+                action: { type },
+              }),
+            );
+        const result = await f.de.speakSessionPrompt(
+          promptCommand(f.de, 'de'),
+          mode === 'no-playback' ? [] : [16000],
+          resume,
+        );
+        expect(result.ok).toBe(true);
+        if (!result.ok || result.data.kind !== 'reply') throw new Error('Missing German prompt');
+        expect(result.data.reply.language).toBe('de');
+        expect(result.data.reply.text).toContain(
+          resume ? 'Wir sind wieder' : 'Hallo, ich bin Lemmi',
+        );
+        expect(result.data.reply.text.includes('?')).toBe(preset !== 'quiet');
+        expect(f.de.snapshot()?.phase).toBe('waiting');
+        expect(f.de.snapshot()?.captureGrant).toBeNull();
+        expect(JSON.stringify(f.de.persistenceSnapshot())).not.toContain(result.data.reply.text);
+      }
+      expect(synthesis.length).toBe(mode === 'disabled' || mode === 'no-playback' ? 0 : 2);
+      expect(synthesis.every((input) => input.language === 'de')).toBe(true);
+      expect(f.calls).toEqual([]);
+    }
+  });
+
+test('approved Start/Resume rejects a client language mismatch and late German synthesis failure after Stop', async () => {
+  let finish!: () => void;
+  const entered = Promise.withResolvers<void>();
+  const f = fixture({
+    stt: {
+      async transcribe() {
+        throw new Error('No capture');
+      },
+    },
+    tts: {
+      synthesize() {
+        return new Promise((resolve) => {
+          finish = () => resolve(fail('UNAVAILABLE', 'Late failure'));
+          entered.resolve();
+        });
+      },
+    },
+  });
+  expect((await f.de.speakSessionPrompt(promptCommand(f.de, 'en'), [])).ok).toBe(false);
+  expect(f.de.snapshot()?.phase).toBe('ready');
+  const work = f.de.speakSessionPrompt(promptCommand(f.de, 'de'), [16000]);
+  expect(f.de.snapshot()?.phase).toBe('processing');
+  await entered.promise;
+  value(
+    f.de.handle('session.command', {
+      sessionId: f.de.snapshot()!.id,
+      expectedGeneration: f.de.snapshot()!.generation,
+      commandId: crypto.randomUUID(),
+      action: { type: 'stop' },
+    }),
+  );
+  finish();
+  expect((await work).ok).toBe(false);
+  expect(f.de.snapshot()?.phase).toBe('ended');
+  expect(f.de.snapshot()?.captureGrant).toBeNull();
+});

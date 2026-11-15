@@ -370,9 +370,33 @@ export class DataRepository {
       bytes.fill(0);
     }
   }
-  async asset(principal: DataPrincipal, id: string, readBytes = false, demoOnly = false) {
+  async asset(
+    principal: DataPrincipal,
+    id: string,
+    readBytes = false,
+    demoOnly = false,
+    sceneScope?: {
+      token: Pick<SessionSnapshot, 'profileRevision' | 'privacyRevision' | 'policyRevision'>;
+      current: () => boolean;
+    },
+  ) {
     return this.sql.begin(async (tx) => {
       const profile = await this.scoped(tx, principal, principal.profileId);
+      if (sceneScope) {
+        if (principal.kind !== 'participant')
+          throw new DataError('FORBIDDEN', 'Paired participant photo scope required');
+        if (
+          profile.revision !== sceneScope.token.profileRevision ||
+          profile.privacy_revision !== sceneScope.token.privacyRevision ||
+          profile.policy_revision !== sceneScope.token.policyRevision
+        )
+          throw new DataError('REVISION_CONFLICT', 'Photo context changed');
+        const epoch =
+          await tx`SELECT 1 FROM lemmi.gateway_state WHERE singleton AND boot_id=${principal.bootId}::uuid FOR SHARE`;
+        if (!epoch.length) throw new DataError('FORBIDDEN', 'Gateway ownership changed');
+        if (!sceneScope.current())
+          throw new DataError('REVISION_CONFLICT', 'Photo context changed');
+      }
       if (demoOnly && !profile.is_demo)
         throw new DataError('FORBIDDEN', 'Fictional demo profile required');
       if (
@@ -397,6 +421,10 @@ export class DataRepository {
       const bytes = readBytes
         ? await this.media.read(row.storage_key, row.byte_length, row.sha256)
         : undefined;
+      if (sceneScope && !sceneScope.current()) {
+        bytes?.fill(0);
+        throw new DataError('REVISION_CONFLICT', 'Photo context changed');
+      }
       return { metadata, bytes, revision: profile.revision };
     });
   }

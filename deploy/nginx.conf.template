@@ -43,7 +43,7 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
     }
-    location ~ ^/(participant(/(conversation|photo-story))?|caregiver(/(settings|check-in|sign-in))?|_app/.*|v1/demo/(profiles|profile-update|profile-context|profile-context-update|profile-memory-forget|profile-demo-fill|profile-image-upload|profile-image-read|conversation-lock|conversation-exit|enroll|current|release|photo-assets/(photo-story-garden|photo-story-park)))?$ {
+    location ~ ^/(participant(/(conversation|photo-story))?|caregiver(/(settings|check-in|sign-in))?|_app/.*|v1/demo/(profiles|profile-update|profile-context|profile-context-update|profile-memory-forget|profile-demo-fill|profile-image-upload|profile-image-read|conversation-lock|conversation-exit|enroll|current|release|photo-assets/(photo-story-garden|photo-story-park|[0-9a-fA-F-]+)))?$ {
         client_max_body_size 32k;
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host YOUR_DOMAIN;

@@ -349,7 +349,7 @@ export class SpeechTurns {
   ): Promise<Result<ConversationTextResult>> {
     const parsed = SpeechStartCommandSchema.safeParse(raw),
       s = this.snapshot();
-    if (!parsed.success || !text || text.length > 300)
+    if (!parsed.success || !text || text.length > 600)
       return fail('VALIDATION_ERROR', 'Invalid approved prompt request');
     const input = parsed.data;
     if (

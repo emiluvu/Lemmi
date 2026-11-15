@@ -6,6 +6,7 @@ import {
   SessionSnapshotSchema,
   SessionCommandSchema,
   ActivityTransitionSchema,
+  ApprovedPackSchema,
   validateActivityCommandContext,
   ConversationTextCommandSchema,
   SpeechStartCommandSchema,
@@ -91,6 +92,7 @@ export class SessionCoordinator {
     private readonly photoStory?: {
       localOnly?: true;
       publicDemo?: true;
+      profilePhotos?: boolean;
       profileId: string;
       pack: ApprovedPack;
       availableAssetIds: string[];
@@ -273,6 +275,166 @@ export class SessionCoordinator {
   speechConfigured() {
     return !!this.speech;
   }
+  // Scene-bound, transient output only; never part of checkpoints or summaries.
+  private photoReminder: { instanceId: string; assetId: string; text: string } | null = null;
+  private conversationReminder: string | null = null;
+  private rememberReply(result: Result<ConversationTextResult>) {
+    const view = this.photoView();
+    if (
+      result.ok &&
+      result.data.kind === 'reply' &&
+      this.photoTalking() &&
+      view?.activityId === 'photo_album' &&
+      view.currentAssetId
+    )
+      this.photoReminder = {
+        instanceId: view.instanceId,
+        assetId: view.currentAssetId,
+        text: result.data.reply.text,
+      };
+    else if (
+      result.ok &&
+      result.data.kind === 'reply' &&
+      !this.session?.teaching &&
+      (!this.activity || this.activity.phase === 'ended')
+    )
+      this.conversationReminder = result.data.reply.text;
+  }
+  async speakPhotoOpening(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
+    const parsed = ConversationTextCommandSchema.safeParse(raw);
+    if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid photo opening request');
+    const { text: _text, purpose: _purpose, ...input } = parsed.data;
+    const s = this.session;
+    if (
+      !s ||
+      s.id !== input.sessionId ||
+      s.generation !== input.expectedGeneration ||
+      !['ready', 'waiting'].includes(s.phase)
+    )
+      return fail('REVISION_CONFLICT', 'Use the current ready session');
+    if (!this.photoStoryEnabled() || this.configurationChanges.size || !this.photoTalking())
+      return fail('REVISION_CONFLICT', 'Photo conversation is not ready');
+    const view = this.photoView();
+    if (view?.activityId !== 'photo_album' || !view.currentAssetId)
+      return fail('UNAVAILABLE', 'No current approved picture');
+    const text = [
+      view.caption,
+      this.session?.communicationSupport.preset === 'quiet'
+        ? ''
+        : 'Would you like to talk about this picture?',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    this.photoReminder = { instanceId: view.instanceId, assetId: view.currentAssetId, text };
+    return this.speakReviewedPrompt(input, rates, text, outputWindow);
+  }
+  async speakSessionPrompt(
+    raw: unknown,
+    rates: number[],
+    resume = false,
+    outputWindow: SpeechOutputWindow = 4,
+  ) {
+    const s = this.session;
+    if (!s) return fail('NOT_FOUND', 'Session not found');
+    const quiet = s.communicationSupport.preset === 'quiet';
+    const german = this.language() === 'de';
+    const view = this.photoView();
+    const words = (en: string, de: string) => (german ? de : en);
+    let text = quiet
+      ? words(
+          "Hello, I'm Lemmi. We can take our time.",
+          'Hallo, ich bin Lemmi. Wir können uns Zeit lassen.',
+        )
+      : words(
+          "Hello, I'm Lemmi, your AI companion. Would you like to talk about your day?",
+          'Hallo, ich bin Lemmi, deine KI-Begleitung. Möchtest du über deinen Tag sprechen?',
+        );
+    if (resume) {
+      if (s.teaching)
+        text = s.teaching.prompt
+          ? `We're back with Teach Lemmi. ${s.teaching.prompt}`
+          : words('We can take our time.', 'Wir können uns Zeit lassen.');
+      else if (view?.activityId === 'photo_album' && view.phase !== 'ended') {
+        const reminder = this.photoReminder;
+        const same =
+          reminder?.instanceId === view.instanceId && reminder.assetId === view.currentAssetId;
+        const prompt = same ? reminder.text : (view.caption ?? 'We can simply look.');
+        const prefix = "We're looking at the same picture. ";
+        text = prefix.length + prompt.length <= 600 ? prefix + prompt : prompt;
+      } else if (this.conversationReminder) {
+        const prefix = words("We're back. ", 'Wir sind wieder da. ');
+        text =
+          prefix.length + this.conversationReminder.length <= 600
+            ? prefix + this.conversationReminder
+            : this.conversationReminder;
+      } else
+        text = quiet
+          ? words(
+              "We're back. We can take our time.",
+              'Wir sind wieder da. Wir können uns Zeit lassen.',
+            )
+          : words(
+              "We're back together. Would you like to talk about your day?",
+              'Wir sind wieder zusammen. Möchtest du über deinen Tag sprechen?',
+            );
+    }
+    return this.speakReviewedPrompt(raw, rates, text, outputWindow);
+  }
+  // Approved text remains usable without negotiated playback or after current TTS fails.
+  // Recheck the complete authority token before exposing any delayed fallback.
+  private async speakReviewedPrompt(
+    raw: unknown,
+    rates: number[],
+    text: string,
+    outputWindow: SpeechOutputWindow,
+  ) {
+    const parsed = SpeechStartCommandSchema.safeParse(raw);
+    if (!parsed.success || !text || text.length > 600)
+      return fail('VALIDATION_ERROR', 'Invalid approved prompt request');
+    const input = parsed.data;
+    if (input.language !== this.language())
+      return fail('VALIDATION_ERROR', 'Use the current profile language');
+    if (this.configurationChanges.size)
+      return fail('REVISION_CONFLICT', 'Configuration save is pending');
+    const token = this.snapshot();
+    if (
+      !token ||
+      token.id !== input.sessionId ||
+      token.generation !== input.expectedGeneration ||
+      !['ready', 'waiting'].includes(token.phase)
+    )
+      return fail('REVISION_CONFLICT', 'Use the current ready session');
+    if (this.speech && rates.length) {
+      const result = await this.speech.speakApproved(input, rates, text, outputWindow);
+      if (result.ok || result.error.code !== 'UNAVAILABLE') return result;
+    }
+    const latest = this.snapshot();
+    if (
+      !latest ||
+      !['ready', 'waiting'].includes(latest.phase) ||
+      this.configurationChanges.size ||
+      !(
+        [
+          'id',
+          'generation',
+          'leaseId',
+          'activeEndpointId',
+          'profileRevision',
+          'privacyRevision',
+          'policyRevision',
+        ] as const
+      ).every((key) => latest[key] === token[key])
+    )
+      return fail('REVISION_CONFLICT', 'Prompt canceled');
+    this.session = { ...this.session!, phase: 'waiting', captureGrant: null };
+    const result = ok<ConversationTextResult>({
+      kind: 'reply',
+      session: this.snapshot()!,
+      reply: { turnId: input.commandId, text, language: input.language, source: 'fixed' },
+    });
+    this.lastChat = { commandId: input.commandId, result };
+    return result;
+  }
   language(): 'en' | 'de' {
     return this.profile.language;
   }
@@ -349,12 +511,38 @@ export class SessionCoordinator {
     return (
       this.language() === 'en' &&
       !!this.photoStory &&
+      (!this.photoStory.profilePhotos ||
+        (this.photoStory.pack.activityId === 'photo_album' &&
+          this.photoStory.pack.entries.length > 0)) &&
       this.photoStory.profileId === this.profile.id &&
       ((this.photoStory.publicDemo === true && this.publicPhotoAuthorized) ||
         (this.photoStory.localOnly === true && this.profile.id === DEMO_PROFILE_ID))
     );
   }
   private publicPhotoAuthorized = false;
+  // Registry-only update, never exposed as a participant operation. A changed
+  // saved album pauses/invalidate old work before replacing any scene context.
+  replaceProfilePhotoPack(profileId: string, raw: ApprovedPack) {
+    if (
+      !this.photoStory?.profilePhotos ||
+      profileId !== this.photoStory.profileId ||
+      profileId !== 'profile-alex'
+    )
+      throw new Error('Profile photo pack is not assigned');
+    const pack = ApprovedPackSchema.parse(raw);
+    if (
+      pack.activityId !== 'photo_album' ||
+      pack.id !== 'profile-alex-photos' ||
+      pack.entries.some(
+        (entry) => entry.entityIds.length !== 1 || entry.entityIds[0] !== 'profile:approved-photo',
+      )
+    )
+      throw new Error('Invalid profile photo pack');
+    if (JSON.stringify(pack) === JSON.stringify(this.photoStory.pack)) return;
+    this.interrupt({ type: 'system.pause', reason: 'config_change' });
+    this.photoStory.pack = pack;
+    this.photoStory.availableAssetIds = pack.entries.map((entry) => entry.assetId);
+  }
   authorizePublicPhotoDemo(enabled: boolean) {
     this.publicPhotoAuthorized = enabled;
   }
@@ -531,7 +719,9 @@ export class SessionCoordinator {
           ? {
               permittedEntityIds: this.photoStoryEnabled()
                 ? this.publicPhotoEnabled()
-                  ? ['scene:generic-nature']
+                  ? this.photoStory?.profilePhotos
+                    ? ['profile:approved-photo']
+                    : ['scene:generic-nature']
                   : this.profile.interests
                 : [],
               available:
@@ -650,7 +840,11 @@ export class SessionCoordinator {
     this.summaryController?.abort();
     this.summaryController = null;
   }
-  private cancelChat(inputOnly = false, preserveSpeech?: object) {
+  private cancelChat(inputOnly = false, preserveSpeech?: object, preserveReminder = false) {
+    if (!preserveReminder && !inputOnly) {
+      this.photoReminder = null;
+      this.conversationReminder = null;
+    }
     this.cancelSummary();
     this.pendingChat?.controller.abort();
     this.pendingChat = null;
@@ -962,6 +1156,7 @@ export class SessionCoordinator {
       });
       this.chatIds.set(input.commandId, fingerprint);
       this.lastChat = { commandId: input.commandId, result };
+      this.rememberReply(result);
       if (speechOwner) this.onFixedReply();
       return result;
     }
@@ -1380,6 +1575,7 @@ export class SessionCoordinator {
       if (this.pendingChat === pending) {
         this.pendingChat = null;
         this.lastChat = { commandId: input.commandId, result };
+        this.rememberReply(result);
       }
       return structuredClone(result);
     })();
@@ -1491,7 +1687,11 @@ export class SessionCoordinator {
   }
   private interrupt(input: Extract<ActivitySystemInput, { type: 'system.pause' | 'system.end' }>) {
     this.freezeTeaching();
-    this.cancelChat();
+    this.cancelChat(
+      false,
+      undefined,
+      input.type === 'system.pause' && input.reason === 'participant',
+    );
     if (!this.session || this.session.phase === 'ended') return;
     this.session = {
       ...this.session,
@@ -1744,7 +1944,7 @@ export class SessionCoordinator {
           case 'resume':
             if (this.session.phase !== 'paused')
               return fail('REVISION_CONFLICT', 'Session is not paused');
-            this.cancelChat();
+            this.cancelChat(false, undefined, true);
             this.system({ type: 'system.resume' });
             this.session = {
               ...this.session,

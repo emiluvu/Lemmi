@@ -21,6 +21,7 @@ import {
 } from '@lemmi/server';
 import {
   ProfileDetailSchema,
+  ActivityViewSchema,
   ParticipantProfileSchema,
   createClients,
   createHttpTransport,
@@ -1035,11 +1036,11 @@ dbtest(
       send('input.start');
       await until(() =>
         messages.some(
-          (event) => event.type === 'state.changed' && event.payload.session?.phase === 'ready',
+          (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
         ),
       );
       const first = messages.find(
-        (event) => event.type === 'state.changed' && event.payload.session?.phase === 'ready',
+        (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
       ).payload.session;
       send('input.stop', first.id, first.generation);
       send('input.start');
@@ -1047,7 +1048,7 @@ dbtest(
         messages.some(
           (event) =>
             event.type === 'state.changed' &&
-            event.payload.session?.phase === 'ready' &&
+            event.payload.session?.phase === 'waiting' &&
             event.payload.session.id !== first.id,
         ),
       );
@@ -1389,7 +1390,7 @@ dbtest(
       });
       await until(() => ready);
       send('input.start');
-      await until(() => snapshot?.phase === 'ready');
+      await until(() => snapshot?.phase === 'waiting');
       await gateway.flush();
       return { send, until, closed: () => closed, snapshot: () => snapshot };
     }
@@ -1413,6 +1414,171 @@ dbtest(
       for (const ws of sockets) ws.close();
       gateway.stop();
       await Bun.sleep(30);
+    }
+  },
+);
+
+dbtest(
+  'saved Alex photo edits/removal refresh the registry pack and fence delayed output and private reads',
+  async () => {
+    await reset();
+    const { SessionRegistry } = await import('@lemmi/server');
+    const { handlePhotoScene } = await import('../packages/server/src/photo-scene');
+    const entered = Promise.withResolvers<void>();
+    const reply = Promise.withResolvers<any>();
+    const sessions = new SessionRegistry(
+      {
+        async complete() {
+          entered.resolve();
+          return reply.promise;
+        },
+      },
+      undefined,
+      Date.now,
+      () => {},
+      true,
+    );
+    const data = new PersistentData(repo, 'fixture-caregiver', sessions, Date.now, () => {});
+    await data.start();
+    const originalRead = repo.media.read.bind(repo.media);
+    const releaseRead = Promise.withResolvers<void>();
+    try {
+      const asset = await repo.createAsset(
+        caregiver,
+        upload({ entityIds: ['profile:approved-photo'] }),
+      );
+      const context = (description: string, include = true) =>
+        ProfileContextSchema.parse({
+          photos: include ? [{ assetId: asset.id, description, portrait: false }] : [],
+        });
+      const save = (revision: number, description: string, include = true) =>
+        data.demoHandle({
+          operation: 'profile.context.update',
+          input: {
+            profileId: 'profile-alex',
+            expectedRevision: revision,
+            commandId: randomUUID(),
+            preferredName: 'Alex',
+            avatarId: 'lemming',
+            communicationSupport: { preset: 'guided', configVersion: 1 },
+            summaryMemoryEnabled: false,
+            context: context(description, include),
+          },
+        });
+      expect((await save(0, 'An approved old scene.')).ok).toBe(true);
+      const enrollment = await data.demoHandle({
+        operation: 'endpoint.enroll',
+        profileId: 'profile-alex',
+        endpoint: 'browser',
+      });
+      if (!enrollment.ok) throw new Error('Photo browser enrollment fixture failed');
+      const endpoint = enrollment.data as any;
+      const coordinator = sessions.forProfile('profile-alex');
+      expect(
+        coordinator.handle('session.start', {
+          profileId: 'profile-alex',
+          endpoint: 'browser',
+          commandId: randomUUID(),
+        }).ok,
+      ).toBe(true);
+      coordinator.bindEndpoint(endpoint.deviceId);
+      const started = coordinator.startPhoto(randomUUID());
+      if (!started.ok) throw new Error('Photo fixture unavailable');
+      const photoView = ActivityViewSchema.parse(started.data);
+      if (photoView.activityId !== 'photo_album') throw new Error('Photo fixture unavailable');
+      expect(
+        coordinator.handle('activities.submit', {
+          sessionId: coordinator.snapshot()!.id,
+          instanceId: photoView.instanceId,
+          expectedRevision: photoView.revision,
+          commandId: randomUUID(),
+          action: { type: 'photo.talk' },
+        }).ok,
+      ).toBe(true);
+      const token = coordinator.snapshot()!;
+      const pending = coordinator.submitText({
+        sessionId: token.id,
+        expectedGeneration: token.generation,
+        commandId: randomUUID(),
+        text: 'A fictional picture response.',
+        language: 'en',
+      });
+      await entered.promise;
+      expect((await save(1, 'The corrected approved scene.')).ok).toBe(true);
+      expect(coordinator.snapshot()?.phase).toBe('paused');
+      expect(coordinator.photoView()).toMatchObject({
+        currentAssetId: asset.id,
+        caption: 'The corrected approved scene.',
+      });
+      reply.resolve({ ok: true, data: { text: 'A stale picture reply.', language: 'en' } });
+      expect((await pending).ok).toBe(false);
+      expect(JSON.stringify(coordinator.photoView())).not.toContain('An approved old scene.');
+
+      const paused = coordinator.snapshot()!;
+      expect(
+        coordinator.handle('session.command', {
+          sessionId: paused.id,
+          expectedGeneration: paused.generation,
+          commandId: randomUUID(),
+          action: { type: 'resume' },
+        }).ok,
+      ).toBe(true);
+      const readEntered = Promise.withResolvers<void>();
+      repo.media.read = async (...args) => {
+        const bytes = await originalRead(...args);
+        readEntered.resolve();
+        await releaseRead.promise;
+        return bytes;
+      };
+      const image = handlePhotoScene(
+        { operation: 'photo.scene.read', credential: endpoint.credential, assetId: asset.id },
+        data,
+        sessions,
+      );
+      await readEntered.promise;
+      const active = coordinator.snapshot()!;
+      expect(
+        coordinator.handle('session.command', {
+          sessionId: active.id,
+          expectedGeneration: active.generation,
+          commandId: randomUUID(),
+          action: { type: 'stop' },
+        }).ok,
+      ).toBe(true);
+      releaseRead.resolve();
+      const cancelled = await image;
+      expect(cancelled.status).toBe(409);
+      expect(cancelled.headers.get('content-type')).not.toBe('image/png');
+      repo.media.read = originalRead;
+
+      expect(
+        coordinator.handle('session.start', {
+          profileId: 'profile-alex',
+          endpoint: 'browser',
+          commandId: randomUUID(),
+        }).ok,
+      ).toBe(true);
+      coordinator.bindEndpoint(endpoint.deviceId);
+      expect(coordinator.startPhoto(randomUUID()).ok).toBe(true);
+      expect((await save(2, '', false)).ok).toBe(true);
+      expect(coordinator.photoView()).toBeNull();
+      expect(coordinator.publicPhotoEnabled()).toBe(false);
+      expect(coordinator.photoAssetAllowed(asset.id)).toBe(false);
+      expect(coordinator.photoAssetAllowed('photo-story-garden')).toBe(false);
+      const removed = await handlePhotoScene(
+        { operation: 'photo.scene.read', credential: endpoint.credential, assetId: asset.id },
+        data,
+        sessions,
+      );
+      expect(removed.status).toBe(404);
+      expect((await sql`SELECT id FROM lemmi.media_assets WHERE id=${asset.id}::uuid`).length).toBe(
+        0,
+      );
+    } finally {
+      repo.media.read = originalRead;
+      releaseRead.resolve();
+      reply.resolve({ ok: true, data: { text: 'A stale picture reply.', language: 'en' } });
+      await data.close();
     }
   },
 );

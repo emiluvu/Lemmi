@@ -2,13 +2,17 @@ import { expect, test } from 'bun:test';
 import { startControlGateway } from '../apps/realtime/src/control';
 import {
   DeviceEventSchema,
+  ProfileDetailSchema,
   ServerEventSchema,
   ok,
+  fail,
   type ServerEvent,
   type SessionSnapshot,
 } from '@lemmi/contracts';
 import type { ChatAdapter, SpeechAdapters } from '@lemmi/server';
 import type { TransportDiagnostic } from '../apps/realtime/src/transport-diagnostics';
+
+import { caregiverProfile } from '@lemmi/contracts/fixtures';
 
 async function device(
   options: {
@@ -16,40 +20,95 @@ async function device(
     chat?: ChatAdapter;
     negotiate?: boolean;
     transportDiagnostics?: { deviceId: string; emit: (observation: TransportDiagnostic) => void };
+
+    manualStart?: boolean;
+    photo?: boolean;
+    language?: 'en' | 'de';
+    disableSpeech?: boolean;
   } = {},
 ) {
   const internal = crypto.randomUUID(),
     accessKey = crypto.randomUUID();
   const output = new Uint8Array(882 * 12).fill(2);
+  const defaultSpeech: SpeechAdapters = {
+    stt: {
+      async transcribe() {
+        return ok({ text: 'A fictional garden greeting', language: 'en' });
+      },
+    },
+    tts: {
+      async synthesize() {
+        return ok({
+          pcm: output,
+          sampleRate: 22050,
+          encoding: 'pcm_s16le',
+          channels: 1,
+          language: 'en',
+        });
+      },
+    },
+  };
+  let opening = !options.manualStart;
   const gateway = startControlGateway({
     publicOrigin: 'https://speech.invalid',
     internalToken: internal,
     accessKey,
     port: 0,
     transportDiagnostics: options.transportDiagnostics,
+
+    demoEnrollment: options.photo,
+    ...(options.photo
+      ? {
+          devices: [
+            { profileId: 'profile-alex', deviceId: 'stackchan-alex', endpoint: 'browser' as const },
+          ],
+          profiles: [
+            ProfileDetailSchema.parse({
+              ...caregiverProfile,
+              privacyRevision: 0,
+              policyRevision: 0,
+              approvedFacts: [],
+              context: {
+                photos: [
+                  {
+                    assetId: 'f1000000-0000-4000-8000-000000000001',
+                    description: 'Alex tending roses in a garden.',
+                    portrait: false,
+                  },
+                ],
+              },
+            }),
+          ],
+        }
+      : {}),
     chatAdapter: options.chat ?? {
       async complete() {
         return ok({ text: 'We can enjoy the garden.', language: 'en' });
       },
     },
-    speech: options.speech ?? {
-      stt: {
-        async transcribe() {
-          return ok({ text: 'A fictional garden greeting', language: 'en' });
+    languageForProfile: () => options.language ?? 'en',
+    speech: options.disableSpeech
+      ? undefined
+      : {
+          stt: options.speech?.stt ?? {
+            async transcribe() {
+              return ok({ text: 'A fictional garden greeting', language: 'en' });
+            },
+          },
+          tts: {
+            async synthesize(input, signal) {
+              if (opening)
+                return ok({
+                  pcm: new Uint8Array(882 * 4).fill(1),
+                  sampleRate: 22050,
+                  encoding: 'pcm_s16le',
+                  channels: 1,
+                  language: 'en',
+                });
+              return (options.speech?.tts ?? defaultSpeech.tts).synthesize(input, signal);
+            },
+          },
         },
-      },
-      tts: {
-        async synthesize() {
-          return ok({
-            pcm: output,
-            sampleRate: 22050,
-            encoding: 'pcm_s16le',
-            channels: 1,
-            language: 'en',
-          });
-        },
-      },
-    },
   });
   const base = `http://127.0.0.1:${gateway.server.port}`;
   async function privateCall(action: string, body: unknown) {
@@ -119,6 +178,7 @@ async function device(
   await until(() => ws.readyState === WebSocket.OPEN);
   send('device.hello', {
     firmwareVersion: 'fictional-audio-fixture',
+    ...(options.photo ? { endpoint: 'browser' } : {}),
     cameraSupported: false,
     pettingSupported: false,
     audio: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1, frameMs: 20 },
@@ -132,10 +192,47 @@ async function device(
   const timer = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN) send('heartbeat');
   }, 2000);
-  send('input.start');
-  await until(() => session?.phase === 'ready');
-  send('input.mute', { muted: false });
-  await until(() => session?.micMuted === false);
+  async function completeOutput() {
+    await until(() => events.some((e) => e.type === 'response.start'));
+    const start = [...events].reverse().find((e) => e.type === 'response.start')!;
+    if (start.type !== 'response.start') throw new Error('Missing output');
+    const meta = start.payload;
+    const receipt = (status: string, playedChunks: number) =>
+      send(
+        'audio.receipt',
+        {
+          leaseId: meta.leaseId,
+          streamId: meta.streamId,
+          status,
+          playedChunks,
+        },
+        meta.turnId,
+      );
+    receipt('started', 0);
+    let played = 0;
+    while (played < meta.chunkCount) {
+      await until(
+        () =>
+          events.filter((e) => e.type === 'audio.chunk' && e.turn_id === meta.turnId).length >
+          played,
+      );
+      played = events.filter((e) => e.type === 'audio.chunk' && e.turn_id === meta.turnId).length;
+      if (played < meta.chunkCount) receipt('progress', played);
+    }
+    await until(() => events.some((e) => e.type === 'audio.end' && e.turn_id === meta.turnId));
+    receipt('completed', meta.chunkCount);
+    await until(() => session?.phase === 'waiting');
+  }
+  if (!options.manualStart) {
+    send('input.start');
+    if (options.negotiate === false || options.disableSpeech)
+      await until(() => session?.phase === 'waiting');
+    else await completeOutput();
+    opening = false;
+    send('input.mute', { muted: false });
+    await until(() => session?.micMuted === false);
+    events.splice(0, events.length, ...events.filter((e) => e.type === 'device.ready'));
+  }
   return {
     gateway,
     ws,
@@ -144,6 +241,7 @@ async function device(
     until,
     send,
     session: () => session!,
+    completeOutput,
     async capture() {
       send('input.speak', { language: 'en' });
       await until(() => session?.phase === 'listening');
@@ -181,6 +279,137 @@ async function device(
     },
   };
 }
+
+test('explicit Start speaks first, Photo Story introduces its scene, Resume repeats it without capture', async () => {
+  const prompts: string[] = [];
+  let finishResume!: (value: any) => void;
+  let resumeSignal!: AbortSignal;
+  const latePcm = new Uint8Array(882 * 4).fill(3);
+  const d = await device({
+    manualStart: true,
+    photo: true,
+    speech: {
+      stt: {
+        async transcribe() {
+          throw new Error('Capture was not requested');
+        },
+      },
+      tts: {
+        async synthesize(input, signal) {
+          prompts.push(input.text);
+          if (prompts.length === 4) {
+            resumeSignal = signal;
+            return new Promise((resolve) => {
+              finishResume = resolve;
+            });
+          }
+          return ok({
+            pcm: new Uint8Array(882 * 4).fill(1),
+            sampleRate: 22050,
+            encoding: 'pcm_s16le',
+            channels: 1,
+            language: 'en',
+          });
+        },
+      },
+    },
+  });
+  try {
+    expect(prompts).toHaveLength(0);
+    d.send('input.start');
+    await d.completeOutput();
+    expect(prompts[0]).toContain("I'm Lemmi");
+    expect(prompts[0]).toContain('?');
+    expect(d.session().captureGrant).toBeNull();
+    d.events.length = 0;
+    d.send('input.photo.start');
+    await d.completeOutput();
+    const scene = [...d.events].reverse().find((e) => e.type === 'activity.changed');
+    if (scene?.type !== 'activity.changed' || scene.payload.activity?.activityId !== 'photo_album')
+      throw new Error('Missing photo');
+    const assetId = scene.payload.activity.currentAssetId;
+    expect(prompts[1]).toContain('Alex tending roses');
+    expect(prompts[1]).toContain('?');
+    d.send('input.pause');
+    await d.until(() => d.session().phase === 'paused');
+    const count = prompts.length;
+    await Bun.sleep(30);
+    expect(prompts).toHaveLength(count);
+    d.events.length = 0;
+    d.send('input.resume');
+    await d.completeOutput();
+    expect(prompts[2]).toBe(`We're looking at the same picture. ${prompts[1]}`);
+    const resumed = [...d.events].reverse().find((e) => e.type === 'activity.changed');
+    expect(
+      resumed?.type === 'activity.changed' &&
+        resumed.payload.activity?.activityId === 'photo_album' &&
+        resumed.payload.activity.currentAssetId,
+    ).toBe(assetId);
+    expect(d.session().captureGrant).toBeNull();
+    expect(d.session().micMuted).toBe(true);
+    await Bun.sleep(30);
+    expect(prompts).toHaveLength(3);
+    d.send('input.pause');
+    await d.until(() => d.session().phase === 'paused');
+    d.events.length = 0;
+    d.send('input.resume');
+    await d.until(() => !!finishResume);
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
+    expect(resumeSignal.aborted).toBe(true);
+    finishResume(
+      ok({ pcm: latePcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }),
+    );
+    await Bun.sleep(30);
+    expect(
+      d.events.some((e) => ['response.start', 'response.text', 'audio.chunk'].includes(e.type)),
+    ).toBe(false);
+    expect(latePcm.every((n) => n === 0)).toBe(true);
+    expect(d.session().phase).toBe('ended');
+  } finally {
+    d.close();
+  }
+});
+
+test('Stop during the automatic opening cancels pending TTS and suppresses all late output', async () => {
+  let finish!: (value: any) => void;
+  let signal!: AbortSignal;
+  const pcm = new Uint8Array(882 * 4).fill(3);
+  const d = await device({
+    manualStart: true,
+    speech: {
+      stt: {
+        async transcribe() {
+          throw new Error('No capture');
+        },
+      },
+      tts: {
+        synthesize(_input, canceled) {
+          signal = canceled;
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        },
+      },
+    },
+  });
+  try {
+    d.send('input.start');
+    await d.until(() => !!finish);
+    d.send('input.stop');
+    await d.until(() => d.session().phase === 'ended');
+    expect(signal.aborted).toBe(true);
+    finish(ok({ pcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }));
+    await Bun.sleep(30);
+    expect(
+      d.events.some((e) => ['response.start', 'response.text', 'audio.chunk'].includes(e.type)),
+    ).toBe(false);
+    expect(pcm.every((n) => n === 0)).toBe(true);
+    expect(d.session().phase).toBe('ended');
+  } finally {
+    d.close();
+  }
+});
 
 test('teaching commands share the authorized gateway and read reviewed prompts without opening capture', async () => {
   const d = await device();
@@ -288,11 +517,13 @@ test('spoken teaching Next crosses WSS with a fresh generation and audible repla
     d.send('input.pause');
     await d.until(() => d.session().phase === 'paused');
     d.send('input.resume');
-    await d.until(() => d.session().phase === 'ready');
+    d.events.length = 0;
+    await d.completeOutput();
+    d.events.length = 0;
     const input = await d.capture(),
       generation = d.session().generation;
     input.finish();
-    await d.until(() => d.events.filter((e) => e.type === 'response.start').length === 2);
+    await d.until(() => d.events.filter((e) => e.type === 'response.start').length === 1);
     const reply = d.events.find((e) => e.type === 'response.text');
     expect(reply?.type).toBe('response.text');
     if (reply?.type !== 'response.text') throw new Error('Missing fixed teaching reply');
@@ -811,3 +1042,52 @@ test('paced 50-fps uplink is accepted with bounded aggregate diagnostics and no 
     d.close();
   }
 });
+
+for (const language of ['en', 'de'] as const)
+  for (const mode of ['no-playback', 'disabled', 'tts-failure'] as const)
+    test(`${language} Start/Resume sends current approved text with ${mode} and no capture`, async () => {
+      const d = await device({
+        manualStart: true,
+        language,
+        negotiate: mode !== 'no-playback',
+        disableSpeech: mode === 'disabled',
+        speech: {
+          stt: {
+            async transcribe() {
+              throw new Error('No capture requested');
+            },
+          },
+          tts: {
+            async synthesize() {
+              return fail('UNAVAILABLE', 'Fixture voice unavailable');
+            },
+          },
+        },
+      });
+      try {
+        for (const type of ['input.start', 'input.resume']) {
+          d.events.length = 0;
+          d.send(type);
+          await d.until(() => d.events.some((e) => e.type === 'response.text'));
+          const reply = d.events.find((e) => e.type === 'response.text')!;
+          expect(reply.type === 'response.text' && reply.payload.language).toBe(language);
+          expect(reply.type === 'response.text' && reply.payload.text).toContain(
+            language === 'de'
+              ? type === 'input.start'
+                ? 'Hallo'
+                : 'Wir sind wieder'
+              : type === 'input.start'
+                ? 'Hello'
+                : "We're back",
+          );
+          expect(d.events.some((e) => ['response.start', 'audio.chunk'].includes(e.type))).toBe(
+            false,
+          );
+          expect(d.session().captureGrant).toBeNull();
+          d.send('input.pause');
+          await d.until(() => d.session().phase === 'paused');
+        }
+      } finally {
+        d.close();
+      }
+    });

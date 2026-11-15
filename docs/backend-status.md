@@ -98,6 +98,12 @@ native helper programs passed with ASan/UBSan; ESP32 SDK/full sketch/hardware
 not independently built or tested here. Runtime/diagnostic deployment status
 unchanged; paired UTC window and robot-side measurement method remain pending.
 
+## Photo Story Start/Resume — local source candidate, November 14, 2026
+
+Branch `codex/photo-story-start-resume` now includes main `f3e3b41`: opening/reorientation precedes browser capture, Start/Resume uses server-resolved English/German, and missing/failed playback returns current approved text with capture off. Same-photo/question reminders, existing picture/avatar recovery and main's German/memory/Jev/Stackchan behavior remain. No new schema, migration, dependency, provider or configuration change. [Deploy-agent handoff and exact acceptance](handoffs/photo-story-start-resume-2026-11-14.md).
+
+Observed on Bun 1.4.4: **435 tests / 6,607 expectations, zero failures/skips**, five isolated PostgreSQL databases; type/Svelte, production build, full format/whitespace, 15 Python speech/provisioning fixtures and production HTTP/verified TLS/WSS participant/Photo Story smoke passed. Fixture services/clients only; merged browser visuals, human audio, public-network/provider and K151 rehearsal plus counterpart review remain pending. **No deployment performed; pushed source is for the server deploy agent to review.**
+
 ## Stackchan twelve-frame output deployed — November14,2026
 
 **Gateway runtime `264df22`**, web/speech `a779c70` retained. Removed browser-only checks in gateway negotiation and all three speech-owner paths. Robot `playback.outputWindowChunks:12` can now negotiate12×20ms=240ms credit; omitted/explicit4 retains80ms fallback. Consumed-only refill and Stop owner cancellation/PCM wipe/late receipt rejection remain. No schema, migration, config/provider/model/UI/firmware change; gateway-only rollout. Final **413 tests /6,281 expectations**, no failures/skips on isolated databases; type/Svelte zero errors/warnings, pinned frozen Bun1.4.4, format/whitespace passed. Includes robot12/legacy4 credit and queued/playing Stop/short-tail tests. [Exact firmware handshake, short-reply behavior, Stop responsibilities and observed checks](handoffs/stackchan-playback-window.md).
@@ -546,3 +552,8 @@ final keypad/centering adjustment. Full-window screenshot was automatically
 rejected because unrelated browser tabs/metadata could be captured; no screenshot
 was taken. Final mobile pixel layout and actual voice/hardware remain unverified.
 No deployment or live credential/configuration change occurred.
+# Alex private photo album candidate — not deployed
+
+`codex/alex-photo-story-pack`, based on Anay’s `5efffcf`, selects saved Alex non-portrait photos instead of garden/park fixtures. Uploaded images remain private media; source contains no photos. The existing gated image route accepts UUIDs with locked profile/device/gateway/revision/policy checks and PNG-only bounded responses. Album edits cancel old work; an empty Alex album disables Photo Story. Other fictional profiles retain their existing neutral pack. No migration or new public command.
+
+The five user-approved photos and descriptions were saved through the hosted caregiver editor and confirmed after reopening; cooking and My Way excluded, Bunny/Guided and memory-off retained. This is a data update, not deployment of this source. Focused 78 tests/848 assertions passed. Full local run:395 pass,42 skip,4 environmental failures (two missing OpenSSL, Windows POSIX permission assertion, missing VAD WASM dependency). Windows dependency installation also fails SvelteKit lifecycle; complete check/build and PostgreSQL/hardware acceptance remain unverified. [Exact review and rollout handoff](handoffs/alex-photo-story-pack.md).
