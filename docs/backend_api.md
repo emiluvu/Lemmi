@@ -1,6 +1,8 @@
 # Lemmi backend integration reference
 
-**Current deployment: web/gateway `95bdcef`.** UI branch `integration/frontend-backend/a664e7e` is merged and preserved. Private speech remains on its existing CPU 2+2/HFC setup; decisions remain off. All seven migrations are unchanged. [Observed review and public acceptance](backend-status.md#conversation-ui-and-spoken-modes-deployed--november-14-2026).
+**Latest web `d6d2ff6`; gateway `95bdcef` retained.** Browser Start conversation now performs the existing `input.start` → acknowledged current owner → `input.mute {muted:false}` → acknowledged unmute → `input.speak` sequence under one explicit user gesture. Permission is required; the client transmits only after the existing current capture grant. After consumed reply completion, Conversational/Guided request another turn only at the matching waiting snapshot; Quiet stays capture-off. No API/schema/device/database change. Raw Start/Unmute/Resume semantics stay capture-off; the browser's explicit Start listening/Resume conversation action separately requests a new grant. Reconnect/background/Stop/mute/profile/lease/privacy changes never restore intent. [Actual acceptance and limits](backend-status.md#one-action-browser-listening-deployed--november-14-2026), [implementation and Stackchan boundary](handoffs/browser-default-listening.md).
+
+**Backend/previous UI deployment: web/gateway `95bdcef`.** UI branch `integration/frontend-backend/a664e7e` is merged and preserved. Private speech remains on its existing CPU 2+2/HFC setup; decisions remain off. All seven migrations are unchanged. [Observed review and public acceptance](backend-status.md#conversation-ui-and-spoken-modes-deployed--november-14-2026).
 
 New exact live demo HTTP operations (existing private gate, explicit demo enablement and same-origin checks; no generic live RPC):
 

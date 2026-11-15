@@ -187,3 +187,22 @@ test('an explicit resume requests ready first; unmute alone does not opt into co
   f.state({ phase: 'waiting', micMuted: false });
   expect(f.requests()).toBe(1);
 });
+
+test('late failure of an old capture request cannot disable a newly started conversation', async () => {
+  const f = fixture();
+  f.connection.session = f.session;
+  let reject!: (reason: Error) => void;
+  f.audio.speak = () =>
+    new Promise((_, fail) => {
+      reject = fail;
+    });
+  await f.c.start();
+  f.c.stop();
+  f.audio.speak = async () => {};
+  await f.c.start();
+  reject(new Error('Retired microphone request'));
+  await Bun.sleep(0);
+  expect(f.enabled.at(-1)).toBe(true);
+  expect(f.errors).toEqual([]);
+  f.c.stop();
+});

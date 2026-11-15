@@ -38,7 +38,7 @@ The current frontend tester's gateway does not need restarting for this change.
 
 ## Observed candidate checks
 
-- Bun 1.4.4 frozen install; **344 tests passed / 5,425 expectations, zero
+- Bun 1.4.4 frozen install; **345 tests passed / 5,427 expectations, zero
   failures/skips**, using isolated databases. Type/Svelte zero errors/warnings,
   production build, formatting and whitespace passed.
 - New tests cover Start/unmute acknowledgment, one request per turn, interim
@@ -84,3 +84,7 @@ Use [the current backend API](../backend_api.md) for the exact hello, 16 kHz mon
 PCM16/20 ms frames, grants, negotiated output rates, receipts and cancellation.
 No STT/TTS inference runs on the ESP32. Actual hardware/human-room acceptance and
 counterpart review remain pending.
+
+## Observed deployment
+
+Web `d6d2ff6` is installed; gateway `95bdcef` and speech were retained. Gateway PID/start timestamp byte-matched around the web-only restart. Rollback pointer `.data/default-listening-rollback-path`. Actual public Chromium, on a newly created fictional profile, used one Start and in-memory fixed speech through real browser capture/VAD, local STT, the configured external LLM and HFC TTS. One reply was consumed by Web Audio and two capture requests occurred without a second button click; Mute stopped input without restart, then Stop ended the session. Zero runtime errors; no human mic/physical-speaker claim. Only the rehearsal profile/endpoint was removed. Refresh and explicitly Start/Resume to load/use the new flow. The final late-old-request test raised the full clean count to 345/5,427; no deployed runtime change was needed for that test.

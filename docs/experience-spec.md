@@ -109,7 +109,7 @@ An avatar may blink or make small, slow movements. Avoid flashing, sudden jumps,
 
 Starting conversation or an activity from home begins a session. Moving between conversation and activities keeps the session open. Stop ends it and triggers journal saving. Pause keeps it open without capture, speech, or advancing activity timers.
 
-For the initial demo, use turn-based voice interaction: capture audio only in the visible listening state. Keep the microphone off during Lemmi's speech, processing, pause, home, and ended states. A clearly labeled **Speak now** control lets the participant interrupt Lemmi: cancel output before activating capture. Continuous listening and simultaneous speech are deferred.
+For the demo, capture audio only in the visible listening state, with the microphone off during Lemmi's speech, processing, pause, home and ended states. Following the user's November 14 usability correction, browser **Start conversation** opts into microphone permission/unmute and an initial fresh capture grant in one action. Conversational/Guided request the next granted turn after actual consumed output; Quiet waits. Mute is a visible option rather than a separate startup hurdle. Type instead cancels the loop and uses capture-off ready; Pause/Stop/background/disconnect/authority changes retire intent. Browser Start listening or Resume conversation is an explicit new opt-in after interruption. Raw Unmute/Resume commands never grant capture. Half-duplex playback/capture and bounded turns remain; simultaneous speech and background recording are not implemented.
 
 | State | Visible wording | Microphone | Behavior |
 | --- | --- | --- | --- |
@@ -363,3 +363,6 @@ Solitaire is the bottom/last stretch item, after all committed work and other op
 
 
 November 14 integration clarification: the user explicitly authorized full fictional multi-profile support. Alex remains the initial profile; separately created fictional participants have isolated authorized context/assets/sessions. Existing labeled example cards remain preview-only. Multiple endpoints may observe one profile, with explicit handoff and one active audio owner. This supersedes earlier Alex-only demo restrictions for fictional profiles only; it does not authorize real participant data or infer care readiness. See [backend API](backend_api.md) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).
+
+
+November 14 browser listening implementation: web `d6d2ff6` follows the explicit Start behavior above, with direct Mute/Type controls and manual finish on the listening indicator. Initial silence pauses after 15 seconds without model submission. Modal typing/reply/exit Resume never opts into listening. Real browser fixture and public synthetic audio checks are recorded in [backend status](backend-status.md); human microphone/room, hardware and full accessibility acceptance remain pending.
