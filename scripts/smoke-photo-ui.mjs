@@ -13,6 +13,7 @@ const browser = await chromium.launch({
 const errors = [];
 let portrait = false;
 let failImage = false;
+let photoRequests = 0;
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   page.on('pageerror', (e) => errors.push(e.message));
@@ -39,6 +40,7 @@ try {
         },
       });
     if (path.includes('/photo-assets/')) {
+      photoRequests++;
       if (failImage) return route.fulfill({ status: 503 });
       const [w, h] = portrait ? [320, 640] : [640, 480];
       return route.fulfill({
@@ -124,6 +126,10 @@ try {
       },
       emit,
       publish,
+      refreshAuthority() {
+        session = { ...session, privacyRevision: session.privacyRevision + 1 };
+        publish();
+      },
     };
   }, repoRoot);
   await page.getByRole('button', { name: 'Start listening', exact: true }).waitFor();
@@ -163,6 +169,19 @@ try {
       );
     }
   }
+  const beforeSnapshots = photoRequests;
+  for (let n = 0; n < 20; n++) {
+    await page.evaluate(() => window.review.showPhoto('f1000000-0000-4000-8000-000000000002'));
+    await page.waitForTimeout(20);
+  }
+  assert.equal(photoRequests, beforeSnapshots, 'unchanged snapshots reload the protected photo');
+  await page.evaluate(() => window.review.refreshAuthority());
+  await page.waitForFunction(() => document.querySelector('.picture img')?.naturalWidth === 320);
+  assert.equal(
+    photoRequests,
+    beforeSnapshots + 1,
+    'privacy revision did not reauthorize the photo',
+  );
   failImage = true;
   await page.evaluate(() => window.review.showPhoto('f1000000-0000-4000-8000-000000000003'));
   await page.getByRole('button', { name: 'Try picture again', exact: true }).waitFor();

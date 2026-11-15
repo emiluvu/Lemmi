@@ -18,8 +18,11 @@
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
   let source = $state('');
   let attempt = $state(0);
+  // Activity snapshots are fresh objects even when the selected image is the
+  // same. Depend on the scalar ID so playback/heartbeat updates keep the blob.
+  let selectedAssetId = $derived(assetId);
   $effect(() => {
-    const id = assetId;
+    const id = selectedAssetId;
     attempt;
     const controller = new AbortController();
     let active = true;
