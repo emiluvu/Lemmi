@@ -349,6 +349,8 @@ if (process.env.LEMMI_MODE === 'live') {
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  if (process.env.LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE)
+    console.info('Lemmi transport diagnostics enabled (one selected endpoint; content-free)');
   console.info(
     `Lemmi authenticated CONTROL gateway on loopback port ${gateway.server.port}; HTTPS/WSS proxy required; media/contact unavailable`,
   );
