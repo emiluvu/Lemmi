@@ -1318,3 +1318,39 @@ Stackchan transport diagnostics are off; evidence and rollback pointers remain
 saved. No further code change, deployment, restart or test was performed for
 this final handoff. Next session should reproduce the user's remaining bugs
 against these exact revisions before choosing another fix.
+
+## Access page visual integration — November 15, 2026
+
+Source implemented in isolated branch `codex/auth-welcome`, based on `435b73a`.
+Integration/deployment handoff: [auth-welcome.md](handoffs/auth-welcome.md).
+The `/access` gate now reuses the supplied Lemmi logo, Nunito font, cream paper
+texture, sage palette and brown outlines. Locked, rejected-key, unlocked,
+relocked and throttled states share the responsive page. Successful unlock
+offers the existing caregiver and participant destinations; the arrival form
+contains only the key entry and one primary action.
+
+The affected interface is the server-rendered access HTML and its CSP. A hash
+permits only the exact fixed stylesheet; images/fonts use existing same-origin
+public assets already listed in the proxy template. Scripts remain blocked.
+Origin checks, signed cookies, rate limits, independent caregiver authorization
+and POST unlock/logout are retained. No dependency, route, proxy, environment,
+database, speech or firmware changes are required.
+
+Observed locally with Bun 1.4.4: frozen install, type/Svelte checks (zero errors
+or warnings), production build, seven private-access tests / 64 expectations,
+formatting and whitespace checks. Sandbox permission errors on the existing
+loopback gateway test and build worker were resolved by rerunning with the
+required execution permissions; the reruns passed.
+
+Chromium inspected the actual access handler with fictional credentials at
+1280×900, 390×844, 320×740 and a 640×450 viewport representing the available
+layout area at 200% desktop zoom. Observed no horizontal overflow, runtime or
+CSP errors. Pre-unlock logo/paper/font/favicon loaded; native wrong-key,
+unlock, cookie reload and lock forms passed; keyboard Tab/focus outlines passed.
+Screenshots: `/tmp/lemmi-auth-desktop.png`, `/tmp/lemmi-auth-mobile.png`,
+`/tmp/lemmi-auth-rejected.png`, `/tmp/lemmi-auth-unlocked.png`.
+
+A read-only technical agent review found no blocking access/CSP issues. Next
+handoff: Kylie reviews visual integration; Anay integrates the server template
+and deploys the web build through the existing process. No live deployment,
+provider, participant data or hardware checks were performed in this task.

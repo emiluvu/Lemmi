@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { createHash } from 'node:crypto';
 import {
   privateAccessKey,
   controlConfig,
@@ -12,6 +13,58 @@ const key = 'private-access-fixture-independent-1234567890';
 const origin = 'https://lemmi.invalid';
 const now = 1_800_000_000_000;
 const request = (headers: Record<string, string> = {}) => new Request(origin, { headers });
+test('access presentation keeps scripts blocked and authorizes only its exact stylesheet', async () => {
+  const handler = createPrivateAccessHandler();
+  const response = await handler(new Request(origin + '/access'), key, origin, now);
+  const html = await response.text();
+  const stylesheet = html.match(/<style>([\s\S]*?)<\/style>/)?.[1];
+  expect(stylesheet).toBeDefined();
+  const hash = createHash('sha256').update(stylesheet!).digest('base64');
+  const policy = response.headers.get('content-security-policy')!;
+  expect(policy).toContain(`style-src 'sha256-${hash}'`);
+  expect(policy).toContain("default-src 'none'");
+  expect(policy).toContain("img-src 'self'; font-src 'self'");
+  expect(policy).toContain("form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+  expect(policy).not.toContain('unsafe-inline');
+  expect(html).not.toContain('<script');
+  expect(html).not.toContain(key);
+  expect(html).toContain('/images/brand/lemmi.png');
+  expect(html).toContain('<label for="access-key">');
+  expect(html).not.toContain('href="/caregiver"');
+});
+test('access feedback clears rejected keys and presents destinations after unlocking', async () => {
+  const handler = createPrivateAccessHandler();
+  const submit = (value: string) =>
+    handler(
+      new Request(origin + '/access', {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ key: value }),
+      }),
+      key,
+      origin,
+      now,
+    );
+  const rejected = await submit('<script>untrusted-key</script>');
+  expect(rejected.status).toBe(401);
+  const html = await rejected.text();
+  expect(html).toContain('role="alert"');
+  expect(html).toContain('aria-invalid="true"');
+  expect(html).not.toContain('untrusted-key');
+  const unlocked = await submit(key);
+  const cookie = unlocked.headers.get('set-cookie')!.split(';')[0]!;
+  for (const response of [
+    unlocked,
+    await handler(new Request(origin + '/access', { headers: { cookie } }), key, origin, now),
+  ]) {
+    const body = await response.text();
+    expect(body).toContain('href="/caregiver"');
+    expect(body).toContain('href="/participant/conversation"');
+    expect(body).toContain('action="/access/logout"');
+    expect(body).not.toContain('name="key"');
+    expect(body).not.toContain(key);
+  }
+});
 test('private gate is independent, rejects malformed secrets, and preserves legacy opt-out', () => {
   expect(() =>
     controlConfig({
