@@ -183,7 +183,7 @@ function automatic(overrides = {}) {
 }
 
 test('automatic turn ending tolerates thinking pauses and resumed speech, then submits exactly once', async () => {
-  const f = automatic();
+  const f = automatic({ silenceMs: 1500 });
   try {
     await f.audio.speak();
     expect(f.track.enabled).toBe(false);

@@ -140,16 +140,16 @@ export function fixedInputReply(route: InputRoute, language: 'en' | 'de'): strin
       : "I can't assess that. A healthcare professional can discuss your concerns.";
   if (route === 'bereavement')
     return de
-      ? 'Darüber können Sie mit einer Person sprechen, der Sie vertrauen.'
-      : 'This is something to talk through with someone you trust.';
+      ? 'Das kann eine schwere Frage sein. Wir können uns Zeit lassen. Eine vertraute Person kann Ihnen helfen, darüber zu sprechen.'
+      : 'That can be a difficult question. We can take our time. Someone you trust may be able to help you talk it through.';
   if (route === 'frightening')
     return de
       ? 'Das klingt beängstigend. Ich kann den Raum nicht überprüfen. Bitte wenden Sie sich an eine Person, der Sie vertrauen.'
       : "That sounds frightening. I can't check the room. Please contact someone you trust for support.";
   if (route === 'personal_location')
     return de
-      ? 'Ich kann den Aufenthaltsort einer Person nicht überprüfen. Bitte fragen Sie eine Person, der Sie vertrauen.'
-      : "I can't verify someone's location. Please ask someone you trust.";
+      ? 'Es ist verständlich, jemanden sehen zu wollen, der Ihnen wichtig ist. Ich weiß nicht, wo die Person gerade ist. Eine vertraute Person kann Ihnen vielleicht helfen, das herauszufinden.'
+      : "It's understandable to want to see someone important to you. I don't know where they are right now. Someone you trust may be able to help you find out.";
   if (route === 'navigation')
     return de
       ? 'Bitte wenden Sie sich an eine Person, der Sie vertrauen, wenn Sie Hilfe beim Heimweg brauchen.'
@@ -174,19 +174,20 @@ export function normalizeVoiceCommand(text: string): string {
 export function requestedActivity(text: string): 'photo' | 'teaching' | 'unavailable' | null {
   const value = normalizeVoiceCommand(text);
   const invitation =
-    /^(?:please )?(?:(?:start|play|open|do|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|can we) (?:play|start|do|open)) (?:the )?/;
-  const name = value.replace(invitation, '').replace(/ please$/, '');
+    /^(?:please )?(?:(?:start|play|open|do|try|begin|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|can we|could we) (?:play|start|do|open|try)) (?:the )?/;
+  const name = value.replace(invitation, '').replace(/,? please$/, '');
   if (
     /^(?:photo stor(?:y|ies)|photo album(?: talk)?|explore pictures|look at pictures)$/.test(name)
   )
     return 'photo';
-  if (name === 'teach lemmi') return 'teaching';
+  // Reviewed name spellings from local ASR, still anchored to the whole invitation.
+  if (/^teach (?:lemmi|lemmy|lemme|lemi)(?: game)?$/.test(name)) return 'teaching';
   if (/^(?:music|20 questions|twenty questions|picture matching|object matching)$/.test(name))
     return 'unavailable';
   return null;
 }
 export function requestsOpenConversation(text: string): boolean {
-  return /^(?:back to (?:the )?conversation|(?:finish|end) (?:teach(?:ing)? lemmi|teaching|photo story|explor(?:e|ing) pictures)|let's just talk|let us just talk)$/.test(
+  return /^(?:back to (?:the )?conversation|(?:finish|end) (?:teach(?:ing)? (?:lemmi|lemmy|lemme|lemi)(?: game)?|teaching|photo story|explor(?:e|ing) pictures)|let's just talk|let us just talk)$/.test(
     normalizeVoiceCommand(text),
   );
 }

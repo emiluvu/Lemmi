@@ -44,7 +44,6 @@
   let connected = $state(false);
   let busy = $state(false);
   let message = $state('');
-  let newName = $state('');
   let text = $state('');
   let reply = $state('');
   let transcript = $state<ConversationTranscriptEntry[]>([]);
@@ -90,9 +89,6 @@
     } finally {
       busy = false;
     }
-  }
-  async function refreshProfiles() {
-    profiles = show(await setup.profiles()) ?? [];
   }
   function received(event: ServerEvent) {
     if (event.type === 'device.ready') {
@@ -328,32 +324,6 @@
     }
     if (session?.phase === 'paused' && current()) control('input.resume');
   }
-  async function select(profileId: string) {
-    await run(async () => {
-      connectionEpoch++;
-      conversation?.stop();
-      conversation = null;
-      audio?.close();
-      audio = null;
-      connection?.close();
-      connection = null;
-      session = null;
-      clearConversation();
-      text = '';
-      connected = false;
-      assignment = show(await setup.enroll(profileId));
-      if (assignment) connect();
-    });
-  }
-  async function createProfile() {
-    await run(async () => {
-      const profile = show(await setup.create(newName));
-      if (profile) {
-        profiles = [...profiles, profile];
-        newName = '';
-      }
-    });
-  }
   let exitGate = $state<{ requestExit: () => void; isOpen: () => boolean }>(null!);
   let controlsDialog = $state<HTMLDialogElement>(null!);
   let typingDialog = $state<HTMLDialogElement>(null!);
@@ -453,15 +423,17 @@
         message = 'Participant setup is not enabled on this server.';
         return;
       }
-      await refreshProfiles();
-      if (disposed) return;
       const current = await setup.current();
       if (disposed) return;
       if (current.ok && (!requestedProfileId || requestedProfileId === current.data.profileId)) {
         assignment = current.data;
+        profiles = current.data.profile ? [current.data.profile] : [];
         connect();
       } else if (!current.ok && current.error.code !== 'UNAUTHORIZED')
         message = current.error.message;
+      else
+        message =
+          'Choose this browser’s profile in the caregiver workspace before opening Conversation.';
     });
     const background = () => {
       if (document.visibilityState === 'hidden') {
@@ -639,19 +611,11 @@
         {/if}
       {/if}
     {:else if demoEnrollment}
-      <label for="choose-participant">Choose a participant</label>
-      <select
-        id="choose-participant"
-        onchange={(event) => {
-          if (event.currentTarget.value) void select(event.currentTarget.value);
-        }}
-        disabled={busy}
-      >
-        <option value="">Choose a profile</option>
-        {#each profiles as profile}<option value={profile.id}>{profile.preferredName}</option
-          >{/each}
-      </select>
-      <p>Use the caregiver exit to set up a new profile.</p>
+      <p>
+        {busy
+          ? 'Opening your conversation…'
+          : 'Use the caregiver exit to choose a profile in the caregiver workspace.'}
+      </p>
     {/if}
     {#if photoLoadError}<p role="alert">
         The picture is unavailable. Pause or choose another activity.
@@ -944,8 +908,7 @@
   .dialog-heading h2 {
     margin: 0;
   }
-  textarea,
-  select {
+  textarea {
     width: 100%;
     padding: 10px;
     margin: 12px 0;

@@ -1,5 +1,9 @@
 # Lemmi backend status
 
+## Response and profile-entry fixes — reviewed, rollout pending
+
+Based on `0f299c4`: browser silence default 1,000 ms; reviewed ASR spellings/polite invitations select Teach Lemmi; caregiver cards enroll the selected profile before conversation, with no participant dropdown and a guarded initial entry; warmer grounded fixed family replies and model guidance. Select an 8-second external model deadline after observing a 20-second stall. No migration/new public route; current speech CPU 2+2/HFC, CUDA/Jev off. **350 tests / 5,644 expectations**, no failures/skips; type/Svelte, build, formatting and isolated production/browser checks passed. Live family follow-ups: 5/6 accepted, one Quiet reply explicitly rejected/unavailable; human semantic review pending. [Measurements, failures, bounded coverage and rollout](handoffs/voice-response-and-profile-entry.md).
+
 ## One-action browser listening deployed — November 14, 2026
 
 **Web runtime `d6d2ff6`; gateway `95bdcef` and private speech retained.** User prioritized microphone usability while another frontend session was active. Restarted **only web**; recorded gateway PID/start timestamp byte-matched before/after, preserving the existing authority/connections. No API, schema, migration, provider/speech configuration or existing credential change. Protected rollback pointer `.data/default-listening-rollback-path`.

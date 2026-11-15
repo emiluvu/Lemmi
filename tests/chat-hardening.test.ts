@@ -35,6 +35,7 @@ test('reviewed sensitive and unclear English inputs work at every preset without
   const cases = [
     ['Who are you?', 'identity', false],
     ['Where does Maya live?', 'personal_location', false],
+    ['Where is my husband?', 'personal_location', false],
     ['Where does Farah live?', 'personal_location', false],
     ['Where does Mary Jane live?', 'personal_location', false],
     ['Should I take another pill?', 'medication', false],
@@ -140,6 +141,29 @@ test('repeated identity and unclear turns stay patient without reprompt loops, p
   expect(c.snapshot()?.phase).toBe('ended');
 });
 
+test('family-location replies offer warmth and practical support; worried follow-ups carry grounded guidance and no durable text', async () => {
+  let followupSystem = '',
+    followupHistory = '';
+  const c = setup({
+    async complete(input) {
+      followupSystem = input.system;
+      followupHistory = JSON.stringify(input.history);
+      return ok({ text: 'That sounds worrying. We can take our time together.', language: 'en' });
+    },
+  });
+  const first = await submit(c, 'Where is my husband?');
+  expect(first.ok && first.data.kind === 'reply' && first.data.reply.source).toBe('fixed');
+  const reply = first.ok && first.data.kind === 'reply' ? first.data.reply.text : '';
+  expect(reply).toContain('understandable');
+  expect(reply).toContain('Someone you trust');
+  expect(reply).not.toMatch(/he(?:'s| is) safe|busy|at work|coming later|talked with|nieces/i);
+  expect((await submit(c, 'I want to see him now. I am so worried!')).ok).toBe(true);
+  expect(followupSystem).toContain('acknowledge the expressed feeling warmly');
+  expect(followupSystem).toContain('Never invent reassurance');
+  expect(followupHistory).toContain('Where is my husband?');
+  expect(JSON.stringify(c.persistenceSnapshot())).not.toContain('husband');
+});
+
 test('malformed, overlong, multiple-question and unsupported action claims are never accepted or replayed as successful chat', async () => {
   const cases: [CommunicationPreset, string][] = [
     ['guided', 'One? Two?'],
@@ -149,6 +173,10 @@ test('malformed, overlong, multiple-question and unsupported action claims are n
     ['quiet', 'a'.repeat(241)],
     ['conversational', '\u0000Hidden'],
     ['guided', 'I have contacted your caregiver.'],
+    ['guided', 'I just talked with him. He is coming later.'],
+    ['guided', 'I have just spoken to your husband.'],
+    ['guided', "I've just talked to him."],
+    ['guided', 'I spoke with your wife.'],
     ['guided', "I'll call your family."],
     ['guided', '<think>private reasoning marker</think>Hello.'],
     ['guided', 'See https://example.invalid'],

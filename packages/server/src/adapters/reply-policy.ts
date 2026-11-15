@@ -12,7 +12,7 @@ export function permittedModelReply(text: string, support: CommunicationSupport)
     !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text) &&
     !/\p{Cf}/u.test(text) &&
     !/```|<[^>]+>|https?:\/\//iu.test(text) &&
-    !/\bi(?: have|'ve| just)? (?:called|contacted|notified|alerted|messaged|checked your room)\b/iu.test(
+    !/\bi(?:(?: have|'ve)(?: just)?| just)? (?:called|contacted|notified|alerted|messaged|checked your room|(?:talked|spoken|spoke) (?:to|with))\b/iu.test(
       normal,
     ) &&
     !/\bi(?: will|'ll) (?:call|contact|notify|alert|message) (?:your|the) (?:caregiver|family|doctor|emergency services)\b/iu.test(

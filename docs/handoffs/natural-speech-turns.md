@@ -1,5 +1,7 @@
 # Automatic browser turn ending and speech diagnostics
 
+**Current update:** [response timing/profile entry](voice-response-and-profile-entry.md) supersedes the original 1500 ms trial with a 1000 ms browser default, configurable over 1000–8000 ms. [One-action listening](browser-default-listening.md) supersedes the original no-continuation behavior below. Original branch observations are retained as history.
+
 Feature branch `anay/natural-speech-turns`, based on frontend/backend integration `a7d5528`. Isolated worktree: `/tmp/lemmi-natural-speech-turns`. Undeployed; the shared checkout and running backend configuration are unchanged.
 
 ## Behavior
@@ -21,7 +23,7 @@ Set public values in the **web process environment** before startup. `apps/web/s
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `PUBLIC_LEMMI_AUTO_TURN_END` | `1` | `0` retains manual Finish speaking only |
-| `PUBLIC_LEMMI_END_SILENCE_MS` | `1500` | Integer 1500–8000 ms after speech; trial setting, not validated for dementia |
+| `PUBLIC_LEMMI_END_SILENCE_MS` | `1000` | Integer 1000–8000 ms after speech; trial setting, not validated for dementia |
 | `PUBLIC_LEMMI_SPEECH_DIAGNOSTICS` | `0` | Opt-in browser console timings |
 | `LEMMI_SPEECH_DIAGNOSTICS` | `0` | Opt-in gateway console timings in live speech mode |
 

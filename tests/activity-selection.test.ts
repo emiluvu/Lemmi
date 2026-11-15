@@ -198,11 +198,20 @@ test('activity selection recognizes explicit invitations and leaves incidental/n
   expect(requestedActivity('Please start Photo Story.')).toBe('photo');
   expect(requestedActivity('Explore pictures')).toBe('photo');
   expect(requestedActivity('Can we play Teach Lemmi?')).toBe('teaching');
+  for (const name of ['Lemmi', 'Lemmy', 'Lemme', 'Lemi']) {
+    expect(requestedActivity(`Let's play Teach ${name}.`)).toBe('teaching');
+    expect(requestedActivity(`Can we play the Teach ${name} game?`)).toBe('teaching');
+    expect(requestedActivity(`Could we try Teach ${name}, please?`)).toBe('teaching');
+  }
   for (const text of [
     'I used to play music',
     'Do not start Photo Story',
     'I want to stop',
     'What is a photo story?',
+    "Don't play Teach Lemmy",
+    'I used to play the Teach Lemmy game',
+    'She said "Let\'s play Teach Lemmy"',
+    'Can we play Teach Lemmy or stop?',
   ])
     expect(requestedActivity(text)).toBeNull();
 });
@@ -237,12 +246,19 @@ test('unavailable games remain explicit and paused/stale selections cannot start
   expect(f.c.snapshot()?.teaching).toBeNull();
   expect(f.calls()).toBe(0);
 });
-for (const text of ['Let’s play Teach Lemmi', 'Start Photo Story', 'Explore pictures']) {
+for (const text of [
+  'Let’s play Teach Lemmi',
+  "Let's play Teach Lemmy.",
+  'Can we play the Teach Lemmy game?',
+  'Start Photo Story',
+  'Explore pictures',
+]) {
   test(`STT selection ${text} receives a fresh output turn with receipt-backed playback`, async () => {
     const f = fixture(text);
     const old = f.c.snapshot()!;
     const result = value<any>(await f.capture());
     expect(result.kind).toBe('reply');
+    expect(f.c.snapshot()?.conversationMode).toBe(text.includes('Teach') ? 'teach_lemmi' : 'open');
     expect(result.session.generation).toBeGreaterThan(old.generation);
     const output = f.c.drainSpeechOutput()!;
     expect(output.chunks.length).toBe(2);

@@ -190,38 +190,12 @@ try {
   });
   const gateCookie = unlock.headers.get('set-cookie')?.split(';')[0];
   check(gateCookie, 'Unlock cookie missing');
-  const page = await request('/participant', 'GET', undefined, gateCookie);
-  const html = await page.text();
+  const unselectedPage = await request('/participant', 'GET', undefined, gateCookie);
   check(
-    page.status === 200 && html.includes('Choose a participant') && html.includes('caregiver exit'),
-    'Production participant setup page failed',
-  );
-  const navigationCookie = page.headers.get('set-cookie')?.split(';')[0];
-  check(navigationCookie, 'Conversation navigation cookie missing');
-  const lockedCookie = `${gateCookie}; ${navigationCookie}`;
-  check(
-    (await request('/caregiver', 'GET', undefined, lockedCookie)).status === 303,
-    'Conversation exit navigation bypass',
-  );
-  check(
-    (await request('/v1/demo/profiles', 'POST', { preferredName: 'Blocked fixture' }, lockedCookie))
-      .status === 403,
-    'Locked browser changed profiles',
-  );
-  check(
-    (await request('/v1/demo/conversation-exit', 'POST', { password: '1111' }, lockedCookie))
-      .status === 401,
-    'Wrong exit code accepted',
-  );
-  const exited = await request(
-    '/v1/demo/conversation-exit',
-    'POST',
-    { password: '7631' },
-    lockedCookie,
-  );
-  check(
-    exited.status === 200 && exited.headers.get('set-cookie')?.includes('Max-Age=0'),
-    'Configured exit code did not clear navigation lock',
+    unselectedPage.status === 303 &&
+      unselectedPage.headers.get('location') === '/caregiver' &&
+      !unselectedPage.headers.has('set-cookie'),
+    'Unselected conversation did not return to caregiver setup',
   );
   for (const [path, mime] of [
     ['/fonts/nunito-latin-variable.ttf', 'font/ttf'],
@@ -307,6 +281,41 @@ try {
     'Browser token leaked or cookie missing',
   );
   const browserCookie = `${gateCookie}; ${endpointCookie}`;
+  const page = await request('/participant', 'GET', undefined, browserCookie);
+  const html = await page.text();
+  check(
+    page.status === 200 &&
+      !html.includes('Choose a participant') &&
+      html.includes('Talk with Lemmi'),
+    'Selected participant conversation page failed',
+  );
+  const navigationCookie = page.headers.get('set-cookie')?.split(';')[0];
+  check(navigationCookie, 'Conversation navigation cookie missing');
+  const lockedCookie = `${browserCookie}; ${navigationCookie}`;
+  check(
+    (await request('/caregiver', 'GET', undefined, lockedCookie)).status === 303,
+    'Conversation exit navigation bypass',
+  );
+  check(
+    (await request('/v1/demo/profiles', 'POST', { preferredName: 'Blocked fixture' }, lockedCookie))
+      .status === 403,
+    'Locked browser changed profiles',
+  );
+  check(
+    (await request('/v1/demo/conversation-exit', 'POST', { password: '1111' }, lockedCookie))
+      .status === 401,
+    'Wrong exit code accepted',
+  );
+  const exited = await request(
+    '/v1/demo/conversation-exit',
+    'POST',
+    { password: '7631' },
+    lockedCookie,
+  );
+  check(
+    exited.status === 200 && exited.headers.get('set-cookie')?.includes('Max-Age=0'),
+    'Configured exit code did not clear navigation lock',
+  );
   const robot = (await (
     await request(
       '/v1/demo/enroll',
@@ -488,7 +497,7 @@ try {
   const after = await request('/v1/demo/current', 'GET', undefined, browserCookie);
   check(after.status === 403, 'Revoked browser cookie accepted');
   console.info(
-    'PASS: production participant selector/profile creation, cookie enrollment, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release; scoped public Photo Story media/opening/Stop and gate-only/noncurrent/ended denials. Model and clients are fixtures; no real microphone or speaker.',
+    'PASS: production caregiver profile creation, enrollment before conversation, selected-profile entry/exit controls, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release; scoped public Photo Story media/opening/Stop and gate-only/noncurrent/ended denials. Model and clients are fixtures; no real microphone or speaker.',
   );
 } finally {
   for (const client of clients) client.close();

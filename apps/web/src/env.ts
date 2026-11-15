@@ -13,9 +13,9 @@ export const variables = defineEnvVars({
   PUBLIC_LEMMI_END_SILENCE_MS: {
     public: true,
     schema: (value) => {
-      const ms = Number(value || 1500);
-      if (!Number.isInteger(ms) || ms < 1500 || ms > 8000)
-        throw new Error('End silence must be 1500–8000 ms');
+      const ms = Number(value || 1000);
+      if (!Number.isInteger(ms) || ms < 1000 || ms > 8000)
+        throw new Error('End silence must be 1000–8000 ms');
       return ms;
     },
   },

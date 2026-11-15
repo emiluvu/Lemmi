@@ -13,7 +13,16 @@ test('a short answer starts endpointing; shorter pauses survive and each new tur
   for (let i = 0; i < 99; i++) expect(turn.push(false)).toBe('continue');
   expect(turn.push(false)).toBe('finished');
   expect(new TurnEnd().heardSpeech).toBe(false);
-  for (const ms of [0, 1499, 8001, NaN, Infinity, 2000.5]) expect(() => new TurnEnd(ms)).toThrow();
+  for (const ms of [0, 999, 8001, NaN, Infinity, 2000.5]) expect(() => new TurnEnd(ms)).toThrow();
+});
+
+test('the faster default preserves a shorter pause, resets on resumed speech and ends once after one second', () => {
+  const turn = new TurnEnd();
+  for (let i = 0; i < 5; i++) expect(turn.push(true)).toBe('continue');
+  for (let i = 0; i < 49; i++) expect(turn.push(false)).toBe('continue');
+  expect(turn.push(true)).toBe('continue');
+  for (let i = 0; i < 49; i++) expect(turn.push(false)).toBe('continue');
+  expect(turn.push(false)).toBe('finished');
 });
 
 test('the pinned WebRTC WASM classifies silence and releases its scratch buffer', async () => {

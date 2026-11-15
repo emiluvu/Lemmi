@@ -29,6 +29,30 @@
   let newAvatar = $state<ParticipantProfile['avatarId']>('lemming');
   let newName = $state('');
   let busy = $state(false);
+  let openingProfile = $state<string | null>(null);
+  async function openParticipant(profile: ParticipantProfile, activity = false) {
+    if (openingProfile) return;
+    openingProfile = profile.id;
+    message = '';
+    try {
+      const current = await setup.current();
+      const result =
+        current.ok && current.data.profileId === profile.id
+          ? current
+          : await setup.enroll(profile.id);
+      if (!result.ok) {
+        message = result.error.message;
+        return;
+      }
+      await goto(
+        `/participant/${activity ? 'photo-story' : 'conversation'}?profile=${encodeURIComponent(profile.id)}`,
+      );
+    } catch {
+      message = 'Conversation could not be opened. Please try again.';
+    } finally {
+      openingProfile = null;
+    }
+  }
   const displayedProfiles = $derived(data.live ? liveProfiles : overview ? [overview.profile] : []);
   const previews = $derived(data.live ? previewProfiles : (overview?.previews ?? []));
   async function createProfile(event: SubmitEvent) {
@@ -259,16 +283,29 @@
                 }}>View profile <UIIcon name="arrow" size={19} /></button
               >
               <div class="profile-actions">
-                <a
-                  class="profile-action-button"
-                  href={preview
-                    ? '/preview/application?screen=conversation'
-                    : data.live
-                      ? `/participant/conversation?profile=${encodeURIComponent(profile.id)}`
-                      : '/participant/conversation'}
-                  ><UIIcon name="leaf" size={18} /> Conversation</a
-                >
-                {#if data.live}<a
+                {#if data.live && !preview}<button
+                    class="profile-action-button"
+                    disabled={openingProfile !== null}
+                    aria-label={`Conversation with ${profile.preferredName}`}
+                    onclick={() => void openParticipant(profile)}
+                    ><UIIcon name="leaf" size={18} />
+                    {openingProfile === profile.id ? 'Opening…' : 'Conversation'}</button
+                  >{:else}<a
+                    class="profile-action-button"
+                    href={preview
+                      ? '/preview/application?screen=conversation'
+                      : data.live
+                        ? `/participant/conversation?profile=${encodeURIComponent(profile.id)}`
+                        : '/participant/conversation'}
+                    ><UIIcon name="leaf" size={18} /> Conversation</a
+                  >{/if}
+                {#if data.live && !preview}<button
+                    class="profile-action-button"
+                    disabled={openingProfile !== null}
+                    aria-label={`Photo Story with ${profile.preferredName}`}
+                    onclick={() => void openParticipant(profile, true)}
+                    ><UIIcon name="leaf" size={18} /> Photo Story</button
+                  >{:else if data.live}<a
                     class="profile-action-button"
                     href={preview
                       ? '/preview/application?screen=conversation'
