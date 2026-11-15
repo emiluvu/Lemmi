@@ -1,5 +1,9 @@
 # Lemmi
 
+**Known issues remain:** user reports additional bugs after the latest rollout.
+Debugging will continue in a later session; the checks below are not complete
+user acceptance. [Current runtime and handoff](docs/backend-status.md).
+
 **Conversation recovery deployed — web `9b218b9`:** failed profile setup now
 shows Retry instead of staying on “Loading your companion”. Refresh to load
 the update. Avatar assets and Tilde/Tilda German mapping are intact.
