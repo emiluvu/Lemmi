@@ -31,6 +31,7 @@ import {
   boundedJson,
   type DataRepository,
   type SpeechAdapters,
+  type SpeechConcurrency,
 } from '@lemmi/server';
 
 type SocketData = {
@@ -58,6 +59,7 @@ type Options = {
   caregiverSubject?: string;
   accessKey?: string | null;
   speech?: SpeechAdapters;
+  speechConcurrency?: SpeechConcurrency;
   demoEnrollment?: boolean;
   profiles?: ProfileDetail[];
   devices?: Array<{ profileId: string; deviceId: string; endpoint?: 'browser' | 'robot' }>;
@@ -70,7 +72,9 @@ export function startControlGateway(options: Options) {
   const elapsedNow = options.now ?? (() => performance.now());
   const sessions = new SessionRegistry(
     options.chatAdapter,
-    options.speech ? createScheduledSpeechAdapters(options.speech) : undefined,
+    options.speech
+      ? createScheduledSpeechAdapters(options.speech, 8, options.speechConcurrency)
+      : undefined,
     now,
     () => broadcast(),
     options.demoEnrollment === true,

@@ -1,29 +1,54 @@
 import { fail, type Result } from '@lemmi/contracts';
 import type { SpeechAdapters } from './speech-turns';
 
-/** One bounded, transient FIFO shared by every session using the local speech engines. */
+export interface SpeechConcurrency {
+  stt: number;
+  tts: number;
+}
+
+export function speechConcurrencyConfig(
+  env: Record<string, string | undefined> = process.env,
+): SpeechConcurrency {
+  const count = (key: string) => {
+    const value = env[key] ?? '1';
+    if (!/^[1-4]$/.test(value)) throw new Error('Speech workers must be 1–4 per engine');
+    return Number(value);
+  };
+  return { stt: count('LEMMI_SPEECH_STT_WORKERS'), tts: count('LEMMI_SPEECH_TTS_WORKERS') };
+}
+
+/** One bounded transient queue, FIFO within each independently limited engine. */
 export function createScheduledSpeechAdapters(
   adapters: SpeechAdapters,
   capacity = 8,
+  concurrency: SpeechConcurrency = { stt: 1, tts: 1 },
 ): SpeechAdapters {
   if (!Number.isInteger(capacity) || capacity < 0 || capacity > 64)
     throw new Error('Speech queue capacity must be between zero and 64');
-  type Job = { start: () => void; canceled: boolean };
+  if ([concurrency.stt, concurrency.tts].some((n) => !Number.isInteger(n) || n < 1 || n > 4))
+    throw new Error('Speech workers must be 1–4 per engine');
+  const limits = { ...concurrency };
+  type Kind = keyof SpeechConcurrency;
+  type Job = { kind: Kind; start: () => void; canceled: boolean };
   const waiting: Job[] = [];
-  let active = false;
+  const active: SpeechConcurrency = { stt: 0, tts: 0 };
   const canceled = () => fail('UNAVAILABLE', 'Speech request canceled');
   function pump() {
-    if (active) return;
-    const next = waiting.shift();
-    if (next) next.start();
+    // A blocked STT must not hold up another participant's ready TTS, or vice versa.
+    for (;;) {
+      const index = waiting.findIndex((job) => active[job.kind] < limits[job.kind]);
+      if (index < 0) return;
+      waiting.splice(index, 1)[0]!.start();
+    }
   }
   function schedule<T>(
+    kind: Kind,
     signal: AbortSignal,
     run: () => Promise<Result<T>>,
     discard?: (result: Result<T>) => void,
   ): Promise<Result<T>> {
     if (signal.aborted) return Promise.resolve(canceled());
-    if (active && waiting.length >= capacity)
+    if (active[kind] >= limits[kind] && waiting.length >= capacity)
       return Promise.resolve(fail('UNAVAILABLE', 'Speech capacity reached; retry explicitly'));
     return new Promise((resolve) => {
       let started = false;
@@ -37,10 +62,11 @@ export function createScheduledSpeechAdapters(
         resolve(canceled());
       };
       const job: Job = {
+        kind,
         canceled: false,
         start() {
           started = true;
-          active = true;
+          active[kind]++;
           // Keep ownership until the underlying adapter settles, even if it ignores abort.
           void Promise.resolve()
             .then(() => (signal.aborted ? canceled() : run()))
@@ -55,23 +81,26 @@ export function createScheduledSpeechAdapters(
             )
             .finally(() => {
               signal.removeEventListener('abort', abort);
-              active = false;
+              active[kind]--;
               pump();
             });
         },
       };
       signal.addEventListener('abort', abort, { once: true });
-      if (active) waiting.push(job);
+      if (active[kind] >= limits[kind]) waiting.push(job);
       else job.start();
     });
   }
   return {
+    onTiming: adapters.onTiming,
     stt: {
-      transcribe: (input, signal) => schedule(signal, () => adapters.stt.transcribe(input, signal)),
+      transcribe: (input, signal) =>
+        schedule('stt', signal, () => adapters.stt.transcribe(input, signal)),
     },
     tts: {
       synthesize: (input, signal) =>
         schedule(
+          'tts',
           signal,
           () => adapters.tts.synthesize(input, signal),
           (result) => {

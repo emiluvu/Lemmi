@@ -2,6 +2,11 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { BrowserAudio } from './browser-audio.ts';
+  import {
+    PUBLIC_LEMMI_AUTO_TURN_END,
+    PUBLIC_LEMMI_END_SILENCE_MS,
+    PUBLIC_LEMMI_SPEECH_DIAGNOSTICS,
+  } from '$app/env/public';
   import AvatarArt from './AvatarArt.svelte';
   import VoiceTeaching from './VoiceTeaching.svelte';
   import { mayPresentReply } from '#lib/participant-presentation.ts';
@@ -253,6 +258,13 @@
       (value) => {
         speaking = value;
       },
+      {
+        automatic: PUBLIC_LEMMI_AUTO_TURN_END,
+        silenceMs: PUBLIC_LEMMI_END_SILENCE_MS,
+        onTiming: PUBLIC_LEMMI_SPEECH_DIAGNOSTICS
+          ? (timing) => console.info('Lemmi browser speech timing', JSON.stringify(timing))
+          : undefined,
+      },
     );
     connection.connect();
   }
@@ -404,7 +416,7 @@
             : 'Ready when you are'}
       </h2>
       <p class="conversation-capture" aria-live="polite">
-        {listening ? 'Microphone listening — tap Finish speaking when ready.' : 'Microphone off'} · Camera
+        {listening ? PUBLIC_LEMMI_AUTO_TURN_END ? 'Microphone listening — listening ends after a pause. You can also tap Finish speaking.' : 'Microphone listening — tap Finish speaking when ready.' : 'Microphone off'} · Camera
         off
       </p>
     </header>

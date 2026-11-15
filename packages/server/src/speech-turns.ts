@@ -24,6 +24,11 @@ import { elapsedEpochClock } from './elapsed-clock';
 export interface SpeechAdapters {
   stt: SttAdapter;
   tts: TtsAdapter;
+  onTiming?: (timing: SpeechTiming) => void;
+}
+export interface SpeechTiming {
+  stage: 'stt' | 'reply' | 'tts' | 'turn_end_to_playback_receipt';
+  durationMs: number;
 }
 type ReplyResult = Extract<ConversationTextResult, { kind: 'reply' }>;
 type Owner = {
@@ -38,6 +43,7 @@ type Owner = {
   rates: number[];
   outputWindow: SpeechOutputWindow;
   began: number;
+  submittedAt?: number;
   deadline: number;
   phase: 'capture' | 'processing' | 'queued' | 'playing';
   controller: AbortController;
@@ -95,6 +101,12 @@ export class SpeechTurns {
   }
   busy(): boolean {
     return this.#owner !== null;
+  }
+  private timing(stage: SpeechTiming['stage'], began: number) {
+    // No identifiers, text, audio, or paths. Observability cannot break controls.
+    try {
+      this.adapters.onTiming?.({ stage, durationMs: Math.max(0, Math.round(this.now() - began)) });
+    } catch {}
   }
   inputPending(): boolean {
     return (
@@ -491,6 +503,7 @@ export class SpeechTurns {
       return fail('VALIDATION_ERROR', 'Empty, incomplete or expired capture');
     }
     v.phase = 'processing';
+    v.submittedAt = this.now();
     v.deadline = this.now() + 20_000;
     this.transition('processing', null);
     v.promise = this.run(v);
@@ -502,6 +515,7 @@ export class SpeechTurns {
     signal.addEventListener('abort', cancelChat, { once: true });
     try {
       const pcm = v.input!.subarray(0, v.inputBytes);
+      const sttBegan = this.now();
       let transcript;
       try {
         transcript = await boundedWork(signal, () =>
@@ -513,6 +527,7 @@ export class SpeechTurns {
       }
       if (!this.current(v) || signal.aborted)
         return fail('REVISION_CONFLICT', 'Speech turn canceled');
+      this.timing('stt', sttBegan);
       if (
         !transcript.ok ||
         transcript.data.language !== v.language ||
@@ -523,6 +538,7 @@ export class SpeechTurns {
         return fail('UNAVAILABLE', 'Speech was not recognized; retry explicitly');
       }
       this.transition('waiting', null);
+      const replyBegan = this.now();
       const response = await this.chat(
         {
           sessionId: v.token.id,
@@ -545,10 +561,13 @@ export class SpeechTurns {
           response.data.reply.turnId === fixed.turnId &&
           response.data.session.generation === fixed.token.generation &&
           this.current(fixed)
-        )
+        ) {
+          this.timing('reply', replyBegan);
           return await this.synthesize(fixed, response.data);
+        }
         return fail('REVISION_CONFLICT', 'Speech turn canceled');
       }
+      this.timing('reply', replyBegan);
       return await this.synthesize(v, response.data, signal);
     } catch {
       const current = this.current(v);
@@ -577,6 +596,7 @@ export class SpeechTurns {
       if (!this.current(v)) return fail('REVISION_CONFLICT', 'Speech turn canceled');
       if (!v.fixedFor) this.transition('processing', null);
       const reply = response.reply;
+      const ttsBegan = this.now();
       const spoken = await boundedWork(
         signal,
         () =>
@@ -599,6 +619,7 @@ export class SpeechTurns {
         this.clear(true, !this.retainApprovedTextOnTtsFailure);
         return fail('UNAVAILABLE', 'Speech synthesis unavailable');
       }
+      this.timing('tts', ttsBegan);
       const audio = spoken.data;
       v.output = audio;
       const chunkBytes = Math.floor(audio.sampleRate / 50) * 2;
@@ -703,6 +724,7 @@ export class SpeechTurns {
       if (v.phase !== 'queued' || input.playedChunks !== 0)
         return fail('REVISION_CONFLICT', 'Invalid playback start');
       v.phase = 'playing';
+      if (v.submittedAt !== undefined) this.timing('turn_end_to_playback_receipt', v.submittedAt);
       v.deadline = this.now() + (metadata.byteLength / (metadata.sampleRate * 2)) * 1000 + 5000;
       if (!v.fixedFor) this.transition('speaking', null);
     } else {

@@ -16,9 +16,13 @@ import {
 import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
-import { localSpeechConfig, createLocalSpeechAdapters } from '@lemmi/server';
 import { photoStoryDemoPack, alexProfileDetail } from '@lemmi/activities';
 import { reviewedPhotoDemo } from '../../../packages/server/src/adapters/photo-story-demo';
+import {
+  localSpeechConfig,
+  createLocalSpeechAdapters,
+  speechConcurrencyConfig,
+} from '@lemmi/server';
 function startMockGateway() {
   assertMockMode();
   const photoDemo = process.env.LEMMI_PHOTO_STORY_DEMO === '1';
@@ -284,7 +288,15 @@ if (process.env.LEMMI_MODE === 'live') {
     )
       throw new Error('Enable valid independent STT/TTS configuration before speech startup');
     if (!llm.ok) throw new Error('Configure OpenRouter before enabling the speech pipeline');
-    speech = createLocalSpeechAdapters(selected.data);
+    speech = {
+      ...createLocalSpeechAdapters(selected.data),
+      ...(process.env.LEMMI_SPEECH_DIAGNOSTICS === '1'
+        ? {
+            onTiming: (timing: import('@lemmi/server').SpeechTiming) =>
+              console.info('Lemmi speech timing', JSON.stringify(timing)),
+          }
+        : {}),
+    };
   }
   const config = dataConfig();
   const repository = config ? await openData(config) : undefined;
@@ -292,6 +304,7 @@ if (process.env.LEMMI_MODE === 'live') {
     repository,
     demoEnrollment: process.env.LEMMI_DEMO_ENROLLMENT === '1',
     speech,
+    speechConcurrency: speech ? speechConcurrencyConfig() : undefined,
     caregiverSubject: config?.subject,
     ...controlConfig(),
     port: Number(process.env.GATEWAY_PORT ?? 3001),

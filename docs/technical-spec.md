@@ -210,7 +210,7 @@ Prioritize stop/help control messages over audio processing in bounded queues. D
 | Local pause/stop | Within 250 ms in rehearsal | Fix local handling or disable independent robot mode. |
 | Heartbeat interval / local watchdog | Every 2 s / 6 s since valid heartbeat | Stop capture/output locally; backend pauses session and invalidates its lease. |
 | Initial listening silence | 15 s | Waiting state, one invitation, no prompt loop. |
-| End-of-turn silence | 4 s after detected speech | Finish turn; use explicit turn-end if service timing cannot support it. |
+| End-of-turn silence | 1.5 s (1500 ms) after detected speech | User-selected after Lukas’s browser timing trials. Browser implemented; Stackchan target pending firmware integration/hardware checks. Retain explicit turn-end. |
 | Conversation wait | 20 s from turn submission to first playable response | Cancel turn, suppress late output, offer retry. |
 | Notification send timeout | 15 s per attempt | Reconcile uncertain outcome; one bounded transient retry. |
 | Backup / no-response deadline | 60 s / 120 s from help creation | Backup attempt / no-response status; no automatic send after expiry. |

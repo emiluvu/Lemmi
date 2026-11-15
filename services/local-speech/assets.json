@@ -27,23 +27,25 @@
   "tts": {
     "repository": "rhasspy/piper-voices",
     "revision": "6b9cfaacb4fb2e02a9621227e3c1a48bec9710c3",
-    "directory": "en/en_US/ljspeech/medium",
-    "voice": "en_US-ljspeech-medium",
+    "directory": "en/en_US/hfc_female/medium",
+    "voice": "en_US-hfc_female-medium",
     "sampleRate": 22050,
-    "permissionNote": "Pinned MODEL_CARD identifies the LJ Speech dataset as public domain and links training details. Piper engine is GPL-3.0; retain engine/voice source and license notes when distributing. No weights/audio are committed here.",
+    "permissionNote": "Pinned MODEL_CARD links Hi-Fi-Captain dataset under CC BY-NC-SA 4.0 and hifi_tts_92 fine-tuning provenance. Noncommercial demo selection; retain attribution/share-alike/source records and review permissions before commercial use or redistribution. Piper engine is GPL-3.0. No weights/audio are committed here.",
     "files": [
       {
         "name": "MODEL_CARD",
-        "size": 517
+        "size": 531,
+        "sha256": "0e2c236f7572782e38b58f6ded23d8df231a71483cab2dd9eeae4cafcd1e354a"
       },
       {
-        "name": "en_US-ljspeech-medium.onnx.json",
-        "size": 4972
+        "name": "en_US-hfc_female-medium.onnx.json",
+        "size": 5472,
+        "sha256": "b87a53db0f6b15c0d00e960efc0546f8cf57e103e6ccba7bc41b33beb4572556"
       },
       {
-        "name": "en_US-ljspeech-medium.onnx",
-        "size": 63531379,
-        "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+        "name": "en_US-hfc_female-medium.onnx",
+        "size": 63221984,
+        "sha256": "5b3d6e36a33a1eb0e50b54900c229127e3059400885eb5e8f128ff04b31cd73c"
       }
     ]
   },

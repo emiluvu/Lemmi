@@ -56,6 +56,8 @@ def configure(directory, stt_profile="base"):
     if destination.exists():
         print("Private speech .env already exists; preserved existing settings", flush=True)
         return
+    manifest = json.loads((HERE / "assets.json").read_text())
+    voice = manifest["tts"]["voice"]
     content = [
         "# Private generated speech configuration; never commit this file.",
         "LEMMI_STT_BACKEND=local-http", "LEMMI_TTS_BACKEND=local-http",
@@ -65,8 +67,9 @@ def configure(directory, stt_profile="base"):
         "LEMMI_SPEECH_STT_ENGINE=faster-whisper", "LEMMI_SPEECH_TTS_ENGINE=piper",
         "LEMMI_SPEECH_STT_MODEL_PATH=" + json.dumps(str(directory / ("stt-small" if stt_profile == "small" else "stt"))),
         "LEMMI_SPEECH_STT_DEVICE=cpu", "LEMMI_SPEECH_STT_COMPUTE=int8",
+        "LEMMI_SPEECH_STT_WORKERS=1", "LEMMI_SPEECH_TTS_WORKERS=1", "LEMMI_SPEECH_TTS_DEVICE=cpu",
         "LEMMI_SPEECH_THREADS=4",
-        "LEMMI_SPEECH_VOICE_EN=" + json.dumps(str(directory / "tts/en_US-ljspeech-medium.onnx")),
+        "LEMMI_SPEECH_VOICE_EN=" + json.dumps(str(directory / "tts" / (voice + ".onnx"))),
         "LEMMI_SPEECH_VOICE_DE=", "",
     ]
     fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)

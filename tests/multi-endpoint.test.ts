@@ -453,10 +453,18 @@ test('browser cookie upgrades require the assigned browser endpoint and exact co
 });
 
 test('concurrent speech output is delivered only to each profile owner, never an observer or another profile', async () => {
+  let starts = 0;
+  let bothStarted!: () => void;
+  const together = new Promise<void>((resolve) => {
+    bothStarted = resolve;
+  });
   const h = harness({
+    speechConcurrency: { stt: 2, tts: 2 },
     speech: {
       stt: {
         async transcribe(input) {
+          if (++starts === 2) bothStarted();
+          await together; // Neither profile can complete unless both enter recognition together.
           return ok({ text: input.pcm[0] === 3 ? 'Hello Casey' : 'Hello Alex', language: 'en' });
         },
       },
@@ -511,6 +519,7 @@ test('concurrent speech output is delivered only to each profile owner, never an
       return start.payload;
     };
     const [a, c] = await Promise.all([capture(alex, 2), capture(casey, 3)]);
+    expect(starts).toBe(2);
     for (const [client, marker, meta] of [
       [alex, 2, a],
       [casey, 3, c],

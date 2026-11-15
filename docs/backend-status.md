@@ -1,5 +1,10 @@
 # Lemmi backend status
 
+**Undeployed speech concurrency increment:** separate STT/TTS admission lanes and independently cancelable 1–4-worker engine pools replace the global single-job gate. Match `LEMMI_SPEECH_STT_WORKERS` / `LEMMI_SPEECH_TTS_WORKERS` in gateway and speech-wrapper environments; existing input/output limits and per-profile ownership remain. CUDA TTS is explicitly selectable; target NVIDIA validation is delegated to the server agent. Private `/health` adds engine device/compute and configured/ready worker counts; public HTTP/WSS schemas are unchanged. [Implementation, local evidence and server-agent steps](handoffs/speech-gpu-concurrency.md).
+
+**Selected speech defaults (undeployed):** browser post-speech silence is now **1500 ms**, following the user’s report of Lukas’s trials. New speech provisioning/configuration selects **`en_US-hfc_female-medium`**, shared by browser/Stackchan output (22,050 Hz). Existing private configs remain preserved and require the explicit voice-path/restart step in the [local guide](../services/local-speech/README.md). Firmware detection remains a 1500 ms integration target; no deployed config or firmware was changed.
+**Undeployed speech candidate — `anay/natural-speech-turns`:** optional content-free stage/receipt timings (`LEMMI_SPEECH_DIAGNOSTICS=1`) through the existing coordinator/scheduler, with browser turn ending on integration base `a7d5528`. No API/schema/database/voice/firmware replacement. The deployed revision below is unchanged. [Behavior, configuration and observed limits](handoffs/natural-speech-turns.md); final checks are in the build plan.
+
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
 Deployed web and gateway runtime revision: **`da731c8`** (bounded browser playback buffering, retaining the integrated voice UI, public Photo Story and checkpoint recovery). Later documentation-only commits do not require a runtime restart.

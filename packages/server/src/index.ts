@@ -9,7 +9,7 @@ export * from './caregiver-auth';
 export * from './control-config';
 export * from './device-http';
 export * from './private-access';
-export type { SpeechAdapters } from './speech-turns';
+export type { SpeechAdapters, SpeechTiming } from './speech-turns';
 export * from './adapters/openrouter';
 export * from './adapters/local-speech';
 export type * from './adapters/types';
