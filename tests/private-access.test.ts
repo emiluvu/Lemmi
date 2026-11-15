@@ -16,6 +16,7 @@ const request = (headers: Record<string, string> = {}) => new Request(origin, { 
 test('access presentation keeps scripts blocked and authorizes only its exact stylesheet', async () => {
   const handler = createPrivateAccessHandler();
   const response = await handler(new Request(origin + '/access'), key, origin, now);
+  expect(response.headers.get('cache-control')).toBe('no-store, no-transform');
   const html = await response.text();
   const stylesheet = html.match(/<style>([\s\S]*?)<\/style>/)?.[1];
   expect(stylesheet).toBeDefined();

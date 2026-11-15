@@ -49,7 +49,8 @@ export function hasPrivateAccess(request: Request, key: string | null, now = Dat
 }
 
 const headers = {
-  'Cache-Control': 'no-store',
+  // Keep the script-free, hash-authorized document intact through the edge proxy.
+  'Cache-Control': 'no-store, no-transform',
   'Content-Type': 'text/html; charset=utf-8',
   'Content-Security-Policy': privateAccessPagePolicy,
   // Native form navigation needs its same-origin Origin header for the CSRF check.
