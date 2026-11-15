@@ -231,3 +231,44 @@ The prior statements that voice 0.9 was still installed describe preparation
 before this explicit installation. Next required local step is private USB
 provisioning using the existing helper, then explicit local Connect. Coordinate
 one capture attempt and retain the new voice_transport_probe record on failure.
+
+## Diagnostic hardware result — 07:20 UTC
+
+One explicit local attempt on installed `lemmi-voice/0.9-diag1`; user reports
+disconnection immediately after Speak. Filtered observer receipt times UTC:
+
+- 07:18:58.643 ready: audio=1, output_window=12, language=en, owner=1,
+  phase=paused, stopped=1; TCP_NODELAY=1 and Wi-Fi sleep=0.
+- 07:20:03.969: phase=ready, stopped=0, owner=1.
+- 07:20:20.662: local mic unmuted, acknowledged.
+- 07:20:21.679905: phase=listening, capture=on, playback=off.
+- 07:20:22.601708: `voice_send_failed reason=6 status=2 result=0 bytes=0
+  send_max_ms=113 capture_sent=33 camera=off`.
+- 07:20:22.602068: `voice_transport_probe polls=5 poll_zero=5 poll_error=0
+  poll_max_us=21090 writes=0 write_zero=0 write_want=0 write_error=0
+  write_max_us=0 camera=off`.
+- 07:20:22.803319: transport exit stage=control_send, result=0, opcode=1,
+  upgrade=101, errno=0, wifi=3, reason=0, ready=1, connection age=94549 ms.
+- 07:20:22.803644: capture=off, playback=off.
+- 07:20:23.208735: disconnected.
+
+**New measured distinction:** in the failed bounded write, all five actual SDK
+socket-writability polls returned zero; there were zero TLS write calls.
+Maximum individual poll duration was 21,090 us. Thus the zero return in this
+failure came from poll timeout, not a TLS writer zero/WANT return. This does
+not identify whether ACK delay, loss, peer window, SDK writable low-water
+threshold or another scheduling/network condition caused non-writability.
+No socket error was reported by these polls. Wi-Fi status at exit does not
+exclude earlier link stalls. The 33 completed writes are not TCP ACKs or gateway
+accepts. Observer receipt timestamps do not establish physical Stop latency.
+The installed target is instrumentation, not a successful voice fix.
+
+Anay: correlate the existing endpoint diagnostics and bounded local socket
+sampler for 07:20:21.679–07:20:23.209 UTC (connection began 07:18:58.643),
+especially accepted-frame counts/gaps, close cause and origin queue progress.
+Do not repeat the identical user attempt. Next network evidence should target
+robot-facing ACK/window behavior. If choosing a pinned TCP-library/send-buffer
+experiment, jointly review feasibility/RAM and baseline first; this result
+alone does not establish the buffer size needed or justify a longer blocking
+write timeout. Keep the speaker window unchanged for an isolated comparison.
+No further flash, capture or buffer/protocol change followed this observation.

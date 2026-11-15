@@ -825,3 +825,11 @@ hash-verified on the matched backed-up device; boot at 07:17:08 UTC confirmed
 cleared after reset. No speech or network attempt performed. Counterpart review
 before merge, reprovisioning and measured capture remain pending. This updates
 the earlier preparation-only/no-flash status above.
+
+Diagnostic hardware attempt at 07:20 UTC: after 33 completed frame writes,
+failed bounded write recorded five socket polls, all timed out, zero TLS writer
+calls (max poll 21,090 us). This separates socket-writability timeout from TLS
+retry/zero return for that failure. It does not establish ACK/loss/peer-window
+cause or a fix. Capture-off/disconnect observed; Stop-during-capture latency
+not measured. No repeat requested; Anay origin correlation and robot-facing
+transport investigation pending. See send-stall handoff for exact timestamps.
