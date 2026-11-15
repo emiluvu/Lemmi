@@ -8,6 +8,7 @@ import {
   type SpeechOutputStart,
 } from '@lemmi/contracts';
 import { startControlGateway } from '../apps/realtime/src/control';
+import { consumeGreeting } from './support/consume-greeting';
 
 async function endpoint(
   kind: 'browser' | 'robot',
@@ -34,9 +35,9 @@ async function endpoint(
         },
       },
       tts: {
-        async synthesize() {
+        async synthesize(input) {
           return ok({
-            pcm: output,
+            pcm: input.text.startsWith("Hi, I'm Lemmi") ? new Uint8Array(882) : output,
             sampleRate: 22050,
             encoding: 'pcm_s16le',
             channels: 1,
@@ -139,7 +140,7 @@ async function endpoint(
       throw new Error('Audio not negotiated');
     const window = ready.payload.audio.outputWindowChunks;
     await acknowledged(send('input.start'));
-    await until(() => session?.phase === 'ready');
+    await consumeGreeting(events, send);
     await acknowledged(send('input.mute', { muted: false }));
     if (approvedPrompt) await acknowledged(send('input.teaching.start'));
     else {

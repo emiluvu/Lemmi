@@ -241,7 +241,11 @@ function startMockGateway() {
           const action =
             event.type === 'input.mute' && 'muted' in event.payload
               ? { type: 'mute', muted: event.payload.muted }
-              : { type: event.type.slice(6) };
+              : event.type === 'input.teaching.select'
+                ? { type: 'teaching.select', ...event.payload }
+                : event.type === 'input.teaching.start'
+                  ? { type: 'teaching.start', offerChoices: true }
+                  : { type: event.type.slice(6) };
           const result = coordinator.handle('session.command', {
             commandId: event.event_id,
             sessionId: current.id,

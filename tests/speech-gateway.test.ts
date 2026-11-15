@@ -8,6 +8,7 @@ import {
   type SessionSnapshot,
 } from '@lemmi/contracts';
 import type { ChatAdapter, SpeechAdapters } from '@lemmi/server';
+import { consumeGreeting } from './support/consume-greeting';
 
 async function device(
   options: { speech?: SpeechAdapters; chat?: ChatAdapter; negotiate?: boolean } = {},
@@ -25,21 +26,31 @@ async function device(
         return ok({ text: 'We can enjoy the garden.', language: 'en' });
       },
     },
-    speech: options.speech ?? {
-      stt: {
+    speech: {
+      stt: options.speech?.stt ?? {
         async transcribe() {
           return ok({ text: 'A fictional garden greeting', language: 'en' });
         },
       },
       tts: {
-        async synthesize() {
-          return ok({
-            pcm: output,
-            sampleRate: 22050,
-            encoding: 'pcm_s16le',
-            channels: 1,
-            language: 'en',
-          });
+        async synthesize(input, signal) {
+          if (input.text.startsWith("Hi, I'm Lemmi"))
+            return ok({
+              pcm: new Uint8Array(882),
+              sampleRate: 22050,
+              encoding: 'pcm_s16le',
+              channels: 1,
+              language: 'en',
+            });
+          return options.speech
+            ? options.speech.tts.synthesize(input, signal)
+            : ok({
+                pcm: output,
+                sampleRate: 22050,
+                encoding: 'pcm_s16le',
+                channels: 1,
+                language: 'en',
+              });
         },
       },
     },
@@ -126,7 +137,8 @@ async function device(
     if (ws.readyState === WebSocket.OPEN) send('heartbeat');
   }, 2000);
   send('input.start');
-  await until(() => session?.phase === 'ready');
+  if (options.negotiate !== false) await consumeGreeting(events, send);
+  else await until(() => session?.phase === 'ready');
   send('input.mute', { muted: false });
   await until(() => session?.micMuted === false);
   return {
@@ -137,6 +149,18 @@ async function device(
     until,
     send,
     session: () => session!,
+    async startTeaching() {
+      send('input.teaching.start');
+      await until(() => events.some((e) => e.type === 'response.start'));
+      expect(session?.teaching?.choosingTopic).toBe(true);
+      expect(session?.teaching?.prompt).toContain('gardening');
+      expect(session?.teaching?.prompt).toContain('beaches');
+      for (let i = events.length - 1; i >= 0; i--)
+        if (events[i]!.type.startsWith('response.') || events[i]!.type.startsWith('audio.'))
+          events.splice(i, 1);
+      send('input.teaching.select', { entityId: 'topic:gardening' });
+      await until(() => events.some((e) => e.type === 'response.start'));
+    },
     async capture() {
       send('input.speak', { language: 'en' });
       await until(() => session?.phase === 'listening');
@@ -182,7 +206,7 @@ test('teaching commands share the authorized gateway and read reviewed prompts w
       'teaching',
       true,
     );
-    d.send('input.teaching.start');
+    await d.startTeaching();
     await d.until(() => d.events.some((e) => e.type === 'response.start'));
     expect(d.session().teaching?.entityId).toBe('topic:gardening');
     expect(d.session().captureGrant).toBeNull();
@@ -216,7 +240,7 @@ test('teaching voice explanation reaches the existing STT/model/TTS path with on
     },
   });
   try {
-    d.send('input.teaching.start');
+    await d.startTeaching();
     await d.until(() => d.events.some((e) => e.type === 'response.start'));
     const first = d.events.find((e) => e.type === 'response.start')!;
     if (first.type !== 'response.start') throw new Error('Missing prompt');
@@ -276,7 +300,7 @@ test('spoken teaching Next crosses WSS with a fresh generation and audible repla
     },
   });
   try {
-    d.send('input.teaching.start');
+    await d.startTeaching();
     await d.until(() => d.events.some((e) => e.type === 'response.start'));
     d.send('input.pause');
     await d.until(() => d.session().phase === 'paused');
@@ -286,7 +310,7 @@ test('spoken teaching Next crosses WSS with a fresh generation and audible repla
       generation = d.session().generation;
     input.finish();
     await d.until(() => d.events.filter((e) => e.type === 'response.start').length === 2);
-    const reply = d.events.find((e) => e.type === 'response.text');
+    const reply = d.events.find((e) => e.type === 'response.text' && e.generation > generation);
     expect(reply?.type).toBe('response.text');
     if (reply?.type !== 'response.text') throw new Error('Missing fixed teaching reply');
     expect(reply.payload.source).toBe('fixed');
@@ -488,6 +512,7 @@ test('urgent voice guidance uses the paused generation, audible PCM and receipts
     },
   });
   try {
+    const concernAfter = d.events.length;
     const capture = await d.capture(),
       oldGeneration = d.session().generation;
     capture.finish();
@@ -540,6 +565,7 @@ test('urgent voice guidance uses the paused generation, audible PCM and receipts
     expect(pcm.every((x) => x === 0)).toBe(true);
     expect(
       d.events
+        .slice(concernAfter)
         .filter((e) => e.type === 'state.changed')
         .every(
           (e) =>

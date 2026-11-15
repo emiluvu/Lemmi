@@ -66,6 +66,36 @@ export function nextTeachingTopic(
   return remaining.find((t) => preferred.includes(t.entityId)) ?? remaining[0] ?? null;
 }
 
+// Match a complete deliberate choice, never extract a topic from a refusal or story.
+export function requestedTeachingTopic(text: string): string | null {
+  const value = text
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[.!?…]+$/u, '')
+    .replace(/\s+/g, ' ');
+  return (
+    teachingTopics.find((topic) =>
+      new RegExp(
+        `^(?:(?:please )?(?:let's talk about|i'd like to teach you about|i want to teach you about|teach you about|let's choose|choose) )?${topic.label.toLowerCase()}(?:,? please)?$`,
+      ).test(value),
+    )?.entityId ?? null
+  );
+}
+
+export function teachingChoicePrompt(
+  choices: readonly { label: string }[],
+  preset: CommunicationPreset = 'guided',
+): string {
+  if (!choices.length)
+    return 'No eligible teaching topics are available. You can finish and choose something else.';
+  const labels = choices.map((choice) => choice.label.toLowerCase());
+  const names =
+    labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} or ${labels.at(-1)}`;
+  return `You could teach me about ${names}. ${preset === 'quiet' ? 'You can choose a topic or finish whenever you like.' : 'What would you like to teach me about?'}`;
+}
+
 // Explicit, whole-turn choices only. Length, silence and explanations never imply preference.
 // Shared safety routing must run before this conversation-specific routing.
 export function teachingTextIntent(text: string, currentEntityId?: string) {

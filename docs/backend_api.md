@@ -699,3 +699,7 @@ only the conversation lock cookie, not endpoint credentials or the domain gate.
 The production proxy allowlist includes both exact operations.
 No database migration. Cookie removal/browser administration is outside this
 navigation barrier; private caregiver authorization remains separate.
+
+## Local participant greeting/topic-choice candidate — not deployed
+
+The shared device contract adds `input.teaching.select` with `{entityId}`. Teaching snapshots optionally include up to three server-filtered `choices` and `choosingTopic`; public teaching starts first offer a spoken/visible menu. Existing session generations, owner/profile scope, policy checks and cancellation apply. New voice sessions play an application-owned greeting before browser capture; pause/resume/reconnect do not replay it. No route or migration changes. `activity.leave` can close a paused Photo Story while preserving the pause. [Exact behavior, compatibility and validation](handoffs/participant-greetings-exit.md).

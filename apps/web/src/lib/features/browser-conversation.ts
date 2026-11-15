@@ -101,6 +101,14 @@ export class BrowserConversation {
       this.stop();
       return;
     }
+    if (this.stage === 'starting' && session.phase === 'processing') {
+      this.anchor ??= { ...session };
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        this.stop();
+        this.error('The greeting did not finish. Try Start listening again.');
+      }, 30000);
+    }
     if (this.stage !== 'starting' && session.micMuted && this.stage !== 'unmuting') {
       this.stop();
       return;
@@ -118,6 +126,17 @@ export class BrowserConversation {
     }
   }
   playbackCompleted(token: SessionSnapshot) {
+    // A new session greets before its first capture; playback completion still
+    // needs the current ready state and the participant's explicit Start intent.
+    if (
+      this.enabled &&
+      this.stage === 'starting' &&
+      this.anchor &&
+      this.sameContext(this.anchor, token)
+    ) {
+      this.advance();
+      return;
+    }
     if (
       !this.enabled ||
       this.stage !== 'reply' ||

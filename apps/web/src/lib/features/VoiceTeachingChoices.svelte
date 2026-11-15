@@ -17,7 +17,7 @@
     listening?: boolean;
     reply?: string;
     automaticReplies?: boolean;
-    command: (type: string) => void;
+    command: (type: string, payload?: Record<string, unknown>) => void;
   } = $props();
   let status = $derived(
     disabled
@@ -49,7 +49,16 @@
   <h2 id="teaching-title">Teach Lemmi</h2>
   {#if session.teaching}
     <p class="teaching-status" role="status">{status}</p>
-    {#if showTopic}
+    {#if session.teaching.choosingTopic && !disabled && session.phase !== 'paused'}
+      <p class="teaching-prompt">{reply || session.teaching.prompt}</p>
+      <div class="controls" aria-label="Teaching topics">
+        {#each session.teaching.choices ?? [] as choice (choice.entityId)}
+          <button onclick={() => command('input.teaching.select', { entityId: choice.entityId })}
+            >{choice.label}</button
+          >
+        {/each}
+      </div>
+    {:else if showTopic}
       <h3>{session.teaching.topicLabel}</h3>
       <p class="teaching-prompt">{reply || session.teaching.prompt}</p>
       <p>Share whatever you would like. Take your time.</p>
@@ -81,6 +90,7 @@
       <p>There are no more topics to share right now. You can use the shared Stop control.</p>
     {/if}
     <p class="helper">You can pause or stop whenever you like.</p>
+    <button onclick={() => command('input.teaching.finish')} {disabled}>Finish activity</button>
   {:else}
     <p>Lemmi offers a topic. You can tell Lemmi about it, in your own words.</p>
     <ul class="spoken-choices"><li>Say “Let’s play Teach Lemmi”.</li></ul>

@@ -893,7 +893,11 @@ export function startControlGateway(options: Options) {
           const action =
             event.type === 'input.mute' && 'muted' in event.payload
               ? { type: 'mute', muted: event.payload.muted }
-              : { type: event.type.slice(6) };
+              : event.type === 'input.teaching.select'
+                ? { type: 'teaching.select', ...event.payload }
+                : event.type === 'input.teaching.start'
+                  ? { type: 'teaching.start', offerChoices: true }
+                  : { type: event.type.slice(6) };
           result = coordinator.handle('session.command', {
             sessionId: current.id,
             expectedGeneration: event.generation,
@@ -909,9 +913,54 @@ export function startControlGateway(options: Options) {
         if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
         if (
           result.ok &&
+          event.type === 'input.start' &&
+          coordinator.speechConfigured() &&
+          ws.data.playbackRates.length &&
+          current?.id !== coordinator.snapshot()?.id
+        ) {
+          const selected = coordinator.snapshot()!;
+          void coordinator
+            .speakConversationGreeting(
+              {
+                sessionId: selected.id,
+                expectedGeneration: selected.generation,
+                commandId: event.event_id,
+                language: coordinator.language(),
+              },
+              ws.data.playbackRates,
+              ws.data.outputWindow,
+            )
+            .then((spoken) => {
+              if (
+                spoken.ok &&
+                spoken.data.kind === 'reply' &&
+                sockets.has(ws) &&
+                access.current(ws.data.identity) &&
+                ownsEndpoint(ws.data.identity) &&
+                coordinator.speechOutputInfo()?.turnId === spoken.data.reply.turnId
+              )
+                emit(ws, 'response.text', spoken.data.reply);
+              if (!spoken.ok && spoken.error.code !== 'REVISION_CONFLICT' && sockets.has(ws))
+                error(ws, spoken.error.code, spoken.error.message, event.event_id);
+              broadcast();
+            })
+            .catch(() => {
+              if (sockets.has(ws))
+                error(
+                  ws,
+                  'UNAVAILABLE',
+                  'Conversation greeting playback unavailable',
+                  event.event_id,
+                );
+              broadcast();
+            });
+        }
+        if (
+          result.ok &&
           ws.data.playbackRates.length &&
           [
             'input.teaching.start',
+            'input.teaching.select',
             'input.teaching.next',
             'input.teaching.not_sure',
             'input.teaching.avoid',
@@ -931,7 +980,16 @@ export function startControlGateway(options: Options) {
                 ws.data.outputWindow,
               )
               .then((spoken) => {
-                if (!spoken.ok && sockets.has(ws))
+                if (
+                  spoken.ok &&
+                  spoken.data.kind === 'reply' &&
+                  sockets.has(ws) &&
+                  access.current(ws.data.identity) &&
+                  ownsEndpoint(ws.data.identity) &&
+                  coordinator.speechOutputInfo()?.turnId === spoken.data.reply.turnId
+                )
+                  emit(ws, 'response.text', spoken.data.reply);
+                if (!spoken.ok && spoken.error.code !== 'REVISION_CONFLICT' && sockets.has(ws))
                   error(ws, spoken.error.code, spoken.error.message, event.event_id);
                 broadcast();
               })

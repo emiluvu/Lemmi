@@ -74,6 +74,25 @@ test('one Start sequences session Start, unmute acknowledgment and a fresh captu
   expect(f.requests()).toBe(1);
   f.c.stop();
 });
+
+test('a new-session greeting completes before the first fresh capture, and Stop prevents its continuation', async () => {
+  for (const stopped of [false, true]) {
+    const f = fixture();
+    await f.c.start();
+    f.state({ phase: 'processing', micMuted: true });
+    f.audio.hasOutput = true;
+    const output = f.state({ phase: 'speaking', micMuted: true });
+    expect(f.requests()).toBe(0);
+    if (stopped) f.c.stop();
+    f.audio.hasOutput = false;
+    f.c.playbackCompleted(output);
+    f.state({ phase: 'waiting', micMuted: true });
+    expect(f.requests()).toBe(0);
+    f.state({ phase: 'waiting', micMuted: false });
+    expect(f.requests()).toBe(stopped ? 0 : 1);
+    f.c.stop();
+  }
+});
 test('intermediate waiting never overlaps response playback and consumption opens only one later turn', async () => {
   const f = fixture();
   f.connection.session = f.session;

@@ -112,6 +112,11 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     ...base,
+    type: z.literal('input.teaching.select'),
+    payload: z.strictObject({ entityId: IdSchema }),
+  }),
+  z.strictObject({
+    ...base,
     type: z.enum(['input.photo.start', 'input.photo.repeat']),
     payload: z.strictObject({}),
   }),

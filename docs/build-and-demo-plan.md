@@ -1,5 +1,9 @@
 # Lemmi — Build and demo plan
 
+### Participant usability candidate — November 14, 2026 (local, not deployed)
+
+`codex/participant-greetings-exit`, based on main `f3e3b41`, adds fixed spoken conversation/activity greetings, an eligible spoken/visible teaching menu and typed selection, stable captions, and a persistent Finish activity button. Photo leave can preserve an existing pause. No firmware, migration, dependency or provider change. Observed on Bun 1.4.4: frozen install, type/Svelte checks (0 errors/warnings), **382 tests passed / 42 skipped / 0 failed**, 6,037 expectations, production build, formatting and diff whitespace. Headless Chromium fictional transport checks at desktop and two mobile sizes verified stable caption bounds, keyboard topic/Finish controls, a visible 48 px Finish target and no unintended capture request. Database checks remain skipped without configuration; actual microphone/speaker/K151 and deployment are unrun. Anay/Lukas/Kylie/Emilia review the shared boundaries before integration. [Exact behavior, compatibility, observed checks and handoff](handoffs/participant-greetings-exit.md).
+
 ### Activity routing repair — November 14, 2026 (local, not deployed)
 
 Candidate `fix/conversation-activity-routing` from main/backend-deploy `0f299c4` fixes natural reviewed teaching/photo commands and connects optional semantic requests to an application-owned confirmation using existing session/speech transitions. Activity-only scope separates this from the broader failing recap/redirect gate. Actual Jev 1.14 activity-only evaluation: **71/71 matched, zero unavailable/false activity positives, p50/p95 169/248 ms**, unchanged 0.85 threshold and strict provider privacy flags. Final unseen 20-case verification independently passed 20/20 (156/270 ms). Full-conversation evaluation still missed two of 51; do not enable that scope.
