@@ -1,12 +1,91 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("provision_control", Path(__file__).parents[1] / "tools/provision-control.py")
 provision = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(provision)
 
+
+class ProbeChecks(unittest.TestCase):
+    class Port:
+        def __init__(self, reply_at=None, response=None, short_write=False):
+            self.now = 0
+            self.sent = []
+            self.reply_at = reply_at
+            self.response = list(response or [])
+            self.short_write = short_write
+
+        def write(self, value):
+            self.sent.append((self.now, value))
+            return 0 if self.short_write else len(value)
+
+        def read(self, count):
+            self.now += 0.2
+            if self.reply_at is not None and self.now >= self.reply_at and self.response:
+                return self.response.pop(0)
+            return b""
+
+    def run_probe(self, port):
+        with patch.object(provision.time, 'monotonic', side_effect=lambda: port.now):
+            result = provision.probe_control(port)
+        self.assertTrue(all(value == b'control.probe\n' for _, value in port.sent))
+        self.assertLessEqual(len(port.sent), 15)
+        self.assertLessEqual(port.now, 15.3)
+        return result
+
+    def test_late_fragmented_reply_after_startup(self):
+        port = self.Port(6, [b'event=control_boot capture=off camera=off\n',
+                             b'event=control_provision_', b'ready capture=off camera=off\n'])
+        self.assertTrue(self.run_probe(port))
+        self.assertGreater(len(port.sent), 1)
+
+    def test_timeout_and_wrong_firmware_never_confirm(self):
+        for response in ([], [b'event=ready capture=off\n'],
+                         [b'event=control_provision_ready capture=off camera=off secret=x\n']):
+            port = self.Port(0, response)
+            self.assertFalse(self.run_probe(port))
+
+    def test_selftest_failure_and_short_write_stop(self):
+        port = self.Port(0, [b'event=control_selftest_failed capture=off camera=off\n'])
+        self.assertFalse(self.run_probe(port))
+        self.assertEqual(len(port.sent), 1)
+        port = self.Port(short_write=True)
+        self.assertFalse(self.run_probe(port))
+        self.assertEqual(len(port.sent), 1)
+
 class ProvisionChecks(unittest.TestCase):
+    def test_voice_observers_accept_only_fixed_status_without_content(self):
+        import ast,re
+        tree=ast.parse((Path(__file__).parents[1]/'tools/monitor.py').read_text())
+        expr=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='diagnostics' for t in n.targets))
+        for pattern in (provision.STATUS,re.compile(ast.literal_eval(expr.args[0]))):
+            for line in [
+                'event=voice_send_failed reason=6 status=2 result=0 bytes=0 send_max_ms=100 capture_sent=100 camera=off',
+                'event=voice_fault code=2 send_max_ms=100 capture_sent=3 heap_free=70000 camera=off',
+                'event=voice_link nodelay=1 wifi_sleep=0 camera=off',
+                'event=voice_ready audio=1 output_window=12 language=en camera=off',
+                'event=voice_ready audio=1 output_window=4 language=de camera=off',
+                'event=voice_stream received=12 consumed=8 buffer_waits=1 camera=off',
+                'event=voice_boot reset=1 heap_free=200000 loop_min=4000 camera=off',
+                'event=voice_memory loop_min=3000 worker_min=10000 heap_free=160000 camera=off',
+                'event=voice_audio capture=on playback=off camera=off',
+                'event=voice_audio capture=off playback=on camera=off',
+                'event=voice_state phase=listening stopped=0 owner=1 camera=off',
+                'event=voice_ack applied=1 camera=off',
+                'event=voice_control_ready camera=off',
+                'event=voice_control_handoff_requested camera=off',
+                'event=voice_reject stage=reply_binding camera=off',
+                'event=voice_transport_exit stage=read result=-1 opcode=256 upgrade=101 errno=0 wifi=3 reason=0 ready=1 age_ms=500 camera=off',
+            ]:
+                self.assertTrue(pattern.fullmatch(line))
+                self.assertFalse(pattern.fullmatch(line+' transcript=private'))
+            self.assertFalse(pattern.fullmatch('event=voice_audio capture=private playback=off camera=off'))
+            self.assertFalse(pattern.fullmatch('event=voice_reject stage=secret camera=off'))
+            self.assertFalse(pattern.fullmatch('event=voice_send_failed reason=secret status=0 result=0 bytes=0 send_max_ms=0 capture_sent=0 camera=off'))
+            self.assertFalse(pattern.fullmatch('event=voice_fault code=13 send_max_ms=0 capture_sent=0 heap_free=0 camera=off'))
+
     def valid(self):
         return dict(ssid="fictional-wifi", password="fictional-password", accessKey="x" * 32, pairingId="fixture-pair", code="y" * 24)
 

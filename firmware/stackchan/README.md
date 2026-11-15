@@ -2,6 +2,33 @@
 
 Switching accounts or resuming? Read [Emilia’s restart handoff](../../docs/handoffs/emilia-resume.md).
 
+**Latest preparation: voice 0.7.** 0.6 diagnostic confirmed a full microphone
+send queue (45ms longest send); that capture test failed. 0.7 combines each
+masked WebSocket send into one TLS write and bounds input at 240ms plus a
+reserved Finished slot. Host/native checks pass; fresh capture/smoothness/Stop
+acceptance is pending. See [voice target](lemmi_voice/README.md).
+
+**Latest installed: voice 0.5.** Coordinated 240ms (12 chunks) negotiation with
+four-chunk fallback, bounded queues and paced consumption receipts passes host
+checks/native build and four-image upload verification. Idle boot is observed;
+actual negotiated 12-frame connection, connected heap, smooth speech and Stop
+under playback remain pending. See [voice notes](lemmi_voice/README.md).
+
+**Current integration checkpoint:** control 0.9 was restored to `stackchan-alex`;
+Connect/Start/Pause/Resume/Stop, capture-off Unmute and stopped reconnect are
+observed in the filtered helper log. New opt-in [voice 0.4 test target](lemmi_voice/README.md)
+adds the real mic/PCM/playback wire adapter using the same session/control code.
+Host protocol/driver/cancellation/privacy checks, ESP32 compile and private-backup
+upload dry-run pass. After fixing a 0.1 stack defect, 0.2 reached real capture
+and a physically heard but very choppy reply, then disconnected: playback
+acceptance failed. The current build retains 0.3's incremental TLS-frame reads
+and two-slot/prebuffered speech. 0.4 accepts the backend's new validated
+English/German ready field; its upload/hash verification and idle boot are observed.
+Authenticated transport/smoothness/Stop retests await Emilia's return. The existing
+avatar/petting UI remains the final presentation direction; the intermediate
+voice target keeps it disabled during media bring-up. Image activities require
+a companion screen, camera relay remains unavailable, and servo work stays off.
+
 **Latest accepted test:** Emilia reports feasibility 0.8 upload PASS and confirms
 audible tone → blue lights → lights off. Speaker-blue regression is resolved in
 this user-observed retest. Installed firmware remains the offline test menu;

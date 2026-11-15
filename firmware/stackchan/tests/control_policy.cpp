@@ -4,6 +4,7 @@
 int main() {
   ControlPolicy s;
   assert(s.stopped && s.muted && !s.start() && !s.ordinary());
+  assert(s.micIsMuted(true)&&!s.micIsMuted(false));
   assert(s.sequence(0) && !s.sequence(0) && s.sequence(1) && !s.sequence(0));
   s.ready=true;
   assert(!s.start()); // ready alone, before the first snapshot, cannot start
@@ -11,6 +12,8 @@ int main() {
   assert(s.start() && !s.stopped);
   strcpy(s.session,"session-one"); strcpy(s.phase,"ready"); s.generation=7;
   assert(s.ordinary());
+  assert(s.micIsMuted(false));s.serverMuted=false;
+  assert(!s.micIsMuted(false)&&s.micIsMuted(true));
   assert(s.currentCommand(3,3,"session-one",7,false));
   assert(!s.currentCommand(2,3,"session-one",7,false)); // Stop invalidates queued input
   assert(!s.currentCommand(3,3,"old-session",7,false));

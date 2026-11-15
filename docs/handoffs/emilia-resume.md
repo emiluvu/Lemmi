@@ -1,5 +1,503 @@
 # Emilia — Stackchan restart handoff
 
+## Next decision — stop speculative firmware trials
+
+Emilia accepted the flash audit and asked what next. Read
+[send-stall investigation](stackchan-send-stall-investigation.md). Source review
+found the pinned TCP send budget=5744 bytes and default writable low-water=2873;
+SO_SNDBUF/SO_SNDLOWAT are unimplemented. This is a concrete constraint but not
+proof of the actual network acknowledgment timing or sole failure cause.
+The right next step is payload-free transport/Anay proxy timing evidence and
+RAM/throughput budgeting before choosing a custom pinned TCP library build,
+nearer TLS gateway, or jointly negotiated compact envelope. No new upload or
+spoken trial in this investigation. Keep 0.9 stopped; do not promise another
+queue/timeout patch fixes it, or ask Emilia to repeat the same conditions.
+
+## Latest 0.9 failure and flash audit — do not repeat blind hardware trials
+
+At 06:11:35 UTC, acknowledged Speak/listening/capture-on was followed by
+`voice_send_failed reason=6 status=2 result=0 bytes=0 send_max_ms=112
+capture_sent=4`. This is a bounded TLS-write timeout with zero bytes accepted
+for the failing batch, after four successfully sent capture frames; not a mic
+driver fault or a parser rejection. Capture-off/disconnect followed. User saw
+the failure before speaking. New physical capture acceptance FAILED.
+
+Emilia asked whether updates were actually flashed. Read only nonsensitive
+fields from private upload manifests: 0.7/0.8/0.9 all exitCode=0 and distinct
+application hashes. Latest application hash is
+`b3ae04303afb1b166eefd35465e8c0b71b8faa082464caf2add464a9a3cc58df`,
+matching the current build exactly (1,471,824 binary bytes). Earlier direct
+receive-only observer confirmed firmware=lemmi-voice/0.9 at 06:09:23 UTC.
+Thus stale flashing is not supported by the evidence. Do not confuse verified
+transfer, host tests or idle boot with a successful live audio repair. No new
+upload during this audit. Next investigate the persistent TLS send stall using
+transport/socket scheduling evidence, rather than another speculative buffer
+increase or another same-condition user speech trial.
+
+## Voice 0.9 batch-send candidate after repeated overflow
+
+0.8 actual ready/window=12, Resume/Unmute succeeded. Speak at 06:05:07 UTC
+opened capture, then code=2 at 06:05:09: send_max_ms=72, capture_sent=76,
+heap_free=81192. Local capture-off/disconnect followed. TLS retries did not
+resolve sustained backlog; capture acceptance remains FAILED. Do not ask for
+the same turn without a substantive sender change or call this a mic failure.
+
+0.9 collects up to four complete individually masked WS messages into one
+bounded 8,192-byte TLS batch. It allows 60ms collection or dispatches when four
+messages accumulate; controls/reads continue between batch opportunities. Input
+JSON schema, PCM framing, per-message sequence and 12-slot/240ms capture bound
+are unchanged. A fresh random mask remains per frame. Each batch retains each
+message's epoch/input-epoch/mute cancellation token and rechecks them before
+every write attempt. Cancelled unsent batch is discarded; partially transmitted
+cancelled batch closes the connection. Buffers/tokens are wiped after each flush.
+Only actual successful batch completion increments the capture-sent counter.
+
+Sustained host driver rehearsal passes >200 capture frames over ~4.4 seconds
+with independent 16ms mic buffers and simulated 72ms network-write stalls,
+preserving order, queue age under 240ms and Finished. Tests also verify byte-
+exact concatenation, frame/byte caps, erasure, overflow shutdown, cancellation,
+TLS transient/partial/error/deadline handling. These tests are synthetic, not
+proof of venue throughput or smooth sound. Queue/network memory and physical
+Stop/capture/playback need real-device verification. No scope change to camera,
+petting, avatars, motion or backend. Preserve all earlier working targets.
+0.9 native build: 1,471,671 program bytes /151,964 globals; known audio stack
+path 1,568 plus 2,048 reserve passes. Schema fixtures/19 Python privacy+stack
+checks pass; backup preflight and actual four-image upload verification pass.
+Only verified repo helper PID 95122 was gracefully closed. Eight-second direct
+observer saw 0.9 selftest/boot at 06:09:23 UTC, reset USB=11, heap_free=178216,
+loop_min=1180, streams zero. Observer closes before private provisioning.
+Fresh connected heap, capture, intelligible reply and under-load Stop remain
+pending. No microphone/camera/motion was activated during the upload check.
+
+## Voice 0.8 bounded-write candidate after 0.7 send-path exit
+
+0.7 actual ready/window=12 at 05:58:21 UTC; connected free heap ~84KB.
+Resume/Unmute applied. Speak at 05:59:17 opened capture; ~2.8s later the worker
+exited stage=link and disconnected, capture-off, without a mic fault, local Stop
+or parser rejection. Emilia confirms this happened WHILE speaking, before
+Finished. The branch indicates sendVoice failure/abort, but 0.7 did not log the
+underlying TLS result; do not claim a confirmed transient-error root cause.
+
+Source inspection: installed TLS writer may return short positive writes,
+zero-byte poll timeout or explicit WANT_READ/WANT_WRITE. 0.8 keeps the same
+combined masked frame stable and retries ONLY zero/WANT statuses or remaining
+bytes, bounded by 100ms and 128 iterations. Hard negative errors still close.
+Each attempt rechecks local abort/epoch/Stop/mute/input cancellation. Cancelled
+unsent work is discarded without breaking the connection; cancellation after
+partial framing closes it. Numeric send_failed reason/status/result/bytes and
+capture-send counters distinguish allocation, age and transport failures.
+
+Host ASan/UBSan tests pass exact write ordering across partial/WANT/zero returns,
+hard errors/no retry, timeouts/clock rollover and Stop cancellation. Voice driver
+regression, exact schemas and all 19 Python privacy/stack tests pass. No buffer
+or server grant enlargement. Physical capture, completed playback and Stop under
+load remain unverified. Only the verified repo helper may be closed for upload;
+private reprovisioning will be needed afterward.
+Actual 0.8 build: 1,470,943 program bytes /143,708 globals; stack guard passes.
+Backup preflight and actual four-image hash verification passed. Verified repo
+helper PID 93455 was gracefully closed first. Receive-only observer confirmed
+0.8 selftest/boot at 06:03:19 UTC (reset USB=11, heap free=186472,
+loop_min=1180, capture/camera off). USB observation ends before provisioning;
+do not mistake this boot-only result for a successful capture turn.
+
+## Voice 0.7 — confirmed capture-queue overflow, transport candidate
+
+0.6 authenticated at 05:52:29 UTC with audio=1/window=12/en, paused/owner=1.
+Resume and Unmute applied. Speak at 05:54:17 UTC: grant accepted/listening,
+capture-on, then `voice_fault code=2 send_max_ms=45 capture_sent=8
+heap_free=83476`, followed by local Stop/capture-off/disconnect. **Outgoing
+capture queue overflow is confirmed.** Mic begin/record failure was not the
+first cause. The 12-chunk output window was not exercised by this failed turn.
+
+0.7 preserves verified TLS/SDK HTTP upgrade but encodes each masked WS frame
+into one fixed 4,104-byte worker buffer and ONE TLS write. The installed SDK's
+old sender writes header and payload separately; avoiding two writes is a
+latency candidate, not a measured fix. Fresh esp_fill_random mask per send;
+partial write closes rather than retry/interleave corrupted frames. No private
+payload prints. Buffer is wiped after each send, including failure.
+
+Capture queue now allows at most twelve 20ms PCM frames plus one reserved
+input-end slot, with a 240ms enqueue-age check before sending. No frames are
+dropped/padded/replayed to conceal stalls; overflow/old current input fails
+closed. Stop/mute/revision/owner invalidation still clears all queued work.
+Network dispatch remains bounded per loop so control/heartbeat can progress.
+The existing 12-frame OUTPUT bound remains separate from this input queue.
+
+Checks pass: combined-frame boundary/mask/erasure ASan/UBSan; driver tests for
+240ms stalled consumer, reserved Finished slot, continued overflow failure,
+first-cause retention, full output-buffer Stop and cancellation; 19 Python
+privacy/stack tests; exact fetched schemas. Native voice: 1,470,303 program bytes
+/143,692 globals; known stack path 1,568+2,048 reserve passes. Connected heap,
+actual send times and capture/playback/Stop need new physical checks. Verified
+repo helper PID 91605 was gracefully closed before the backed-up upload.
+No new live turn is started by the agent. Next: private helper/Connect, retain
+the same observer, then actual grant/state → explicit Speak rehearsal.
+Actual upload passed all four image hashes. Eight-second receive-only observer
+confirmed 0.7 selftest/boot at 05:57:21 UTC and one unchanged idle memory sample:
+heap_free=186488, loop_min=1180, worker unsampled, streams zero. Observer closed;
+USB is free. Control-only native regression compile also passes (1,347,447
+program bytes /53,300 globals). This is idle boot, not successful capture.
+
+## Current voice 0.6 diagnostic — 0.5 capture fails locally
+
+0.5 actual handshake at 05:45:38 UTC confirms audio=1, output_window=12,
+language=en, TCP_NODELAY=1/Wi-Fi sleep=0. Connected heap ~98KB; Resume at
+05:46:16 and Unmute at 05:46:30 applied. Speak at 05:46:44 was ACKED, listening
+and actual capture-on. ~250ms later generic audio_error/local Stop/disconnect
+occurred, capture-off. No server rejection, new boot, or output chunks observed.
+This is FAILED capture acceptance, not a failed twelve-chunk negotiation.
+The old generic fault cannot establish mic begin/record failure versus send
+queue pressure. Do not claim a confirmed cause or just increase queues.
+
+Prepared/uploaded diagnostic 0.6: preserve first failure as enum 1..12 and emit
+fixed `voice_fault code/send_max_ms/capture_sent/heap_free`. Code 2=outgoing
+queue full, 7=mic begin, 10=mic record. Other mapping is in VoiceBridge::Failure.
+No queue limit/window expansion or protocol bypass. Local cancellation precedes
+the diagnostic. Network counters reset per connection; sent counts successful
+capture-frame sends, not dropped/stale data. Both observers strictly allow these
+numeric diagnostics and reject appended private text. Host tests reproduce
+stalled-consumer/full-queue and mic begin/record failure, preserving first cause.
+
+19 Python tests, driver ASan/UBSan, fetched schema fixtures pass. Native 0.6
+compile: 1,460,051 program bytes /129,636 globals; known audio stack path 1,568
+plus 2,048 reserve passes. Backup preflight/four-image upload verification pass.
+Gracefully stopped only verified repo helper PID 89393 before upload. New
+provisioning is required; agent's bounded boot observer will close before user
+runs the single one-hour private provisioning/observer. Next: Connect/actual
+12-frame grant → Resume/Start → Unmute → Speak once, inspect first fault code.
+No physical fix or smooth speech result is claimed by this diagnostic upload.
+The post-upload ten-second receive-only observer returned ZERO recognized
+events and closed normally. Boot is therefore unverified for 0.6; do not claim
+idle acceptance. Next private helper's nonsecret probe must confirm the sketch
+before sending any configuration. If it does not, inspect the physical screen
+and safe boot diagnostics rather than repeatedly sending secrets or reflashing.
+
+## Voice 0.5 — 240ms negotiation finished and uploaded
+
+Resumed the pasted account handoff; preserved all existing uncommitted files.
+Fetched backend-deploy `f3e3b41`: Anay's deployment notes record gateway
+`264df22` granting robot 12-frame credit in negotiation and all speech-owner
+paths, with 4-frame fallback. This is backend-owner evidence; the K151's new
+live negotiated grant remains to be observed after private reprovisioning.
+
+Finished firmware 0.5: request 12, honor strict 4|12 actual grant, fixed 12-slot
+decoded ring/14-slot ingress queue, two stable driver blocks, short-tail-aware
+prebuffer, consumed-only progress paced at 40ms plus final tail. Added numeric
+link/ready diagnostics to both filtered observers with privacy tests. Local
+server-muted state now affects the mute label/action and redraw. Wi-Fi modem
+sleep disabled and TCP_NODELAY set/read back on the TLS socket; these are
+latency mitigations, not a measured root-cause or smoothness claim.
+
+Checks passed: 19 Python tests, ASan/UBSan playback bounds (12th accepted/13th
+rejected), negotiation/fallback/malformed window, full-buffer Stop/revision/owner
+cancellation, 49-chunk ring-wrap/odd-tail/receipt pacing rehearsal, control policy,
+voice driver and exact fetched Zod fixtures. Synthetic 100ms replacement delay
+has no waits with 12 slots; four-slot rehearsal still shows waits. Voice native
+compile 1,459,819 program bytes /129,612 static globals; known audio path 1,568
+plus 2,048 reserve fits the 8,192-byte loop stack. Control-only compile
+1,347,447 /53,300. Static RAM grew 34,496 bytes; actual connected heap remains
+to be checked. Backup/image/esptool preflight passed.
+
+After verifying PID 83580 was only the repo's provisioning observer, gracefully
+interrupted it to free USB. Direct 0.5 upload PASS, all four hashes verified.
+Twelve-second receive-only observation confirmed selftest/voice 0.5 boot at
+05:43:24 UTC, reset=11; two idle samples were unchanged: loop low-water free
+1,180 bytes and heap free 200,568 bytes, worker unsampled/streams zero. Observer
+closed normally. No live speech/camera/motion started by agent.
+Next: one private provisioning helper/Connect, keep it open. Inspect
+`voice_ready audio=1 output_window=12 language=...` and connected memory before
+Start/Resume → Unmute → Speak. Physical smoothness and full-buffer Stop are
+still REQUIRED; prior choppy playback remains a failed acceptance result.
+
+## Keep one USB connection open — observation expiry interrupted next attempt
+
+After Emilia reported another Start, the prior provisioning observer had reached
+its 600-second limit; the file stopped at 05:18:29 UTC and no process held USB.
+No new Start could be verified from that stale file. The agent attached the
+existing receive-only monitor to recover observation, but a fresh 0.4 boot was
+observed immediately at 05:20:47, reset=11 (USB), clearing RAM provisioning.
+Treat that attachment as an interruption, not a successful session continuation.
+Do not repeatedly close/reopen USB during a live test or assume RAM survives it.
+
+The provisioning helper now defaults to a bounded one-hour observer (1–3600s),
+keeping the SAME port handle after the private Wi-Fi prompts. All 19 existing
+Python regressions pass. No firmware change/upload is needed. The agent closed
+only its verified monitor process; USB is free for one fresh private provisioning.
+Next: user runs the helper and Connects, LEAVES IT OPEN, and agent reads only
+the filtered file. Avoid direct USB observation while it owns the port. The
+separate receive-only monitor's 10-minute maximum remains unchanged.
+
+## 0.4 connection accepted; shared session ended before Unmute
+
+Filtered log confirms 0.4 ready/ack at 05:09:45 UTC, then no active session.
+Start applied at 05:11:59 → ready/owner=1. A physical local Stop was recorded
+05:12:15 and ended the session. New Start at 05:13:17 → ready/owner=1. At
+05:15:06 the server sent ended/stopped while the connection remained up, without
+a corresponding local Stop or command ack in this log. Local mic_unmuted at
+05:15:07 occurred AFTER that end, so it did not unmute an active server session.
+No capture/stream occurred. The ending actor/cause is unknown: other authorized
+participant clients can Stop this shared profile; do not invent an idle timeout
+or blame the user's touch for an event with no local Stop receipt.
+
+Known intermediate UI issue found by source inspection: server session.start
+defaults micMuted=true, while firmware's local micMuted setting may carry over
+from the ended session. After restarting from this condition, an explicit
+Mute → Unmute pair can resynchronize, with capture still off. A future firmware
+increment should reconcile local mute on a NEW session before final avatar UI;
+do not pretend the local button alone proves the server is unmuted. Prioritize
+getting a physical playback result without another unnecessary reflash first.
+Keep competing Alex participant views inactive during the focused robot test;
+the log alone does not establish that a browser caused this end.
+
+## Current installed — voice 0.4, ready-language compatibility; reconnect next
+
+After Emilia returned and provisioned 0.3, Connect failed with
+`voice_reject stage=ready_fields` at 05:00:25 UTC, upgrade=101/ready=0. Freshly
+fetched backend-deploy `5ef554a` now emits `device.ready.language` (en/de), which
+the prior strict ready allowlist omitted. This source change matches the observed
+rejection; no raw live message, credentials or text were printed.
+
+0.4 accepts only that optional enum, defaults legacy absent language to en,
+stores it in the safe mirror and uses it for Speak's label/payload. Malformed,
+duplicate and unknown fields remain rejected transactionally. An owned capture
+grant must match the negotiated language; changing profile language on an
+existing connection may require an explicit stopped reconnect. No automatic
+capture or camera permission is added. Invalidation now precedes diagnostic
+printing and transport cleanup on rejected input/disconnect, so the UI task can
+stop local audio before either blocks.
+
+Real-cJSON voice and default-control sanitizer tests, driver sanitizer tests,
+19 Python checks and exact `5ef554a` schemas pass. Voice native build:
+1,424,111 program bytes / 95,116 globals; known audio stack path 1,552 plus 2,048
+reserve passes. Control-only compile: 1,347,327 / 53,300. Original backup/image
+preflight and final direct upload both pass with four image hashes verified.
+The agent gracefully interrupted only the verified repo provisioning observer
+holding USB, then closed its own bounded receive-only observer after upload.
+
+Direct 0.4 boot observed at 05:04:43 UTC; two idle samples through 05:04:53:
+loop_min=1260, heap_free=235064, worker_min=0 (unsampled), no stream activity.
+No repeated boot or capture/output observed in that interval. Authentication,
+new handshake acceptance, full speech quality and German hardware speech remain
+pending. Next: Emilia privately reprovisions Wi-Fi using the same credential
+file and taps Connect; inspect the filtered file before Start/Speak. No new
+pairing, credential rotation or backend edit is needed for this compatibility fix.
+
+## First speech heard, playback failed — 0.3 uploaded idle while Emilia is away
+
+**Current installed checkpoint:** direct voice 0.3 upload passed all four image
+hash checks, then a receive-only 20-second observer saw selftest/boot/version
+0.3 at 04:38:40 UTC. Three idle samples through 04:38:54 were unchanged:
+loop_min=1276, heap_free=235064, worker_min=0 (unsampled), and stream received/
+consumed/buffer_waits all zero. No camera, speech, mic or motion was activated.
+The observer exited and released USB. Wi-Fi/provisioning remains RAM-only and
+was cleared by upload; private reprovisioning/Connect and the next physical
+speech/Stop test await Emilia's return. No request for input was left pending.
+
+0.3 validation actually passed: 19 Python tests; C++ ASan/UBSan incremental
+frame decoder, playback window, two-slot voice driver and latency rehearsal;
+schema fixtures against freshly fetched backend-deploy `ddecdc9`; pinned voice
+compile (1,423,915 program bytes / 95,116 globals) and unchanged 1,552-byte known
+audio stack path plus 2,048 reserve; control-only compile (1,347,183 / 53,300),
+backup/image dry-run and actual upload. Default control target retains its
+SDK read path; only the opt-in voice target uses the incremental reader.
+
+Latest physical turn on 0.2: authenticated reconnect 04:24:25 UTC; no active
+session then. Start at 04:24:54 → ready/owner=1; Unmute at 04:25:15 → ready.
+Speak at 04:25:32 → listening and actual capture-on. Finished at 04:25:36 →
+capture-off/processing, followed by playback-on at 04:25:38. Emilia heard the
+beginning of a real reply, very choppy, then connection failed at 04:25:42:
+SDK WS read -1/opcode NONE=256, upgrade=101, Wi-Fi associated/errno=0. Playback
+went off locally. This is a FAILED voice/playback test, not completed speech.
+No new boot or reduced watermarks were logged during the turn.
+
+Emilia is away and explicitly asks to work without further input. No new spoken
+turn/camera/motion is authorized by her absence. Continue independent code and
+verification, keeping the robot capture-off/stopped. Prepared 0.3 replaces the
+voice target's ambiguous SDK WS read with bounded incremental frame assembly
+over the same verified TLS transport. It adds two stable speaker slots,
+four-chunk prebuffer/rebuffer, coalesced consumed-progress receipts and numeric
+stream counters. Default control target keeps its SDK reader. Current protocol
+fixtures validate against freshly fetched backend-deploy `ddecdc9`.
+
+See [Anay audio handoff](anay-stackchan-audio-window.md): the gateway AND speech
+owner currently restrict robot output to four 20ms chunks. Synthetic 40ms
+feedback is covered without waits; 100ms exceeds that window and produces waits.
+No robot-window expansion or backend edit was made; Anay/Emilia review is needed
+before advertising a larger window. Transport/smoothness fixes need physical
+verification when Emilia returns. No additional private credential entry is
+requested while she is away.
+
+## Voice 0.1 startup failure → 0.2 stack fix and access update
+
+Follow-up filtered log: 0.2 reached authenticated ready at 04:20:29 UTC with
+paused/stopped owner=0. Explicit robot handoff later produced applied ack and
+paused/stopped owner=1 at 04:22:21 UTC: ownership transfer succeeded, without
+capture. At 04:22:48 UTC transport exited `stage=read result=-1 opcode=256
+upgrade=101 errno=0 wifi=3 reason=0 ready=1 age_ms=95092`, then connect_failed.
+Thus current endpoint is disconnected; the handoff itself did not fail.
+No confirmed disconnect cause; age includes setup, not time since ready.
+Idle/connected samples kept loop_min=1276, worker_min=14432 with no new boot.
+Next: one explicit Connect, inspect paused/owner state, then separate Resume.
+No credential rotation, new pairing or blind flash is justified by this exit.
+
+**Latest observed:** approved direct CLI upload of 0.2 PASS, matching device,
+all four image hashes verified and reset requested. A subsequent approved
+receive-only 20-second observer saw selftest/boot/version 0.2 at 04:18:35 UTC,
+then three periodic samples through 04:18:49 with loop_min=1276 and
+heap_free=237016 unchanged; worker_min=0 means not yet sampled (not connected).
+Boot reset code was 11 (USB reset in the installed SDK). No additional boot or
+panic was observed in this short interval. This verifies only upload/idle boot,
+not provisioning, TLS, capture/playback or the old failure's exclusive cause.
+The observer closed normally; port is available for Emilia's private Wi-Fi
+provisioning. Next: run the existing credential helper, enter Wi-Fi privately,
+then local Connect while its filtered observer stays open. Agent can inspect
+the filtered file; direct CLI upload/observation is now available when the
+user's helper releases the port.
+
+Emilia provisioned 0.1 and tapped Connect, then reported Provision via USB again.
+Filtered log contained only selftest/boot, no authenticated ready. Do not repeat
+credential entry or mark voice connected. Native disassembly found a definite
+stack-budget defect: loop 752 + tick 4,256 + cancelAll 3,536 = 8,544 bytes,
+already exceeding the pinned core's 8,192-byte loop stack before other callees.
+This is a source/binary defect consistent with a reset, not an observed reset
+reason or confirmed exclusive cause of the failed connection.
+
+Prepared voice 0.2 moves UI-owned temporary frames into static adapter storage
+and worker temporary frames into single-worker storage, wiping after use.
+Native frames now total 1,552 bytes on that path (752 + 768 + 32); a new build
+guard requires an additional 2,048-byte callee reserve within the loop stack.
+The guard is a known-path check, not whole-program stack proof. Numeric boot
+reset/heap and periodic loop/worker stack watermarks are now allowlisted.
+Pinned compile: 1,420,219 program bytes / 93,164 static globals. All 19 Python
+checks (16 helper/privacy + 3 stack guards), host driver ASan/UBSan and private
+backup/image upload preflight pass. Physical fix verification remains pending.
+
+**Access update:** Emilia explicitly reports Full Access and requests direct
+Terminal/USB operation. Native Terminal app access remains tool-blocked; do not
+try an alternate UI automation route. After Emilia closed her serial helper,
+default-shell USB open was denied but approved elevated shell execution of the
+existing receive-only monitor succeeded at 04:16:49 UTC, reporting voice 0.1
+boot. Thus the older blanket agent-serial restriction below is historical;
+approved direct CLI upload/filtered observation is now available. Private Wi-Fi
+entry still belongs in the user's interactive local helper. No secrets are read
+into chat. Voice 0.2 direct upload is in progress; verify transfer/boot before
+marking it installed or requesting provisioning.
+
+## Next hardware step — voice 0.1 prepared, not uploaded
+
+Latest user receipt: Emilia reports voice-target upload PASS, with all four
+flash images written/hash-verified and hard reset requested. Installed target
+is now voice 0.1 by this user-reported upload sequence; boot/screen, negotiation,
+actual mic transmission and audible speech remain unverified. Next: existing
+private credential provisioning, then explicit Connect. Do not Start/Speak until
+the connection statuses are checked. This receipt supersedes the pre-upload
+installed-control status in the preparation notes below.
+
+Emilia authorized application/hardware integration. The restored control 0.9
+checks below passed; installed target remains control, not voice. A separate
+`--target voice` now opts into the same TLS/provisioning/control source plus
+`SpeechWire.h`, `VoiceBridge.h`, `PlaybackWindow.h` and zeroing fixed queues.
+Full details and source/test limits: [voice rehearsal](../../firmware/stackchan/lemmi_voice/README.md).
+
+Goal of this increment: Start → Unmute → explicit Speak → granted mic capture →
+Finished → actual STT/LLM/TTS reply on the speaker, with local Stop/mute and
+no capture on reconnect/unmute alone. English first, fictional/generic content.
+Camera/petting stay unsupported in this intermediate build. Emilia confirms
+the final connected UI should use the existing avatars/petting; image-dependent
+activities use the companion screen. Servo investigation remains stopped.
+
+Checks actually passed: real-cJSON speech protocol and old control regression
+ASan/UBSan; host mock-driver ASan/UBSan (capture/end, receipt ordering,
+Stop/mute/scope/revision/disconnect cancellation); queue erasure and concurrent
+ordering; voice fixtures against backend-deploy `9257de1`; 16 provisioning/log
+privacy tests; pinned ESP32 voice compile (1,416,979 program bytes / 86,188 globals)
+and original-backup/four-image/esptool 4.12.0 upload dry-run. Final playback uses
+mixer consumption and a provisional 100 ms DMA drain guard, not observed audible
+completion. No physical voice, runtime heap/latency, secure F13 or avatar-sync
+result is claimed. No device serial access or upload by agent.
+
+Next user step: close the helper if still running, upload `--target voice` with
+the existing backup/tool environment, then report PASS/error. After that guide
+the existing private credential provisioning and Connect, one short step at a
+time. Inspect filtered voice events from `build/control-monitor.log`; do not
+request pasted secrets, run a second same-identity WSS client or rotate keys.
+If the service declines negotiation, UI explicitly shows VOICE OFFLINE.
+
+## Integration resumed — control restoration prepared
+
+At 03:33:29 UTC filtered log confirms local Stop/disconnected after explicit
+Disconnect; at 03:34:37 UTC explicit Connect reached ready then
+`phase=ended stopped=1`, owner local=1, capture/camera off. Reconnect does not
+restart interaction. This closes the restored control subset; watchdog under
+network failure and actual media cancellation remain pending.
+
+Emilia confirms connected avatar/petting UI and picture-free robot activity
+scope; recorded in integration-contracts section 6. Added firmware-only
+`audio/PlaybackWindow.h`: four bounded decoded output chunks, native-rate sizes,
+exact end/tails, actual-consumption counter and stale epoch/callback rejection.
+Host ASan/UBSan passes and pinned compile-only playback probe passes (309,444
+program bytes / 31,856 globals). No upload or audio capability change. Next:
+integrate serialized transport/driver ownership, current grants/revisions and
+speaker-consumed receipts; SDK queue/buffer-release flags alone do not prove
+I2S drain. Preserve separate offline avatar/feasibility targets; servo work off.
+
+At 03:33:06 UTC, filtered helper log records `control_mic_unmuted` with
+capture/camera off after Stop. No ready/listening transition followed in the
+inspected log. This verifies the control-only local unmute indication; actual
+capture gating awaits the audio-enabled adapter. Next: explicit Disconnect,
+then separate Connect and verify stopped reconciliation without Start.
+
+Directly inspected filtered `build/control-monitor.log`: Pause at 03:30:01 UTC
+was acknowledged/applied and projected paused; explicit Resume at 03:30:15 UTC
+was acknowledged/applied and projected ready. At 03:32:20 UTC local Stop emitted
+`control_local_stop`, followed by applied acknowledgment and
+`phase=ended stopped=1`. Local ownership remained 1 and capture/camera stayed off.
+Control-only Start/Pause/Resume/Stop now observed on restored 0.9 against the
+current service. These host receipt times do not measure physical Stop latency
+or actual media cancellation. Existing helper's filtered file can be read by the
+agent; Emilia need only report when she has acted while that observer runs.
+
+November 15, 2026, 03:29:40 UTC user-supplied fixed statuses confirm
+`control_ready`, applied acknowledgment and safely ended/stopped initial state.
+At 03:29:42 UTC, after explicit Start: applied acknowledgment,
+`phase=ready stopped=0`, `owner local=1`. Thus restored control 0.9 connects and
+starts a session owned by `stackchan-alex`; camera/capture remain off. The updated
+probe helper was followed by successful provisioning/connection; this does not
+prove the earlier USB failure's cause. Next: Pause in the same observer/session,
+then explicit Resume and Stop separately. No speech/camera media acceptance.
+
+After the successful upload, Emilia confirms the screen says Provision via USB.
+Two provisioning attempts returned no probe confirmation, with no secrets sent.
+Cause is unresolved; the screen establishes a running control UI, not USB RX/TX.
+Helper now retries only `control.probe` once per second for up to 15 seconds,
+preserving fragmented replies and refusing credentials without the exact ready
+line. No reset/DTR/RTS change, firmware change or new upload. All 15 helper tests
+pass, including late fragmented response, bounded silence/wrong response,
+selftest failure and short-write rejection. Physical helper retry pending.
+
+Emilia reports the control restoration upload PASS: all four flash images
+written and hash-verified; hard reset requested. This is user-reported upload
+evidence, not a new connection or screen/touch acceptance. Confirmed endpoint
+is `stackchan-alex`, assigned to `profile-alex`. Next: private provisioning using
+the existing credential file, then explicit local Connect and fixed-status review.
+
+Emilia authorizes the next application/hardware integration work. Inspected
+firmware `e4c4cb6` and freshly fetched backend-deploy `9257de1`; see
+[current integration audit](emilia-hardware-integration-audit.md). Control 0.9
+recompiled successfully: 1,346,047 program bytes / 53,060 static globals.
+Real-cJSON parser ASan/UBSan and fetched-schema compatibility checks pass;
+provisioning 12 tests, PCM/control-policy sanitizers also passed in this audit.
+Fresh post-build upload dry-run verifies original backup, four images and
+esptool 4.12.0. No serial access or upload by agent.
+
+Next: Emilia runs one local upload of the preserved control target, then reports
+the fixed result. After upload, privately provision the existing credential and
+explicitly Connect; verify current service/control behavior before adding media.
+This temporarily replaces offline feasibility; accepted offline targets remain
+preserved. Audio/camera/petting still advertise unsupported in control 0.9.
+Backend camera relay remains unavailable; bounded speech transport exists on the
+backend and needs the firmware adapter. Servo work stays disabled.
+
 ## Latest accepted checkpoint — feasibility 0.8 speaker blue restored
 
 Emilia reports 0.8 upload PASS, then confirms audible speaker tone, blue lights

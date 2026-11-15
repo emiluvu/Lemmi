@@ -199,6 +199,20 @@ Disconnect/watchdog stops capture, output, camera and motion locally, invalidate
 
 ## 6. Asset handoff: Kylie → Emilia/Lukas/Anay
 
+**Confirmed Stackchan presentation direction (Emilia, November 15):** reuse the
+existing little-avatar device UI as the connected participant surface, with
+local petting and accessible session/Stop/mic controls. Robot-native activities
+must work without an image. Photos, object picture matching, illustrated teaching
+scenes and any picture-dependent guessing pack require an explicit companion-screen
+handoff; do not render miniature choices or silently run those on the robot.
+Music and reviewed picture-free conversation/guessing content may use the robot
+once actual playback/input and the pack's required controls are supported.
+Teaching remains conversation mode; picture-free reviewed teaching prompts may
+use that path. This presentation choice does not remove any of the four required
+application activities or change shared activity rules. Emilia consumes the
+existing authority; Lukas/Anay supply eligibility/presentation and capability
+enforcement, Kylie supplies the app handoff. No new wire fields are defined here.
+
 The project/companion name is Lemmi. The exact avatar set is `dog`, `cat`, `bunny`, `bird`, `lemming` (labels Dog, Cat, Bunny, Bird, Lemming). Define `AvatarId` as this enum in shared contracts. Store `avatarId` with profile revision and expose it in participant-safe profile/device state; `expressionId` is a separate interaction-state enum. Do not use the animal name as an expression or activity ID. Validate both fields at the boundary. Avatar changes follow the same approved profile-update path and invalidate outdated render instructions; preserve the choice on app/device handoff.
 
 All five use the same session rules, activity logic, controls and voice configuration. The minimum final asset target is five avatars × six static states = 30 frames, plus app chooser previews. First prove one complete avatar/state set with Emilia, then extend the approved format to the remaining four. Static/reduced-motion mode does not require a sixth neutral avatar. Missing device support is explicit; do not silently render another animal. Stop/microphone indicators remain independent of face art. See [Kylie’s guide](kylie-design-guide.md) for inspiration and exports.

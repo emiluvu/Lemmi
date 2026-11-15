@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Provision the control-only sketch through local USB. Existing private device access file or optional caregiver-authenticated pairing; networking requires local confirmation."""
+"""Provision the control/voice sketches through local USB. Existing private device access file or optional caregiver-authenticated pairing; networking requires local confirmation."""
 import argparse
 import getpass
 import json
@@ -142,7 +142,43 @@ def wait_for(connection, expected, seconds=5):
                 return True
     return False
 
+
+def probe_control(connection):
+    """Retry only the nonsecret probe while USB/firmware startup settles.
+
+    Do not reset, toggle DTR/RTS, or send provisioning data. Keep fragmented
+    replies across retries; arbitrary USB output is neither printed nor trusted.
+    """
+    deadline = time.monotonic() + 15
+    next_probe = 0
+    pending = b""
+    while time.monotonic() < deadline:
+        now = time.monotonic()
+        if now >= next_probe:
+            if connection.write(b"control.probe\n") != len(b"control.probe\n"):
+                return False
+            next_probe = now + 1
+        pending = (pending + connection.read(256))[-4096:]
+        while b"\n" in pending:
+            line, pending = pending.split(b"\n", 1)
+            if line.strip() == b"event=control_provision_ready capture=off camera=off":
+                return True
+            if line.strip() == b"event=control_selftest_failed capture=off camera=off":
+                return False
+    return False
+
 STATUS = re.compile(
+    r"event=voice_send_failed reason=(?:2|3|4|6) status=[0-3] result=-?\d{1,10} bytes=\d{1,5} send_max_ms=\d{1,10} capture_sent=\d{1,10} camera=off|"
+    r"event=voice_fault code=(?:[0-9]|1[0-2]) send_max_ms=\d{1,10} capture_sent=\d{1,10} heap_free=\d{1,10} camera=off|"
+    r"event=voice_link nodelay=1 wifi_sleep=0 camera=off|"
+    r"event=voice_ready audio=[01] output_window=(?:4|12) language=(?:en|de) camera=off|"
+    r"event=voice_stream received=\d{1,4} consumed=\d{1,4} buffer_waits=\d{1,4} camera=off|"
+    r"event=voice_boot reset=\d{1,3} heap_free=\d{1,10} loop_min=\d{1,10} camera=off|"
+    r"event=voice_memory loop_min=\d{1,10} worker_min=\d{1,10} heap_free=\d{1,10} camera=off|"
+    r"event=voice_(?:audio capture=(?:on|off) playback=(?:on|off)|state phase=(?:none|ready|listening|processing|speaking|waiting|paused|unavailable|ended) stopped=[01] owner=[01]|ack applied=[01]) camera=off|"
+    r"event=voice_control_(?:handoff_requested|audio_error|selftest_passed|selftest_failed|boot|ready|local_stop|queue_full|mic_muted|mic_unmuted|connect_failed|claim_failed|wifi_ready|expired|watchdog|protocol_error|disconnected) camera=off|"
+    r"event=voice_reject stage=(?:envelope|sequence|ready_fields|ready_binding|ready_media|ready_controls|before_ready|event_shape|state_fields|state_binding|state_owner|state_capture|reply_binding|unsupported_event) camera=off|"
+    r"event=voice_transport_exit stage=(?:wifi|wifi_test|claim|tls_init|ws_init|headers|connect|hello|link|expiry|watchdog|stop_send|heartbeat_send|control_send|poll|close|read|partial|frame|message|auth) result=-?\d{1,10} opcode=\d{1,3} upgrade=\d{1,3} errno=-?\d{1,10} wifi=\d{1,3} reason=\d{1,3} ready=[01] age_ms=\d{1,10} camera=off|"
     r"event=control_transport_exit stage=(?:wifi|wifi_test|claim|tls_init|ws_init|headers|connect|hello|link|expiry|watchdog|stop_send|heartbeat_send|control_send|poll|close|read|partial|frame|message|auth) result=-?\d{1,10} opcode=\d{1,3} upgrade=\d{1,3} errno=-?\d{1,10} wifi=\d{1,3} reason=\d{1,3} ready=[01] age_ms=\d{1,10} capture=off camera=off|"
     r"(?:event=control_protocol_reject stage=(?:envelope|sequence|ready_fields|ready_binding|ready_media|ready_controls|before_ready|event_shape|state_fields|state_binding|state_owner|state_capture|reply_binding|unsupported_event)|event=control_owner local=[01]|event=control_handoff_requested) capture=off camera=off|"
     r"(?:event=control_claim_result stage=(?:init|headers|open|write|status|size|read|shape|expiry|ok) http=\d{1,3} error=-?\d{1,10} errno=-?\d{1,10} length=-?\d{1,19} received=-?\d{1,10}|"
@@ -181,10 +217,11 @@ def main():
     modes.add_argument("--wifi-only", action="store_true", help="Wi-Fi association only; no domain key, caregiver token or pairing needed")
     modes.add_argument("--create-pairing", action="store_true", help="Create the request using a hidden local caregiver token; never sent to device")
     modes.add_argument("--credential-file", type=Path, help="Private Alex device access JSON; bypass pairing claim, still requires local Connect")
-    parser.add_argument("--observe-seconds", type=int, default=600)
+    parser.add_argument("--observe-seconds", type=int, default=3600,
+                        help="Keep this USB connection open after provisioning (1–3600 seconds; default one hour)")
     args = parser.parse_args()
-    if not 1 <= args.observe_seconds <= 600:
-        parser.error("--observe-seconds must be between 1 and 600")
+    if not 1 <= args.observe_seconds <= 3600:
+        parser.error("--observe-seconds must be between 1 and 3600")
     if not sys.stdin.isatty() or not sys.stderr.isatty():
         raise SystemExit("Use an interactive local Terminal; redirected/private-input capture is refused.")
     warnings.simplefilter("error", getpass.GetPassWarning)
@@ -197,8 +234,8 @@ def main():
     except serial.SerialException:
         raise SystemExit("Cannot open USB port. Stop the monitor and check the port; nothing provisioned.")
     try:
-        connection.write(b"control.probe\n")
-        if not wait_for(connection, b"event=control_provision_ready capture=off camera=off"):
+        print("Checking control firmware over USB (up to 15 seconds; no secrets sent).", flush=True)
+        if not probe_control(connection):
             raise SystemExit("Control sketch did not confirm provisioning mode. No secrets sent.")
         print("Control sketch confirmed. Wi-Fi name is visible locally; passwords/tokens/codes are hidden. Values stay in process memory only.")
         config = {

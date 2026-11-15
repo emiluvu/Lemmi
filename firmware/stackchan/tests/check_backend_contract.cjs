@@ -31,8 +31,8 @@ function load(file) {
 }
 const { ServerEventSchema, DeviceEventSchema } = load('packages/contracts/src/device');
 const source = fs.readFileSync(path.join(__dirname, 'control_protocol.cpp'), 'utf8');
-function fixture(name) {
-  const match = source.match(new RegExp(`static const char\\* ${name}=R"\\(([\\s\\S]*?)\\)";`));
+function fixture(name, input = source) {
+  const match = input.match(new RegExp(`static const char\\* ${name}=R"\\(([\\s\\S]*?)\\)";`));
   assert(match, `Missing ${name} fixture`);
   return JSON.parse(match[1]);
 }
@@ -56,3 +56,19 @@ DeviceEventSchema.parse({ ...base, type: 'device.hello', payload: {
 DeviceEventSchema.parse({ ...base, type: 'input.handoff', session_id: 'fixture-session',
   generation: 2, sequence: 2, payload: {} });
 console.log(`PASS: firmware fixtures/hello/handoff match ${ref} shared runtime schemas`);
+const voice = fs.readFileSync(path.join(__dirname, 'voice_protocol.cpp'), 'utf8');
+DeviceEventSchema.parse({ ...base, type: 'device.hello', payload: fixture('voiceHello', voice) });
+ServerEventSchema.parse({ ...base, type: 'device.ready', payload: fixture('voiceReady', voice) });
+const extendedReady=fixture('voiceReady',voice);
+extendedReady.audio.outputWindowChunks=12;
+extendedReady.audio.playback.outputWindowChunks=12;
+ServerEventSchema.parse({...base,type:'device.ready',payload:extendedReady});
+ServerEventSchema.parse({ ...base, type: 'state.changed', session_id: 'fixture-session', generation: 2, payload: fixture('voiceSession', voice) });
+ServerEventSchema.parse({ ...base, type: 'response.start', session_id: 'fixture-session', turn_id: 'fixture-turn', generation: 2, payload: fixture('voiceOutputStart', voice) });
+for (const [type, payload, turn_id] of [
+  ['input.speak', { language: 'en' }, null],
+  ['audio.chunk', { leaseId: 'fixture-lease', streamId: 'fixture-input', chunkIndex: 0, encoding: 'pcm_s16le', data: Buffer.alloc(640).toString('base64') }, 'fixture-turn'],
+  ['audio.end', { leaseId: 'fixture-lease', streamId: 'fixture-input', chunkCount: 1 }, 'fixture-turn'],
+  ...['started', 'progress', 'completed', 'failed'].map(status => ['audio.receipt', { leaseId: 'fixture-lease', streamId: 'fixture-output', status, playedChunks: status === 'started' ? 0 : 1 }, 'fixture-turn']),
+]) DeviceEventSchema.parse({ ...base, type, session_id: 'fixture-session', turn_id, generation: 2, payload });
+console.log(`PASS: voice hello/ready/grant/output and input/end/receipt fixtures match ${ref}`);

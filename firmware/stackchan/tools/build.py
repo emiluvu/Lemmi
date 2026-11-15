@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "presentation", "petting", "control", "avatars", "display"], default="foundation")
+parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "playback", "presentation", "petting", "control", "voice", "avatars", "display"], default="foundation")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 lock = json.loads((root / "toolchain.json").read_text())
@@ -14,7 +14,7 @@ cli = root / ".tools/arduino-cli"
 config = root / ".tools/arduino-cli.yaml"
 if not cli.is_file() or not config.is_file():
     raise SystemExit("Run python3 tools/setup.py from firmware/stackchan first.")
-sketch = root / ("tests/arduino_" + args.target) if args.target in ("packetizer", "presentation") else root / ("lemmi_" + args.target)
+sketch = root / ("tests/arduino_" + args.target) if args.target in ("packetizer", "playback", "presentation") else root / ("lemmi_" + args.target)
 if args.target in ("avatars", "display"):
     import sys
     subprocess.run([sys.executable, str(root / "tools/export-avatars.py"), "--target", args.target], check=True)
@@ -30,3 +30,12 @@ if args.target == "feasibility":
     if "CameraBus.cpp.o" not in link_map:
         raise SystemExit("Camera bus adapter missing from link")
     print("PASS: application SCCB adapter linked; SDK SCCB driver absent.")
+
+if args.target == "voice":
+    import sys
+    dump_tools=list((root / '.arduino/data/packages/m5stack/tools/esp-x32').glob('*/bin/xtensa-esp32s3-elf-objdump'))
+    if len(dump_tools)!=1:
+        raise SystemExit('Expected one pinned Xtensa objdump; inspect installed toolchain.')
+    subprocess.run([sys.executable,str(root / 'tools/check-stack.py'),
+                    '--elf',str(root / 'build/voice/lemmi_voice.ino.elf'),
+                    '--objdump',str(dump_tools[0])],check=True)

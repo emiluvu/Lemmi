@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload an offline test only after a matching private full-flash backup."""
+"""Upload selected Lemmi firmware only after a matching private full-flash backup."""
 import argparse
 import hashlib
 import json
@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timezone
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--target", choices=["foundation", "feasibility", "petting", "control", "avatars", "display"], default="foundation")
+parser.add_argument("--target", choices=["foundation", "feasibility", "petting", "control", "voice", "avatars", "display"], default="foundation")
 parser.add_argument("--port", required=True)
 parser.add_argument("--backup-dir", required=True, type=Path)
 parser.add_argument("--esptool-python", default=sys.executable)
@@ -35,7 +35,7 @@ if backup.stat().st_size != 16777216 or hashlib.sha256(backup.read_bytes()).hexd
 lock = json.loads((root / "toolchain.json").read_text())
 build = root / "build" / args.target
 sketch = "lemmi_" + args.target
-firmware = {"foundation": "lemmi-foundation/0.1", "feasibility": "lemmi-feasibility/0.8", "petting": "lemmi-petting/0.2", "control": "lemmi-control/0.9", "avatars": "lemmi-avatars/0.1", "display": "lemmi-display/0.7"}[args.target]
+firmware = {"foundation": "lemmi-foundation/0.1", "feasibility": "lemmi-feasibility/0.8", "petting": "lemmi-petting/0.2", "control": "lemmi-control/0.9", "voice": "lemmi-voice/0.9", "avatars": "lemmi-avatars/0.1", "display": "lemmi-display/0.7"}[args.target]
 if json.loads((build / "build.options.json").read_text())["fqbn"] != lock["fqbn"]:
     raise SystemExit("Build target differs from pinned toolchain")
 # Same four offsets/images as the pinned M5Stack platform.txt upload recipe.
@@ -75,7 +75,7 @@ if not original or not connected or original.group(1).lower() != connected.group
     raise SystemExit("Connected device identity does not match the private backup")
 if not re.search(r"Secure Boot:\s*Disabled", security) or not re.search(r"Flash Encryption:\s*Disabled", security):
     raise SystemExit("Unexpected security settings; no firmware write attempted")
-print("Backup and connected device match. Uploading offline test; no erase-all or eFuse changes.", flush=True)
+print("Backup and connected device match. Uploading selected Lemmi firmware; no erase-all or eFuse changes.", flush=True)
 command = base + ["--after", "hard_reset", "write_flash", "-z", "--flash_mode", "keep",
                   "--flash_freq", "keep", "--flash_size", "keep"]
 for address, image in images:
