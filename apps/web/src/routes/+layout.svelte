@@ -1,8 +1,8 @@
 <script lang="ts">
   import '../styles.css';
-  import PhotoPicker from '#lib/features/PhotoPicker.svelte';
   import UIIcon from '#lib/features/UIIcon.svelte';
   import { page } from '$app/state';
+  import { caregiverAppearanceKey, type CaregiverAppearance } from '#lib/caregiver-appearance.ts';
   import { setContext, onDestroy } from 'svelte';
   import {
     photoStoryPreviewKey,
@@ -10,6 +10,16 @@
     type PhotoStoryPreviewContext,
   } from '#lib/photo-story-preview.ts';
   let previewPhotos = $state<PreviewPhoto[]>([]);
+  let caregiverPhoto = $state<string | null>(null);
+  setContext<CaregiverAppearance>(caregiverAppearanceKey, {
+    get photo() {
+      return caregiverPhoto;
+    },
+    setPhoto(file) {
+      if (caregiverPhoto) URL.revokeObjectURL(caregiverPhoto);
+      caregiverPhoto = file ? URL.createObjectURL(file) : null;
+    },
+  });
   setContext<PhotoStoryPreviewContext>(photoStoryPreviewKey, {
     get photos() {
       return previewPhotos;
@@ -37,11 +47,12 @@
         (photo) => photo.profileId === profileId && photo.id === id,
       );
       if (!target) return;
-      previewPhotos = previewPhotos.filter((photo) => photo.id !== id);
+      previewPhotos = previewPhotos.filter((photo) => photo.id !== target.id);
       URL.revokeObjectURL(target.url);
     },
   });
   onDestroy(() => {
+    if (caregiverPhoto) URL.revokeObjectURL(caregiverPhoto);
     for (const photo of previewPhotos) URL.revokeObjectURL(photo.url);
   });
   let { children, data } = $props();
@@ -70,7 +81,7 @@
   const settingsLinks = [
     {
       href: '/caregiver/settings',
-      title: 'Profile settings',
+      title: 'Caregiver Setting',
       detail: 'Appearance & account options',
       icon: 'settings',
     },
@@ -191,7 +202,7 @@
         >{/each}
     </nav>
     <div class="rail-account">
-      <PhotoPicker label="Caregiver photo" initials="CG" />
+      <div class="photo-circle">{#if caregiverPhoto}<img src={caregiverPhoto} alt="Caregiver" />{:else}<span aria-hidden="true">CG</span>{/if}</div>
       <div>
         <p class="nav-section-label">Caregiver account</p>
         <strong>Your own little corner</strong><a

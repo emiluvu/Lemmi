@@ -308,8 +308,8 @@
       </section>
       <section class="card">
         <span class="section-icon"><UIIcon name="settings" size={30} /></span>
-        <h3>Profile settings</h3>
-        <p>Review appearance and account options.</p>
+        <h3>Caregiver Setting</h3>
+        <p>Review your caregiver photo and account options.</p>
         <a href="/caregiver/settings">Open settings →</a>
       </section>
     </div>
