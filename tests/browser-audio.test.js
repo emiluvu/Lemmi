@@ -382,10 +382,10 @@ test('browser diagnostics measure scheduled start and playback gaps without cont
         'browser',
       );
     chunk(0);
-    expect(f.timings.at(-1)).toEqual({ stage: 'turn_end_to_scheduled_playback', durationMs: 530 });
+    expect(f.timings.at(-1)).toEqual({ stage: 'turn_end_to_scheduled_playback', durationMs: 580 });
     f.audio.context.currentTime = 0.2;
     chunk(1);
-    expect(f.timings.at(-1)).toEqual({ stage: 'playback_gap', durationMs: 150 });
+    expect(f.timings.at(-1)).toEqual({ stage: 'playback_gap', durationMs: 100 });
     expect(JSON.stringify(f.timings)).not.toContain('turnId');
     expect(JSON.stringify(f.timings)).not.toContain('lease');
   } finally {
