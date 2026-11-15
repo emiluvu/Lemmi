@@ -986,3 +986,24 @@ Runtimea779c70 deployed, migration006/eight checksums verified, DB+private-media
 ### Stackchan twelve-frame backend credit review — November14,2026
 
 User/Emilia requested240ms output capacity with four-frame fallback. Removed browser-only restrictions from hello negotiation and captured/approved/typed speech owners; contracts already support4|12. Final413tests/6281expectations passed, no skips/failures; type/Svelte zero errors/warnings, frozen Bun, format/whitespace. Robot/browser credit, consumed-only refill, over-credit rejection, four-frame fallback, queued/playing Stop with PCM wipe/late-receipt denial, approved teaching output and short-tail completion passed in real gateway fixtures. Gateway264df22 deployed after protected backup; web/speecha779c70 PID/start timestamps retained, config/data/keys unchanged. Actual public own-profile robot WSS12initial→started0/no credit→consumed2/14total→Stop/no more chunks/stale-receipt denial and omitted-field4 fallback passed with real speech/simulated receipts; only own fixture records removed. Four services active, no automatic gateway restart. Local firmware Stop/ring/DMA flush and actual jitter/speaker/K151 checks remain Emilia’s hardware acceptance. [Exact integration handoff](handoffs/stackchan-playback-window.md).
+
+### Stackchan microphone uplink investigation — November 15, 2026
+
+Inspected deployed gateway/proxy around Emilia's voice 0.9 failure at 06:11:35 UTC.
+No entries in four-service journals for 06:09–06:14 UTC; gateway/other services
+and Nginx predate the incident with zero recorded automatic/container restarts.
+Receive/close logs were unavailable in the deployed gateway; proxy access/Docker
+logs are disabled. No normal-uplink, no-close or no-network-stall acceptance can
+be inferred. Prepared an undeployed, default-off exact-device diagnostic candidate
+with bounded aggregate receive/acceptance/error/timing counters and safe close
+causes. 78 targeted fixture tests / 2,304 expectations passed, including paced
+75-frame/50 fps upload, diagnostic privacy, peer close-text exclusion, local
+rate-limit attribution and failing-observer Stop/mute checks. Existing verified
+TLS, speech/access/scheduler/cancellation tests passed; type/Svelte zero
+errors/warnings, formatting and whitespace passed. Initial socket tests were
+sandbox-blocked and passed after running outside that restriction. No provider,
+physical robot, protocol/configuration change or production restart/deployment.
+Emilia/Anay paired UTC-marked retest, exact voice-source review and robot/AP-side
+payload-free ACK/window/retransmission observations remain pending. Backend
+loopback socket counters cannot measure robot-to-Cloudflare TCP. [Evidence and
+counterpart handoff](handoffs/stackchan-uplink-backend-investigation.md).

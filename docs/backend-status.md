@@ -1,5 +1,33 @@
 # Lemmi backend status
 
+## Stackchan uplink investigation — November 15, 2026; diagnostic candidate only
+
+Investigated Emilia's voice 0.9 failure at **06:11:35 UTC** on the deployed host.
+Gateway `264df22`, web/speech `a779c70` retained; source checkout `f3e3b41`.
+No service, private configuration, credential, profile, protocol change or deployment.
+Four-service journals contain zero entries for 06:09–06:14 UTC; existing runtime
+does not log received capture counts or WS closes, so frame delivery, rate-limit
+closes and backpressure cannot be reconstructed. Gateway started 05:39:31 UTC,
+web/speech 04:48:05 UTC, tunnel November 14 06:43:36 UTC; all active, zero automatic
+restarts. Nginx running since November 14 06:30:07 UTC with restart count 0,
+buffering off/no configured rate limiter, access logs off/Docker logging `none`.
+No observed local restart explains the incident; Cloudflare edge/network
+behavior remains unmeasured. Origin TCP counters cannot observe the robot's
+separate edge-TLS connection.
+
+Prepared **undeployed/default-off** exact-device transport diagnostics for
+received bytes/messages, accepted frames/gaps, handler timing, aggregate errors
+and allowlisted local close causes/codes. One periodic sample/second plus
+capture/open/close records; no media/text/headers/credentials/profile IDs or peer
+close text. Existing TLS/auth/rate/backpressure/revision/cancellation behavior is
+retained. **78 targeted fixture tests / 2,304 expectations passed** across gateway,
+verified TLS proxy, speech/access/cancellation, including paced 50 fps upload,
+diagnostic privacy/sink failure and rate-limit-close attribution. Type/Svelte
+and formatting/whitespace checks passed. No physical robot/provider acceptance
+or payload capture. Emilia's detailed handoff is absent from this checkout and
+fetched firmware branch; paired retest and exact source/counterpart review are
+pending. [Evidence, diagnostic rollout and payload-free observation plan](handoffs/stackchan-uplink-backend-investigation.md).
+
 ## Stackchan twelve-frame output deployed — November14,2026
 
 **Gateway runtime `264df22`**, web/speech `a779c70` retained. Removed browser-only checks in gateway negotiation and all three speech-owner paths. Robot `playback.outputWindowChunks:12` can now negotiate12×20ms=240ms credit; omitted/explicit4 retains80ms fallback. Consumed-only refill and Stop owner cancellation/PCM wipe/late receipt rejection remain. No schema, migration, config/provider/model/UI/firmware change; gateway-only rollout. Final **413 tests /6,281 expectations**, no failures/skips on isolated databases; type/Svelte zero errors/warnings, pinned frozen Bun1.4.4, format/whitespace passed. Includes robot12/legacy4 credit and queued/playing Stop/short-tail tests. [Exact firmware handshake, short-reply behavior, Stop responsibilities and observed checks](handoffs/stackchan-playback-window.md).

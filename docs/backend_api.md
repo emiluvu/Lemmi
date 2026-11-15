@@ -1,5 +1,23 @@
 # Lemmi backend integration reference
 
+**Stackchan uplink diagnostic candidate — November 15, 2026; not deployed:**
+Optional server-only `LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE=<exact enrolled device ID>`
+selects one endpoint for content-free gateway receive/close diagnostics. Empty/unset
+disables it; changing it requires a coordinated gateway restart and fresh explicit
+participant Start. No route, wire schema, media format, auth or rate/buffer/deadline
+change. Records use `Lemmi transport diagnostic`, a random connection ID, cumulative
+message/byte/error counters, per-capture accepted-frame counts/gaps, handler/sample
+timing, last validated event type/error code and close code/allowlisted local cause.
+At most one periodic sample/second plus open/capture/close events. No payloads,
+headers, private identifiers or peer close text; observer failure cannot alter
+control processing. Native/peer closes may have no local cause, and capture-end
+receipt does not assert processing success. Uses the existing host journal; disable
+after the coordinated rehearsal and apply existing technical-log cleanup policy.
+Current runtime `264df22` lacks these receive/close records; the 06:11:35 UTC incident
+cannot be reconstructed from its empty incident-window journals. Origin socket
+statistics do not measure robot-to-Cloudflare ACK timing. [Evidence, safe observation
+points, exact diagnostics and Emilia handoff](handoffs/stackchan-uplink-backend-investigation.md).
+
 **Deployed Stackchan output credit — gateway `264df22`, web/speech retained:** existing hello `playback.outputWindowChunks:12` is now honored for authenticated robots as well as browsers; actual ready response advertises12, omitted/explicit4 stays4. Gateway negotiation and captured/approved/typed speech owners share that bound. Credit counts consumed frames only; Stop cancels/wipes queued output and rejects stale receipts. No wire schema or migration change. [Firmware handshake, limits and hardware test handoff](handoffs/stackchan-playback-window.md). Public own-profile robot WSS12→consumed2→14→Stop/stale-receipt denial and omitted-field4 fallback passed with real speech/simulated receipts. Firmware/speaker/jitter acceptance remains Emilia’s hardware check. No migration/configuration/credential change.
 
 **Deployed profile-context/German update — web/gateway/speech `a779c70`:** additive migration006; six private-gate/demo-only/context/image operations from `cd68663`, with participant lock and transactional scope checks. Separate default-off summary memory uses bounded revision-fenced background work and unreviewed AI records, never transcript/audio retention. Participant profile and `device.ready` add server-resolved `language` with English compatibility default; exact-ID German rejects mismatched text/capture, has no activities and skips Jev classification. English Jev activities remains enabled. Proxy image-upload1500k/other demo32k. [Detailed contracts, security fixes, observed checks and rollout](handoffs/profile-german-backend-integration.md). Migration006 applied, all eight migration checksums match. Public rich profile/images/scope/deletion/permission controls, opted-in background summary persistence, Tilda German, concurrent English/German and retained Jev spoken confirmation passed synthetically. One initial German start timed out; two later runs passed, cause unresolved; human voice/startup/room/hardware review pending. Private speech2STT/2TTS supports en/de with shared total capacity. Existing data/keys retained; no bulk backfill or existing memory opt-in.

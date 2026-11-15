@@ -311,6 +311,15 @@ if (process.env.LEMMI_MODE === 'live') {
   const config = dataConfig();
   const repository = config ? await openData(config) : undefined;
   const gateway = startControlGateway({
+    ...(process.env.LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE
+      ? {
+          transportDiagnostics: {
+            deviceId: process.env.LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE,
+            emit: (observation: import('./transport-diagnostics').TransportDiagnostic) =>
+              console.info('Lemmi transport diagnostic', JSON.stringify(observation)),
+          },
+        }
+      : {}),
     repository,
     demoEnrollment: process.env.LEMMI_DEMO_ENROLLMENT === '1',
     speech,

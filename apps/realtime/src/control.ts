@@ -1,3 +1,8 @@
+import {
+  TransportDiagnostics,
+  type TransportDiagnostic,
+  type TransportCloseReason,
+} from './transport-diagnostics';
 import { handlePhotoScene } from '../../../packages/server/src/photo-scene';
 import {
   DeviceEventSchema,
@@ -49,8 +54,10 @@ type SocketData = {
   outputWindow: 4 | 12;
   mediaMessages: number;
   speechOutput?: SpeechOutputStart;
+  transport?: TransportDiagnostics;
 };
 type Options = {
+  transportDiagnostics?: { deviceId: string; emit: (observation: TransportDiagnostic) => void };
   publicOrigin: string;
   internalToken: string;
   port: number;
@@ -99,6 +106,31 @@ export function startControlGateway(options: Options) {
   function disconnect(identity: DeviceIdentity) {
     if (ownsEndpoint(identity)) sessions.forProfile(identity.profileId).disconnect();
   }
+  function closeSocket(
+    ws: Bun.ServerWebSocket<SocketData>,
+    code: number,
+    reason: TransportCloseReason,
+  ) {
+    if (ws.data.transport) ws.data.transport.localCloseReason ??= reason;
+    ws.close(code, reason);
+  }
+  function observeMessage(
+    handler: (ws: Bun.ServerWebSocket<SocketData>, message: string | Buffer) => void,
+  ) {
+    return (ws: Bun.ServerWebSocket<SocketData>, message: string | Buffer) => {
+      const transport = ws.data.transport;
+      if (!transport) return handler(ws, message);
+      const began = elapsedNow();
+      transport.received(
+        typeof message === 'string' ? Buffer.byteLength(message) : message.byteLength,
+      );
+      try {
+        handler(ws, message);
+      } finally {
+        transport.handled(began);
+      }
+    };
+  }
   const origin = new URL(options.publicOrigin);
   if (
     origin.protocol !== 'https:' ||
@@ -112,7 +144,7 @@ export function startControlGateway(options: Options) {
         coordinator.revokeDeviceAccess();
     for (const socket of sockets)
       if (!deviceId || socket.data.identity.deviceId === deviceId)
-        socket.close(1008, 'Device access ended');
+        closeSocket(socket, 1008, 'Device access ended');
   };
   const data = options.repository
     ? new PersistentData(
@@ -144,7 +176,7 @@ export function startControlGateway(options: Options) {
     }
     if (checkpoints.length > 800) {
       sessions.disconnect();
-      for (const socket of sockets) socket.close(1011, 'Persistent checkpoint capacity');
+      for (const socket of sockets) closeSocket(socket, 1011, 'Persistent checkpoint capacity');
       return Promise.reject(new Error('Persistent checkpoint capacity'));
     }
     if (persisting) return persisting;
@@ -165,13 +197,13 @@ export function startControlGateway(options: Options) {
             sessions.removeProfile(snapshot.session.profileId);
             for (const socket of sockets)
               if (socket.data.identity.profileId === snapshot.session.profileId)
-                socket.close(1008, 'Device access ended');
+                closeSocket(socket, 1008, 'Device access ended');
           }
         }
       } catch {
         checkpoints.length = 0;
         sessions.disconnect();
-        for (const socket of sockets) socket.close(1011, 'Persistent data unavailable');
+        for (const socket of sockets) closeSocket(socket, 1011, 'Persistent data unavailable');
       } finally {
         persisting = null;
       }
@@ -205,7 +237,7 @@ export function startControlGateway(options: Options) {
     );
     if (sent <= 0) {
       disconnect(ws.data.identity);
-      ws.close(1013, 'Control backpressure');
+      closeSocket(ws, 1013, 'Control backpressure');
     }
   }
   function error(
@@ -214,6 +246,7 @@ export function startControlGateway(options: Options) {
     message: string,
     commandId?: string,
   ) {
+    ws.data.transport?.rejected(code);
     emit(ws, 'error', { code, message, ...(commandId ? { commandId } : {}) });
   }
   function broadcast() {
@@ -382,7 +415,7 @@ export function startControlGateway(options: Options) {
                 for (const socket of sockets)
                   if (!access.current(socket.data.identity)) {
                     endSession(socket.data.identity);
-                    socket.close(1008, 'Device access revoked');
+                    closeSocket(socket, 1008, 'Device access revoked');
                   }
               return controlResponse(result);
             }
@@ -449,6 +482,15 @@ export function startControlGateway(options: Options) {
           playbackRates: [],
           outputWindow: 4,
           mediaMessages: 0,
+          ...(options.transportDiagnostics?.deviceId === identity.deviceId
+            ? {
+                transport: new TransportDiagnostics(
+                  connectionId,
+                  options.transportDiagnostics.emit,
+                  elapsedNow,
+                ),
+              }
+            : {}),
         },
       });
       if (!upgraded && reservations.get(identity.deviceId)?.id === connectionId)
@@ -462,17 +504,19 @@ export function startControlGateway(options: Options) {
       closeOnBackpressureLimit: true,
       open(ws) {
         sockets.add(ws);
+        ws.data.transport?.report('open');
         if (
           reservations.get(ws.data.identity.deviceId)?.id !== ws.data.connectionId ||
           !access.current(ws.data.identity)
         )
-          ws.close(1008, 'Device access ended');
+          closeSocket(ws, 1008, 'Device access ended');
       },
-      message(ws, message) {
+      message: observeMessage((ws, message) => {
+        const transport = ws.data.transport;
         const coordinator = sessions.forProfile(ws.data.identity.profileId);
         if (!access.current(ws.data.identity)) {
           endSession(ws.data.identity);
-          ws.close(1008, 'Device access expired or revoked');
+          closeSocket(ws, 1008, 'Device access expired or revoked');
           return;
         }
         if (elapsedNow() - ws.data.window >= 1000) {
@@ -482,7 +526,7 @@ export function startControlGateway(options: Options) {
         }
         if (++ws.data.messages > 90) {
           disconnect(ws.data.identity);
-          ws.close(1008, 'Control rate limit');
+          closeSocket(ws, 1008, 'Control rate limit');
           return;
         }
         let raw: unknown;
@@ -496,10 +540,11 @@ export function startControlGateway(options: Options) {
         if (!parsed.success) {
           error(ws, 'VALIDATION_ERROR', 'Invalid device event');
           if (coordinator.snapshot()?.phase === 'listening')
-            ws.close(1008, 'Invalid capture frame');
+            closeSocket(ws, 1008, 'Invalid capture frame');
           return;
         }
         const event = parsed.data;
+        transport?.validated(event.type);
         const media = ['audio.chunk', 'audio.end', 'audio.receipt'].includes(event.type);
         if (
           (media && ws.data.playbackRates.length > 0 && event.turn_id === null) ||
@@ -518,7 +563,7 @@ export function startControlGateway(options: Options) {
           return;
         }
         if (!ws.data.hello && event.type !== 'device.hello') {
-          ws.close(1008, 'Hello required');
+          closeSocket(ws, 1008, 'Hello required');
           return;
         }
         if (event.type === 'device.hello') {
@@ -530,7 +575,7 @@ export function startControlGateway(options: Options) {
             event.payload.endpoint &&
             event.payload.endpoint !== (ws.data.identity.endpoint ?? 'robot')
           ) {
-            ws.close(1008, 'Endpoint assignment mismatch');
+            closeSocket(ws, 1008, 'Endpoint assignment mismatch');
             return;
           }
           ws.data.hello = true;
@@ -587,12 +632,12 @@ export function startControlGateway(options: Options) {
         ws.data.sequence = event.sequence;
         if (event.type === 'audio.chunk' && ++ws.data.mediaMessages > 60) {
           disconnect(ws.data.identity);
-          ws.close(1008, 'Capture rate limit');
+          closeSocket(ws, 1008, 'Capture rate limit');
           return;
         }
         if (event.type !== 'audio.chunk' && ws.data.messages - ws.data.mediaMessages > 30) {
           disconnect(ws.data.identity);
-          ws.close(1008, 'Control rate limit');
+          closeSocket(ws, 1008, 'Control rate limit');
           return;
         }
         const current = coordinator.snapshot();
@@ -759,11 +804,14 @@ export function startControlGateway(options: Options) {
               applied: result.ok,
             });
             if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
+            if (result.ok && result.data.captureGrant)
+              transport?.granted(result.data.captureGrant.streamId);
             broadcast();
             return;
           }
           if (event.type === 'audio.chunk') {
             const result = coordinator.acceptCaptureChunk({ ...scope, ...event.payload });
+            if (result.ok) transport?.acceptedFrame();
             if (!result.ok) {
               error(ws, result.error.code, result.error.message, event.event_id);
               broadcast();
@@ -784,6 +832,7 @@ export function startControlGateway(options: Options) {
             return;
           }
         }
+        if (event.type === 'audio.end') transport?.report('capture_end');
         if (event.type === 'input.text' || event.type === 'audio.end') {
           // Do not await provider work in the control handler. Stop/mute/help/heartbeat
           // remain responsive; the coordinator drops all obsolete turn results.
@@ -942,8 +991,9 @@ export function startControlGateway(options: Options) {
               });
         }
         broadcast();
-      },
-      close(ws) {
+      }),
+      close(ws, code) {
+        ws.data.transport?.report('close', code);
         sockets.delete(ws);
         if (reservations.get(ws.data.identity.deviceId)?.id === ws.data.connectionId) {
           reservations.delete(ws.data.identity.deviceId);
@@ -987,12 +1037,13 @@ export function startControlGateway(options: Options) {
       )
         reservations.delete(deviceId);
     for (const socket of sockets) {
+      socket.data.transport?.report('sample');
       if (!access.current(socket.data.identity)) {
         endSession(socket.data.identity);
-        socket.close(1008, 'Device access expired or revoked');
+        closeSocket(socket, 1008, 'Device access expired or revoked');
       } else if (elapsedNow() - socket.data.lastHeartbeat > 6000) {
         disconnect(socket.data.identity);
-        socket.close(1001, 'Heartbeat timeout');
+        closeSocket(socket, 1001, 'Heartbeat timeout');
       }
     }
   }, 500);
