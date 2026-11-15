@@ -202,7 +202,11 @@
         >{/each}
     </nav>
     <div class="rail-account">
-      <div class="photo-circle">{#if caregiverPhoto}<img src={caregiverPhoto} alt="Caregiver" />{:else}<span aria-hidden="true">CG</span>{/if}</div>
+      <div class="photo-circle">
+        {#if caregiverPhoto}<img src={caregiverPhoto} alt="Caregiver" />{:else}<span
+            aria-hidden="true">CG</span
+          >{/if}
+      </div>
       <div>
         <p class="nav-section-label">Caregiver account</p>
         <strong>Your own little corner</strong><a

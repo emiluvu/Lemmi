@@ -95,7 +95,9 @@ function fixture(options = {}) {
     session,
     states,
     playback,
-    get context() { return context; },
+    get context() {
+      return context;
+    },
     errors,
     timings,
     processors,

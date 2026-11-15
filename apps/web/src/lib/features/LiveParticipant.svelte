@@ -446,8 +446,11 @@
             : 'Ready when you are'}
       </h2>
       <p class="conversation-capture" aria-live="polite">
-        {listening ? PUBLIC_LEMMI_AUTO_TURN_END ? 'Microphone listening — listening ends after a pause. You can also tap Finish speaking.' : 'Microphone listening — tap Finish speaking when ready.' : 'Microphone off'} · Camera
-        off
+        {listening
+          ? PUBLIC_LEMMI_AUTO_TURN_END
+            ? 'Microphone listening — listening ends after a pause. You can also tap Finish speaking.'
+            : 'Microphone listening — tap Finish speaking when ready.'
+          : 'Microphone off'} · Camera off
       </p>
     </header>
     <div class="conversation-workspace">
