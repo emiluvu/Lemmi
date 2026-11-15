@@ -1,5 +1,25 @@
 # Lemmi — Build and demo plan
 
+## Lemmi branding integration — validated candidate, November 15, 2026
+
+Integrated `e1a5bf9` with the current participant release while retaining scoped
+saved-photo smoke checks. Changes are supplied logo/favicon, route titles and
+metadata, plus exactly `/favicon.svg` and `/images/brand/lemmi.png` in the static
+proxy allowlist. PNG SHA-256 and embedded favicon bytes match the documented
+source; no artwork regeneration, avatar, gateway, schema or dependency change.
+
+Bun 1.4.4 frozen install, type/Svelte, build, formatting and whitespace passed.
+Existing page/access/exit/presentation tests: **16 passed / 159 expectations**.
+Production HTTP/verified TLS/WSS/private-photo and branding-asset MIME smoke
+passed on one disposable PostgreSQL database, removed afterward. The preceding
+backend release's 462-test suite was not rerun for this UI/static-only slice.
+Chromium with the candidate production build passed desktop/mobile logo bounds,
+route titles/metadata, menu keyboard/Escape, no overflow or runtime errors, and
+32px favicon decode with 626 opaque pixels. These used a separate mock browser;
+its navigation lock was isolated between page inspections. No profile/session
+writes, microphone, screenshots or hardware tests. Host rollout/proxy validation
+and public read-only Chromium checks remain pending.
+
 ## Participant greetings, teaching choices and Finish deployed — November 15, 2026
 
 Reviewed handoff `1037fe1` against the newer deployed startup-recovery and
@@ -69,6 +89,10 @@ human audio and hardware rehearsal at their respective boundaries.
 ### Participant usability candidate — November 14, 2026 (local, not deployed)
 
 `codex/participant-greetings-exit`, based on main `f3e3b41`, adds fixed spoken conversation/activity greetings, an eligible spoken/visible teaching menu and typed selection, stable captions, and a persistent Finish activity button. Photo leave can preserve an existing pause. No firmware, migration, dependency or provider change. Observed on Bun 1.4.4: frozen install, type/Svelte checks (0 errors/warnings), **382 tests passed / 42 skipped / 0 failed**, 6,037 expectations, production build, formatting and diff whitespace. Headless Chromium fictional transport checks at desktop and two mobile sizes verified stable caption bounds, keyboard topic/Finish controls, a visible 48 px Finish target and no unintended capture request. Database checks remain skipped without configuration; actual microphone/speaker/K151 and deployment are unrun. Anay/Lukas/Kylie/Emilia review the shared boundaries before integration. [Exact behavior, compatibility, observed checks and handoff](handoffs/participant-greetings-exit.md).
+
+### Lemmi branding candidate — November 15, 2026 (not deployed)
+
+`codex/lemmi-branding` uses the user-supplied `lemmi.png` unchanged for a reusable header/welcome logo and self-contained SVG favicon, adds browser/mobile identity metadata, and updates the default/UI title and product description. The reverse-proxy template and existing smoke script allow exactly the two public brand asset paths. Observed on Bun 1.4.4: frozen install, type/Svelte checks (0 errors/warnings), production build, formatting, **371 tests passed / 42 database checks skipped / 0 failed**, exact image-byte/allowlist checks, and desktop/mobile Chromium logo/favicon/title/keyboard inspection. No gateway, migration, dependency, credentials, participant avatar or firmware changes. Actual Nginx syntax/host rollout remains Anay’s handoff; Kylie reviews branding. [Deployment steps and evidence](handoffs/lemmi-branding.md).
 
 ### Activity routing repair — November 14, 2026 (local, not deployed)
 

@@ -1,5 +1,25 @@
 # Lemmi backend status
 
+## Lemmi branding integration — validated candidate, November 15, 2026
+
+Integrated `e1a5bf9` with the current participant release while retaining scoped
+saved-photo smoke checks. Changes are supplied logo/favicon, route titles and
+metadata, plus exactly `/favicon.svg` and `/images/brand/lemmi.png` in the static
+proxy allowlist. PNG SHA-256 and embedded favicon bytes match the documented
+source; no artwork regeneration, avatar, gateway, schema or dependency change.
+
+Bun 1.4.4 frozen install, type/Svelte, build, formatting and whitespace passed.
+Existing page/access/exit/presentation tests: **16 passed / 159 expectations**.
+Production HTTP/verified TLS/WSS/private-photo and branding-asset MIME smoke
+passed on one disposable PostgreSQL database, removed afterward. The preceding
+backend release's 462-test suite was not rerun for this UI/static-only slice.
+Chromium with the candidate production build passed desktop/mobile logo bounds,
+route titles/metadata, menu keyboard/Escape, no overflow or runtime errors, and
+32px favicon decode with 626 opaque pixels. These used a separate mock browser;
+its navigation lock was isolated between page inspections. No profile/session
+writes, microphone, screenshots or hardware tests. Host rollout/proxy validation
+and public read-only Chromium checks remain pending.
+
 ## Participant greetings, teaching choices and Finish deployed — November 15, 2026
 
 Reviewed handoff `1037fe1` against the newer deployed startup-recovery and
