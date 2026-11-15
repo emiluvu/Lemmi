@@ -198,6 +198,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
       mode: z.literal('live'),
       deviceId: IdSchema,
       profileId: IdSchema,
+      language: z.enum(['en', 'de']).default('en'),
       credentialExpiresAt: z.string().datetime().nullable(),
       audio: z.union([
         z.literal(false),

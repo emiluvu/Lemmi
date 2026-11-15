@@ -31,3 +31,8 @@ Migration is additive. A source rollback must not restore revoked permissions or
 ## Local acceptance
 
 The five focused profile tests passed: preserving fictional fills, relevant older retrieval, context grounding with memory off, cross-session memory/privacy refusal, and revocation during summary generation. Browser preview: all sections present; multiline comfortable topics survived, familiar-person rows added, preview Save did not persist, Escape closed the modal. Database/provider/robot and live upload checks require the isolated/backend environments above. Final local check/build/full-suite outcomes are recorded in the build plan.
+
+
+## Backend integration follow-up
+
+[Combined backend review and acceptance](profile-german-backend-integration.md) supersedes the original awaited-summary implementation: optional summaries run in bounded background work and never hold up a normal reply. Added transcript/contact summary guards, revision-changing/fenced refusal with stale-form protection, prompt budgeting and upload admission. Original source behavior/results above remain history. Default memory remains off; no bulk demo fill is performed. Actual runtime and additive migration006 are recorded in backend status/API together.

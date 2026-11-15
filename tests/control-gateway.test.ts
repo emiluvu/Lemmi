@@ -250,7 +250,7 @@ test('paired controls share one authority; stale/replayed inputs, unsupported me
     ).toBe(true);
     let session = (await client.command('input.start', null))!;
     expect(session.mode).toBe('live');
-    expect(session.phase).toBe('ready');
+    expect(session.phase).toBe('waiting');
     expect(session.captureGrant).toBeNull();
     const original = session;
     session = (await client.command('input.mute', session, { muted: false }))!;
@@ -283,7 +283,7 @@ test('paired controls share one authority; stale/replayed inputs, unsupported me
         e.payload.code === 'REVISION_CONFLICT',
     );
     session = (await client.command('input.resume', session))!;
-    expect(session.phase).toBe('ready');
+    expect(session.phase).toBe('waiting');
     expect(session.captureGrant).toBeNull();
     client.socket.close();
     await client.closed;
@@ -327,7 +327,7 @@ test('old revoke retry preserves a new pairing; device credential expiry closes 
   try {
     await client.hello();
     const session = await client.command('input.start', null);
-    expect(session?.phase).toBe('ready');
+    expect(session?.phase).toBe('waiting');
     now += DEVICE_TTL_MS;
     await client.closed;
     expect(

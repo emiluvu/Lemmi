@@ -131,8 +131,7 @@ function fixture(options = {}) {
 test('playback preparation opens output without microphone permission or a capture request', async () => {
   const f = fixture();
   try {
-    f.audio.preparePlayback();
-    await Promise.resolve();
+    await f.audio.prepare();
     expect(f.context).toBeDefined();
     expect(f.processors).toHaveLength(0);
     expect(f.sent).toHaveLength(0);
@@ -209,7 +208,7 @@ function automatic(overrides = {}) {
 }
 
 test('automatic turn ending tolerates thinking pauses and resumed speech, then submits exactly once', async () => {
-  const f = automatic();
+  const f = automatic({ silenceMs: 1500 });
   try {
     await f.audio.speak();
     expect(f.track.enabled).toBe(false);
@@ -782,6 +781,36 @@ test('browser negotiated playback window stays bounded and Stop cancels every sc
     f.audio.cancel();
     expect(f.listeners.every((node) => node.stopped && node.onended === null)).toBe(true);
     expect(f.sent.filter(([type]) => type === 'audio.receipt')).toHaveLength(0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('browser capture recovers the authority language and resets legacy handshakes to English', async () => {
+  const f = fixture();
+  try {
+    f.audio.receive(event('device.ready', { language: 'de', audio: false }), 'browser');
+    await f.audio.speak();
+    expect(f.sent.at(-1)).toEqual(['input.speak', { language: 'de' }]);
+    f.audio.cancel();
+    f.audio.receive(event('device.ready', { audio: false }), 'browser');
+    await f.audio.speak();
+    expect(f.sent.at(-1)).toEqual(['input.speak', { language: 'en' }]);
+  } finally {
+    f.restore();
+  }
+});
+
+test('German microphone failures remain explicit and do not open capture', async () => {
+  const f = fixture();
+  try {
+    f.audio.receive(event('device.ready', { language: 'de', audio: false }), 'browser');
+    navigator.mediaDevices.getUserMedia = async () => {
+      throw new Error('denied');
+    };
+    await f.audio.speak();
+    expect(f.errors.at(-1)).toContain('Mikrofon ist nicht verfügbar');
+    expect(f.sent).toHaveLength(0);
   } finally {
     f.restore();
   }

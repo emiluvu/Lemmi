@@ -600,3 +600,57 @@ test('photo and teaching remain mutually exclusive and profile changes fence pen
       .events.every((event) => !JSON.stringify(event).includes('fictional garden answer')),
   ).toBe(true);
 });
+
+for (const preset of ['guided', 'quiet'] as const)
+  test(`Photo Story ${preset} opening and same-scene Resume retain text without playback or with failed TTS`, async () => {
+    for (const mode of ['disabled', 'no-playback', 'tts-failure'] as const) {
+      let syntheses = 0;
+      const f = setup(
+        preset,
+        reviewedPhotoDemo(),
+        mode === 'disabled'
+          ? undefined
+          : {
+              stt: {
+                async transcribe() {
+                  throw new Error('Capture not requested');
+                },
+              },
+              tts: {
+                async synthesize() {
+                  syntheses++;
+                  return fail('UNAVAILABLE', 'Fixture voice unavailable');
+                },
+              },
+            },
+      );
+      const rates = mode === 'no-playback' ? [] : [16000];
+      const opening = value<any>(await f.c.speakPhotoOpening(f.command('Photo Story'), rates));
+      expect(opening.reply.text).toContain('Roses and other flowers in a garden.');
+      expect(opening.reply.text.includes('?')).toBe(preset !== 'quiet');
+      const openingView = f.c.photoView();
+      if (openingView?.activityId !== 'photo_album') throw new Error('Missing photo view');
+      const assetId = openingView.currentAssetId;
+      for (const type of ['pause', 'resume'] as const)
+        value(
+          f.c.handle('session.command', {
+            sessionId: f.s.id,
+            expectedGeneration: f.c.snapshot()!.generation,
+            commandId: crypto.randomUUID(),
+            action: { type },
+          }),
+        );
+      const { text: _text, ...prompt } = f.command('Resume');
+      const resume = value<any>(await f.c.speakSessionPrompt(prompt, rates, true));
+      expect(resume.reply.text).toContain(opening.reply.text);
+      expect(resume.reply.text.includes('?')).toBe(preset !== 'quiet');
+      const resumedView = f.c.photoView();
+      if (resumedView?.activityId !== 'photo_album') throw new Error('Missing resumed photo');
+      expect(resumedView.currentAssetId).toBe(assetId);
+      expect(f.c.snapshot()?.captureGrant).toBeNull();
+      expect(f.c.snapshot()?.phase).toBe('waiting');
+      expect(f.c.isCurrentTextReply(resume.reply.turnId)).toBe(true);
+      expect(syntheses).toBe(mode === 'tts-failure' ? 2 : 0);
+      expect(JSON.stringify(f.c.persistenceSnapshot())).not.toContain(opening.reply.text);
+    }
+  });

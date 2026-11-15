@@ -2,7 +2,44 @@
 
 ## November 14 Photo Story Start/Resume source acceptance
 
-`codex/photo-story-start-resume`: 76 focused checks passed for explicit openings, unchanged-scene Resume, Quiet/capture-off, pending-output Stop, scoped media authorization and profile/observer isolation. Full suite: 307 pass / 52 database skips / three existing Windows/environment failures; see [handoff](handoffs/photo-story-start-resume-2026-11-14.md). Type/Svelte and build passed. Actual local fictional UI fixtures showed picture plus avatar on mobile/desktop, stable mobile speaking/thinking geometry, and stable space during six-second loading plus explicit failed-image recovery. This is fixture visual acceptance plus synthetic gateway/speech acceptance, not a live human microphone/speaker or deployed end-to-end check. Kylie reviews final UI/keyboard/zoom, Anay reviews transient context and cancellation, Lukas reviews question/scene continuity, Emilia verifies hardware controls. No merge or deployment.
+`codex/photo-story-start-resume` updated against main `f3e3b41`: greeting/reorientation finishes before fresh browser listening, server-resolved English/German prompts and capture-off text fallback preserve newer memory/Jev/Stackchan behavior. Same-scene/question Resume and scoped image/avatar recovery remain. Observed: **435 pass / zero fail or skips / 6,607 expectations** on five isolated PostgreSQL databases; Bun 1.4.4 frozen install, type/Svelte, production build, full format/whitespace, 15 Python fixtures and production HTTP/verified TLS/WSS participant/Photo Story smoke passed. No deployment or current human microphone/speaker/visual/K151 acceptance. Server deploy agent receives the pushed branch and [review/rollout/rehearsal handoff](handoffs/photo-story-start-resume-2026-11-14.md). Anay reviews cancellation/data, Lukas scene continuity, Kylie merged listening/layout/keyboard, Emilia device controls/credit.
+
+### Activity routing repair — November 14, 2026 (local, not deployed)
+
+Candidate `fix/conversation-activity-routing` from main/backend-deploy `0f299c4` fixes natural reviewed teaching/photo commands and connects optional semantic requests to an application-owned confirmation using existing session/speech transitions. Activity-only scope separates this from the broader failing recap/redirect gate. Actual Jev 1.14 activity-only evaluation: **71/71 matched, zero unavailable/false activity positives, p50/p95 169/248 ms**, unchanged 0.85 threshold and strict provider privacy flags. Final unseen 20-case verification independently passed 20/20 (156/270 ms). Full-conversation evaluation still missed two of 51; do not enable that scope.
+
+Observed on pinned Bun 1.4.4: frozen install; type/Svelte check zero errors/warnings; production build; **358 tests passed, zero failures/skips, 5,515 expectations**, using five fresh isolated PostgreSQL 14.24 databases (cluster stopped). Fixtures cover actual shared STT→confirmation→fresh output, receipts, duplicates, interruption/profile-change/late-decision races and failed question playback. Live provider calls used fictional committed text only. No runtime enablement, deployment, human microphone/speaker or physical K151 acceptance; counterpart review remains pending. [Findings, exact behavior, limitations and Anay/Lukas/Emilia/Kylie handoff](handoffs/conversation-routing-repair.md).
+
+## Tilda German candidate — November 14, 2026
+
+Undeployed `codex/tilda-german-integration`, based on `79051d9`: exact-ID
+server-resolved `en`/`de`, safe profile/ready language, browser text/capture and
+essential German controls/errors, deterministic German control/privacy/sensitive
+routes, unavailable German activities, and opt-in pinned German voice candidate
+provisioning. Existing profile permissions/data/keys and English defaults remain.
+Independent read-only backend authority/cancellation review found no blocker.
+
+Observed locally with pinned Bun **1.4.4**: frozen install, **318 passed / 40
+database cases skipped / zero failed**, **5,228 expectations**; Svelte/TypeScript
+check, production build, full source formatting and whitespace passed. All **15
+Python speech/provisioning tests** passed. Existing production SvelteKit → fixture
+managed identity → verified HTTPS/WSS → pairing/chat/Pause/Resume/revoke smoke
+passed. New tests cover concurrent language isolation, wire readiness, text and
+capture mismatch rejection, German missing-voice capture-off behavior, late work
+cancellation, fixed recap, quoted/negated routing and browser propagation/reset.
+Sandbox socket/build-worker restrictions required reruns with local permissions;
+the successful results above are those reruns. PostgreSQL/Docker are unavailable
+in this WSL environment, so database acceptance was not repeated.
+
+Host `mobrob-Precision-3680` could not resolve over batch SSH. No deployment,
+Tilda profile/enrollment, private config change, real German model/voice download,
+human microphone/speaker/room-noise, fluent-speaker review, browser visual/keyboard
+or K151 check was performed. The Thorsten voice remains a candidate pending
+listening review; missing German synthesis has no English fallback. Anay reviews
+server/data/deployment, Kylie human browser wording/flow, Lukas unavailable
+activity boundaries, and Emilia hardware/language handoff. Follow the
+[release handoff](handoffs/tilda-german-release.md) before staging on
+`backend-deploy`; do not reset/reseed the shared database.
 
 ## November 14 profile-context source acceptance
 
@@ -917,3 +954,39 @@ Runtime `95bdcef` merges `integration/frontend-backend/a664e7e` while preserving
 Observed: 336 tests/5,382 expectations, no skips/failures, five isolated PostgreSQL databases; frozen Bun 1.4.4, type/Svelte zero errors/warnings, build/format/whitespace. Production participant/new exit and edit operations/activity transport, persistent data/media/support, TLS control/chat and long speech smokes passed. Local Chromium desktop/mobile keypad/Escape/safety-control checks passed. Actual public Chromium created/edited a fictional profile with database-confirmed revision, selected photo/teaching/return modes, verified no borrowed context, truthful unavailable music, Pause/Resume/Stop, mobile controls/no overflow, code verification and locked mutation denial. Actual synthetic ordinary speech passed 177 input frames/388 output chunks; actual recognized “Explore pictures” selected the reviewed scene and completed fixed TTS with 109 frames/235 chunks. Both used simulated receipts, no human mic/speaker. Public Photo Story scope/model/Skip/Stop, retained key and blocked internal/mock/preview/unlisted-static paths passed. Client secret scan: 54 text assets.
 
 All four services active; web/gateway/speech zero automatic restarts. Only rehearsal-created records removed. Decisions/CUDA remain disabled under prior failed gates. Human microphone/room quality, real audible playback, K151, full assistive technology/zoom and counterpart review remain pending. [Detailed source/review/handoff](handoffs/ui-voice-backend-review-2026-11-14.md).
+
+
+### Browser default-listening usability correction — November 14, 2026
+
+User prioritized active microphone conversation and optional Mute while someone was testing the live frontend. Web runtime `d6d2ff6` implements one Start/permission/unmute/grant action, fresh automatic Conversational/Guided turns after consumed output, Quiet waiting, visible Mute/Type controls, finish on listening status, capture-off typing, and cancellation of stale permission/completion/ownership work. No API, migration, server/firmware command or speech/provider change. Restarted web only; gateway PID/start timestamp matched before/after. Backup pointer `.data/default-listening-rollback-path`.
+
+Final 345 tests/5,427 expectations passed with zero skips/failures; frozen Bun 1.4.4, zero-error/warning type/Svelte, production build, format/whitespace and isolated participant/media/restart/control TLS/WSS smokes passed. Real bundled VAD/Web Audio Chromium fixture checks passed Start/continuation/Mute/Pause/Resume/typing/Stop, denied/late permission and Quiet. Actual public Chromium synthetic in-memory speech passed one Start → real local STT/external LLM/HFC TTS consumed output → next capture without another click → Mute/no restart → Stop (one reply/two capture requests, zero errors). Only its own temporary fictional profile/endpoint was cleaned up. No human microphone, physical speaker, K151 or full accessibility/counterpart acceptance.
+
+Speech remains CPU 2+2/HFC; different enrolled profiles/endpoints can run together with one owner per profile. CUDA/Jev remain off under prior failed gates; reviewed commands select games. Inspected firmware still advertises unsupported audio, so Stackchan control tests can proceed but full audio/local controls/watchdog need Emilia's integration/hardware checks. [Current handoff](handoffs/browser-default-listening.md).
+
+
+### Response timing and profile entry — deployed November 14, 2026
+
+350 tests / 5,644 expectations passed without skips/failures; type/Svelte, build/format and production HTTP/TLS/WSS participant scope passed. Chromium fixture scenarios passed profile preselection, voice/Mute/Pause/Resume/typing/Stop, denied/late permission and Quiet. Actual local ASR/TTS in the isolated production browser selected Teach Lemmi from the fixed spoken invitation, showed the new profile’s empty-topic state, consumed 161 output frames and continued listening with no overlap/runtime errors. Public before-measurement was 3,193 ms synthetic voice end to scheduled playback, including 1,444 ms before submission. Defaults now select 1,000 ms browser silence and an 8-second provider deadline (one 20-second provider stall was observed). No new route/migration.
+
+Warmer fixed family replies and grounded model guidance do not invent relative/contact facts. Live family follow-up rehearsal accepted 5/6 model replies; one Quiet response was explicitly rejected/unavailable, and full human semantic/tone review remains pending. No fake fallback/retry masks failure. Deployed web/gateway `3c5033e` after protected backup; speech PID/start preserved, no migration/reseed/credential change. Actual public Chromium synthetic ordinary response measured 3,193 → 2,555 ms (about 20% in individual observations), with submission wait 1,444 → 955 ms. Public spoken Teach Lemmi selected teaching at 1,513 ms to scheduled output and correctly showed its empty profile’s No eligible topics. Both checked selected caregiver card entry/no dropdown, consumed playback → another capture → Mute/no restart → Stop; zero runtime errors. Four services active. Only rehearsal-created records removed. Backend status/API agree on the runtime and configured 1,000 ms silence/8,000 ms provider deadline. Physical microphone/speaker/K151 and counterpart reviews remain unrun. [Detailed findings, negative cases and rollout](handoffs/voice-response-and-profile-entry.md).
+
+
+### Jev repair integration review — November 14, 2026
+
+Source c1b619f merged with deployed speech/profile fixes and source branch preserved. Three parallel user-requested technical reviews found/fixed Quiet question wording and added substantive cancellation/consent/isolation checks. Final 370 tests / 5,858 expectations passed, no skips/failures, plus zero-error/warning type/Svelte, build/format and production participant TLS/WSS/data smoke. Real Jev activity-only 71-case evaluation passed all cases, no unavailable/false positives, p50 151 ms / p95 204 ms. Full conversation scope remains off after source 49/51 gate. Isolated actual local speech + Jev production browser passed spoken natural teaching invitation → confirmation → spoken yes → teaching UI/empty-profile eligibility → another capture; one decision, zero chat generations, no overlap/runtime error. Mute/Pause/Resume/typing/Stop passed. Runtime gateway07e66b7 deployed with activities-only Jev1.14/.85/1500ms; web3c5033e and speech retained with matching PID/start timestamps. Protected backup pointer .data/jev-routing-rollback-path; no migration/reseed/credential changes. Actual public own-profile spoken request → semantic offer → spoken yes → teaching passed (two replies/three captures, no early switch, Mute/Stop, no runtime errors); separate ordinary actual speech/Jev/chat/TTS passed at an individual2723ms response-start observation (one reply/two captures/Mute/Stop). Only rehearsal-created records removed. Four services active; no physical microphone/speaker/K151/named counterpart acceptance implied.
+
+
+### Combined profile-context/memory and German backend review — November14,2026
+
+Source cd68663 and2ca3fba merged against ddecdc9 while preserving source branches, caregiver preselection, current Jevactivities and microphone controls. Fixed summary latency via bounded background work; fenced refusal/reenable and deletion races; added summary-echo/contact checks, prompt budget and upload admission. German skips irrelevant Jev calls and gains grounded contact-claim checks. Final407tests/6244expectations passed without skips/failures, zero-error/warning type/Svelte, build/format, production participant verifiedTLS/WSS and nine Python checks. Actual staging Chromium passed rich profile/images/default-off permission/Forget/off/deletion/scope/lock checks with fixture summaries, no provider/audio/screenshots. Isolated actual German voice↔STT and configured model→German voice probes passed synthetically; no human/physicalaudio acceptance. Back up DB+private media before migration006; existing Tilda reused; no bulk backfill or existing permission opt-in. Runtime rollout/public checks follow in backend status/API. [Detailed review and three-integration human test reminder](handoffs/profile-german-backend-integration.md).
+
+
+### Combined profile/German rollout observed — November14,2026
+
+Runtimea779c70 deployed, migration006/eight checksums verified, DB+private-media backup refreshed during maintenance, all keys/data retained, no bulk fill/default opt-in. Existing Tilda reused; speech health2STT/2TTS en/de CPU, Jevactivities still enabled. Public profile/photo CRUD/scope/private-byte deletion/permission/lock checks passed. Actual opted-in English speech persisted a background summary; own test data removed. Tilda German and concurrent English/German real STT/model/TTS→next capture→Mute/Stop passed; initial German start timeout was not reproduced by two later successes, cause unresolved. Postmerge public Jev spoken confirmation also passed. Zero runtime errors in successful browser checks,59clientassets/zero credential matches, four services active. These are fixed synthetic/no-recording probes, not human/physical K151/tone acceptance. Please test all three: Jev, profile context/photos+memory/Forget, German Tilda alongside English, including startup/reconnect and controls. [Deployment detail/limitations](handoffs/profile-german-backend-integration.md).
+
+
+### Stackchan twelve-frame backend credit review — November14,2026
+
+User/Emilia requested240ms output capacity with four-frame fallback. Removed browser-only restrictions from hello negotiation and captured/approved/typed speech owners; contracts already support4|12. Final413tests/6281expectations passed, no skips/failures; type/Svelte zero errors/warnings, frozen Bun, format/whitespace. Robot/browser credit, consumed-only refill, over-credit rejection, four-frame fallback, queued/playing Stop with PCM wipe/late-receipt denial, approved teaching output and short-tail completion passed in real gateway fixtures. Gateway264df22 deployed after protected backup; web/speecha779c70 PID/start timestamps retained, config/data/keys unchanged. Actual public own-profile robot WSS12initial→started0/no credit→consumed2/14total→Stop/no more chunks/stale-receipt denial and omitted-field4 fallback passed with real speech/simulated receipts; only own fixture records removed. Four services active, no automatic gateway restart. Local firmware Stop/ring/DMA flush and actual jitter/speaker/K151 checks remain Emilia’s hardware acceptance. [Exact integration handoff](handoffs/stackchan-playback-window.md).

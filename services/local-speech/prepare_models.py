@@ -10,10 +10,10 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 
 
-def provision(directory, stt_profile="base"):
+def provision(directory, stt_profile="base", german=False):
     manifest = json.loads((HERE / "assets.json").read_text())
     hashes = {}
-    for kind in ["stt", "tts"]:
+    for kind in ["stt", "tts"] + (["tts-de"] if german else []):
         selected = "stt-small" if kind == "stt" and stt_profile == "small" else kind
         asset = manifest[selected]
         folder = directory / selected
@@ -84,8 +84,10 @@ if __name__ == "__main__":
     parser.add_argument("--configure", action="store_true", help="Create private service .env only if absent")
     parser.add_argument("--stt-profile", choices=["base", "small"], default="base",
                         help="Explicit model profile; never silently switch a configured model")
+    parser.add_argument("--german", action="store_true",
+                        help="Provision pinned German candidate for review; never enables/overwrites a voice setting")
     args = parser.parse_args()
     directory = args.directory.resolve()
-    provision(directory, args.stt_profile)
+    provision(directory, args.stt_profile, args.german)
     if args.configure:
         configure(directory, args.stt_profile)

@@ -82,6 +82,11 @@ test('bounded retrieval selects relevant caregiver details and older summaries w
   }));
   expect(memoryContext(memories, 'garden')).toContain('garden');
   expect(memoryContext(memories, 'garden')).toContain('unreviewed');
+  const longMemories = memories.map((memory) => ({ ...memory, summary: '"'.repeat(300) }));
+  const bounded = memoryContext(longMemories, '', 1000);
+  expect(bounded.length).toBeLessThanOrEqual(1000);
+  expect(JSON.parse(bounded.split('Data: ')[1]!).length).toBe(1);
+  expect(memoryContext(longMemories, '', 10)).toBe('');
 });
 test('ordinary chat grounds in caregiver context; memory off makes no summary call or durable memory', async () => {
   const calls: ChatInput[] = [];
@@ -115,6 +120,8 @@ test('opt-in summary reaches later sessions; privacy refusal removes use and req
   start(c);
   await text(c, 'I like daisies');
   expect(calls[0]!.system).toContain('growing daisies');
+  for (let i = 0; i < 20 && !c.persistenceSnapshot()?.memory; i++)
+    await new Promise((resolve) => setTimeout(resolve, 1));
   expect(c.persistenceSnapshot()?.memory?.summary).toContain('flowers');
   const s = c.snapshot()!;
   c.handle('session.command', {
@@ -147,6 +154,97 @@ test('profile revocation during an optional summary discards its late result', a
   c.pauseForProfileUpdate({ summaryMemoryEnabled: false });
   c.acceptPersistentProfile({ ...profile(false), revision: 1 });
   finish!(ok({ text: 'Late private summary.', language: 'en' }));
-  expect((await pending).ok).toBe(false);
+  // The ordinary reply was already delivered; revocation cancels only the optional job.
+  expect((await pending).ok).toBe(true);
+  await new Promise((resolve) => setTimeout(resolve, 1));
   expect(c.persistenceSnapshot()?.memory).toBeUndefined();
+});
+
+test('a held optional summary cannot hold up the ordinary reply, and its completion queues a checkpoint', async () => {
+  let finish!: (value: any) => void;
+  let changed = 0;
+  const c = new SessionCoordinator(
+    'live',
+    {
+      async complete(input) {
+        if (input.system.startsWith('Write a short'))
+          return new Promise((resolve) => (finish = resolve));
+        return ok({ text: 'We can enjoy the flowers.', language: 'en' });
+      },
+    },
+    undefined,
+    Date.now,
+    () => changed++,
+  );
+  c.acceptPersistentProfile(profile(true));
+  start(c);
+  let delivered = false;
+  const pending = text(c, 'I enjoy looking at the garden').then((reply) => {
+    delivered = reply.ok;
+    return reply;
+  });
+  for (let i = 0; i < 20 && !delivered; i++) await new Promise((resolve) => setTimeout(resolve, 1));
+  expect(finish).toBeDefined();
+  expect(delivered).toBe(true);
+  expect(c.snapshot()?.phase).toBe('waiting');
+  expect(c.persistenceSnapshot()?.memory).toBeUndefined();
+  finish(ok({ text: 'Participant discussed gardens.', language: 'en' }));
+  for (let i = 0; i < 20 && !c.persistenceSnapshot()?.memory; i++)
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  expect((await pending).ok).toBe(true);
+  expect(c.persistenceSnapshot()?.memory?.summary).toBe('Participant discussed gardens.');
+  expect(changed).toBe(1);
+});
+
+test('a new no-saving request revokes the current permission after a future-preset revision', async () => {
+  const c = new SessionCoordinator('live', {
+    async complete() {
+      return ok({ text: 'We can take our time.', language: 'en' });
+    },
+  });
+  c.acceptPersistentProfile(profile(true));
+  start(c);
+  c.acceptPersistentProfile(
+    { ...profile(true), revision: 1, communicationSupport: { preset: 'quiet', configVersion: 1 } },
+    false,
+  );
+  expect(c.snapshot()?.profileRevision).toBe(0);
+  expect((await text(c, "Don't save this")).ok).toBe(true);
+  expect(c.persistenceSnapshot()?.forgetMemory).toBe(true);
+  expect(c.snapshot()?.profileRevision).toBe(1);
+  expect(c.snapshot()?.communicationSupport.preset).toBe('guided');
+  expect(c.snapshot()?.phase).toBe('paused');
+});
+
+test('Stop or a newer input discards a late optional summary without losing either successful reply', async () => {
+  for (const interruption of ['stop', 'new_turn'] as const) {
+    let finish!: (value: any) => void;
+    let summaries = 0;
+    const c = new SessionCoordinator('live', {
+      async complete(input) {
+        if (input.system.startsWith('Write a short')) {
+          summaries++;
+          if (summaries === 1) return new Promise((resolve) => (finish = resolve));
+          return ok({ text: 'Participant discussed books.', language: 'en' });
+        }
+        return ok({ text: 'We can take our time.', language: 'en' });
+      },
+    });
+    c.acceptPersistentProfile(profile(true));
+    start(c);
+    expect((await text(c, 'I enjoy the garden')).ok).toBe(true);
+    if (interruption === 'stop') {
+      const s = c.snapshot()!;
+      c.handle('session.command', {
+        sessionId: s.id,
+        expectedGeneration: s.generation,
+        commandId: crypto.randomUUID(),
+        action: { type: 'stop' },
+      });
+    } else expect((await text(c, 'I like reading books')).ok).toBe(true);
+    finish(ok({ text: 'Late discarded topic.', language: 'en' }));
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    expect(c.persistenceSnapshot()?.memory?.summary).not.toBe('Late discarded topic.');
+    if (interruption === 'stop') expect(c.persistenceSnapshot()?.memory).toBeUndefined();
+  }
 });

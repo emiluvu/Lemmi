@@ -67,8 +67,9 @@
           message = result.error.message;
           return;
         }
-        const { id, preferredName, avatarId, revision, communicationSupport } = result.data;
-        saved({ id, preferredName, avatarId, revision, communicationSupport });
+        const { id, preferredName, avatarId, revision, communicationSupport, language } =
+          result.data;
+        saved({ id, preferredName, avatarId, revision, communicationSupport, language });
         editing = false;
         message = 'Saved to the local mock backend. Resets when that server restarts.';
       } catch {

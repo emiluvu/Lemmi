@@ -9,9 +9,16 @@ import {
 } from '@lemmi/contracts';
 import { startControlGateway } from '../apps/realtime/src/control';
 
-async function endpoint(kind: 'browser' | 'robot', requested?: 4 | 12) {
+async function endpoint(
+  kind: 'browser' | 'robot',
+  requested?: 4 | 12,
+  approvedPrompt = false,
+  outputFrames = 24,
+  openingPrompt = false,
+) {
   const internal = crypto.randomUUID();
-  const output = new Uint8Array(882 * 24).fill(7);
+  const output = new Uint8Array(882 * outputFrames).fill(7);
+  let syntheses = 0;
   const gateway = startControlGateway({
     publicOrigin: 'https://window.fixture.invalid',
     internalToken: internal,
@@ -31,7 +38,7 @@ async function endpoint(kind: 'browser' | 'robot', requested?: 4 | 12) {
       tts: {
         async synthesize() {
           return ok({
-            pcm: output,
+            pcm: !openingPrompt && syntheses++ === 0 ? new Uint8Array(output) : output,
             sampleRate: 22050,
             encoding: 'pcm_s16le',
             channels: 1,
@@ -134,11 +141,86 @@ async function endpoint(kind: 'browser' | 'robot', requested?: 4 | 12) {
       throw new Error('Audio not negotiated');
     const window = ready.payload.audio.outputWindowChunks;
     await acknowledged(send('input.start'));
+    if (!openingPrompt) {
+      const first = await (async () => {
+        await until(() => events.some((e) => e.type === 'response.start'));
+        return events.find((e) => e.type === 'response.start')!;
+      })();
+      if (first.type !== 'response.start') throw new Error('Missing greeting');
+      const meta = first.payload;
+      send(
+        'audio.receipt',
+        { leaseId: meta.leaseId, streamId: meta.streamId, status: 'started', playedChunks: 0 },
+        meta.turnId,
+      );
+      let played = 0;
+      while (played < meta.chunkCount) {
+        await until(
+          () =>
+            events.filter((e) => e.type === 'audio.chunk' && e.turn_id === meta.turnId).length >
+            played,
+        );
+        played = events.filter((e) => e.type === 'audio.chunk' && e.turn_id === meta.turnId).length;
+        if (played < meta.chunkCount)
+          send(
+            'audio.receipt',
+            {
+              leaseId: meta.leaseId,
+              streamId: meta.streamId,
+              status: 'progress',
+              playedChunks: played,
+            },
+            meta.turnId,
+          );
+      }
+      await until(() => events.some((e) => e.type === 'audio.end' && e.turn_id === meta.turnId));
+      await acknowledged(
+        send(
+          'audio.receipt',
+          {
+            leaseId: meta.leaseId,
+            streamId: meta.streamId,
+            status: 'completed',
+            playedChunks: meta.chunkCount,
+          },
+          meta.turnId,
+        ),
+      );
+      events.splice(0);
+      await acknowledged(send('input.mute', { muted: false }));
+      if (approvedPrompt) await acknowledged(send('input.teaching.start'));
+      else {
+        await acknowledged(send('input.speak', { language: 'en' }));
+        await until(() => session?.phase === 'listening');
+        const grant = session!.captureGrant!;
+        for (let index = 0; index < 2; index++)
+          send(
+            'audio.chunk',
+            {
+              leaseId: grant.leaseId,
+              streamId: grant.streamId,
+              chunkIndex: index,
+              encoding: 'pcm_s16le',
+              data: Buffer.alloc(640, 1).toString('base64'),
+            },
+            grant.turnId,
+          );
+        send(
+          'audio.end',
+          { leaseId: grant.leaseId, streamId: grant.streamId, chunkCount: 2 },
+          grant.turnId,
+        );
+      }
+    }
     await until(() => events.some((e) => e.type === 'response.start'));
     const event = events.find((e) => e.type === 'response.start')!;
     if (event.type !== 'response.start') throw new Error('Missing output metadata');
     const metadata: SpeechOutputStart = event.payload;
-    await until(() => events.filter((e) => e.type === 'audio.chunk').length >= window);
+    await until(
+      () =>
+        events.filter((e) => e.type === 'audio.chunk').length >=
+        Math.min(window, metadata.chunkCount),
+    );
     await barrier();
     return {
       events,
@@ -170,41 +252,44 @@ async function endpoint(kind: 'browser' | 'robot', requested?: 4 | 12) {
   }
 }
 
-test('browser opts into twelve queued frames; started/zero progress grant no credit and consumed progress grants exactly its count', async () => {
-  const d = await endpoint('browser', 12);
-  try {
-    expect(d.window).toBe(12);
-    expect(d.count()).toBe(12);
-    await d.acknowledged(d.receipt('started', 0));
-    await d.barrier();
-    expect(d.count()).toBe(12);
-    await d.acknowledged(d.receipt('progress', 0));
-    await d.barrier();
-    expect(d.count()).toBe(12);
-    const invalid = d.receipt('progress', 13);
-    await d.acknowledged(invalid);
-    expect(
-      d.events.some(
-        (e) =>
-          e.type === 'error' &&
-          e.payload.commandId === invalid &&
-          e.payload.code === 'REVISION_CONFLICT',
-      ),
-    ).toBe(true);
-    expect(d.count()).toBe(12);
-    await d.acknowledged(d.receipt('progress', 2));
-    await d.until(() => d.count() === 14);
-    await d.barrier();
-    expect(d.count()).toBe(14);
-  } finally {
-    d.close();
-  }
-});
+for (const kind of ['browser', 'robot'] as const)
+  test(`${kind} opts into twelve queued frames; started/zero progress grant no credit and consumed progress grants exactly its count`, async () => {
+    const d = await endpoint(kind, 12);
+    try {
+      expect(d.window).toBe(12);
+      expect(d.count()).toBe(12);
+      await d.acknowledged(d.receipt('started', 0));
+      await d.barrier();
+      expect(d.count()).toBe(12);
+      await d.acknowledged(d.receipt('progress', 0));
+      await d.barrier();
+      expect(d.count()).toBe(12);
+      const invalid = d.receipt('progress', 13);
+      await d.acknowledged(invalid);
+      expect(
+        d.events.some(
+          (e) =>
+            e.type === 'error' &&
+            e.payload.commandId === invalid &&
+            e.payload.code === 'REVISION_CONFLICT',
+        ),
+      ).toBe(true);
+      expect(d.count()).toBe(12);
+      await d.acknowledged(d.receipt('progress', 2));
+      await d.until(() => d.count() === 14);
+      await d.barrier();
+      expect(d.count()).toBe(14);
+    } finally {
+      d.close();
+    }
+  });
 
-test('legacy browser stays at four frames and a robot cannot opt into the browser window', async () => {
+test('legacy and explicit four-frame browser/robot endpoints retain the fallback bound', async () => {
   for (const [kind, requested] of [
     ['browser', undefined],
-    ['robot', 12],
+    ['browser', 4],
+    ['robot', undefined],
+    ['robot', 4],
   ] as const) {
     const d = await endpoint(kind, requested);
     try {
@@ -216,28 +301,95 @@ test('legacy browser stays at four frames and a robot cannot opt into the browse
   }
 });
 
-test('Stop retires a twelve-frame queue, wipes PCM and rejects stale completion without emitting more chunks', async () => {
-  const d = await endpoint('browser', 12);
+for (const kind of ['browser', 'robot'] as const)
+  for (const playing of [false, true])
+    test(`Stop retires a twelve-frame ${kind} ${playing ? 'playing' : 'queued'} stream, wipes PCM and rejects stale completion`, async () => {
+      const d = await endpoint(kind, 12);
+      if (playing) await d.acknowledged(d.receipt('started', 0));
+      try {
+        const oldGeneration = d.session().generation;
+        await d.acknowledged(d.send('input.stop'));
+        await d.until(() => d.session().phase === 'ended');
+        expect(d.session().generation).toBeGreaterThan(oldGeneration);
+        expect(d.session().captureGrant).toBeNull();
+        expect(d.output.every((byte) => byte === 0)).toBe(true);
+        const completion = d.receipt('completed', 12);
+        await d.acknowledged(completion);
+        await d.barrier();
+        expect(
+          d.events.some(
+            (e) =>
+              e.type === 'error' &&
+              e.payload.commandId === completion &&
+              e.payload.code === 'REVISION_CONFLICT',
+          ),
+        ).toBe(true);
+        expect(d.count()).toBe(12);
+      } finally {
+        d.close();
+      }
+    });
+
+test('robot approved teaching prompts use twelve-frame credit without capture and Stop clears their queued PCM', async () => {
+  const d = await endpoint('robot', 12, true);
   try {
-    const oldGeneration = d.session().generation;
+    expect(d.window).toBe(12);
+    expect(d.count()).toBe(12);
+    expect(d.session().captureGrant).toBeNull();
+    await d.acknowledged(d.receipt('started', 0));
+    await d.acknowledged(d.receipt('progress', 2));
+    await d.until(() => d.count() === 14);
     await d.acknowledged(d.send('input.stop'));
     await d.until(() => d.session().phase === 'ended');
-    expect(d.session().generation).toBeGreaterThan(oldGeneration);
-    expect(d.session().captureGrant).toBeNull();
     expect(d.output.every((byte) => byte === 0)).toBe(true);
-    const completion = d.receipt('completed', 12);
-    await d.acknowledged(completion);
+    const before = d.count();
+    await d.acknowledged(d.receipt('progress', 4));
     await d.barrier();
-    expect(
-      d.events.some(
-        (e) =>
-          e.type === 'error' &&
-          e.payload.commandId === completion &&
-          e.payload.code === 'REVISION_CONFLICT',
-      ),
-    ).toBe(true);
-    expect(d.count()).toBe(12);
+    expect(d.count()).toBe(before);
+    expect(d.session().captureGrant).toBeNull();
   } finally {
     d.close();
   }
 });
+
+test('a robot reply shorter than its twelve-frame capacity ends without padding or waiting for a full buffer', async () => {
+  const d = await endpoint('robot', 12, false, 3);
+  try {
+    expect(d.window).toBe(12);
+    expect(d.count()).toBe(3);
+    await d.until(() => d.events.some((e) => e.type === 'audio.end'));
+    await d.acknowledged(d.receipt('started', 0));
+    await d.acknowledged(d.receipt('completed', 3));
+    await d.until(() => d.session().phase === 'waiting');
+    expect(d.count()).toBe(3);
+    expect(d.session().captureGrant).toBeNull();
+    expect(d.output.every((byte) => byte === 0)).toBe(true);
+  } finally {
+    d.close();
+  }
+});
+
+for (const kind of ['browser', 'robot'] as const)
+  test(`${kind} Start greeting preserves twelve-frame credit and Stop cancellation without capture`, async () => {
+    const d = await endpoint(kind, 12, false, 24, true);
+    try {
+      expect(d.window).toBe(12);
+      expect(d.count()).toBe(12);
+      expect(d.session().captureGrant).toBeNull();
+      await d.acknowledged(d.receipt('started', 0));
+      await d.barrier();
+      expect(d.count()).toBe(12);
+      await d.acknowledged(d.receipt('progress', 2));
+      await d.until(() => d.count() === 14);
+      await d.acknowledged(d.send('input.stop'));
+      await d.until(() => d.session().phase === 'ended');
+      expect(d.output.every((byte) => byte === 0)).toBe(true);
+      const after = d.count();
+      await d.acknowledged(d.receipt('progress', 4));
+      await d.barrier();
+      expect(d.count()).toBe(after);
+      expect(d.session().captureGrant).toBeNull();
+    } finally {
+      d.close();
+    }
+  });

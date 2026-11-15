@@ -64,6 +64,8 @@ type Options = {
   speechConcurrency?: SpeechConcurrency;
   demoEnrollment?: boolean;
   profiles?: ProfileDetail[];
+  // Trusted server configuration only; never accepted in HTTP/WSS payloads.
+  languageForProfile?: (profileId: string) => 'en' | 'de';
   devices?: Array<{ profileId: string; deviceId: string; endpoint?: 'browser' | 'robot' }>;
 };
 
@@ -81,6 +83,7 @@ export function startControlGateway(options: Options) {
     () => broadcast(),
     options.demoEnrollment === true,
     options.decisionAdapter,
+    options.languageForProfile,
   );
   for (const profile of options.profiles ?? []) sessions.acceptPersistentProfile(profile);
   // In-memory fixtures explicitly enroll fictional profiles; PostgreSQL supplies its own is_demo check.
@@ -538,15 +541,12 @@ export function startControlGateway(options: Options) {
             event.payload.playback
               ? [...event.payload.playback.sampleRates]
               : [];
-          ws.data.outputWindow =
-            ws.data.identity.endpoint === 'browser' &&
-            event.payload.playback?.outputWindowChunks === 12
-              ? 12
-              : 4;
+          ws.data.outputWindow = event.payload.playback?.outputWindowChunks === 12 ? 12 : 4;
           emit(ws, 'device.ready', {
             mode: 'live',
             deviceId: ws.data.identity.deviceId,
             profileId: ws.data.identity.profileId,
+            language: coordinator.language(),
             credentialExpiresAt:
               ws.data.identity.expiresAt === null
                 ? null
@@ -564,7 +564,7 @@ export function startControlGateway(options: Options) {
               : false,
             camera: false,
             textChat: !!options.chatAdapter,
-            teaching: true,
+            teaching: coordinator.language() === 'en',
             photoStory: ws.data.identity.endpoint === 'browser' && coordinator.publicPhotoEnabled(),
             controls: [
               'start',
@@ -686,7 +686,7 @@ export function startControlGateway(options: Options) {
               expectedGeneration: selected.generation,
               commandId: event.event_id,
               text: 'Photo Story',
-              language: 'en',
+              language: coordinator.language(),
               purpose,
             },
             ws.data.playbackRates,
@@ -920,11 +920,8 @@ export function startControlGateway(options: Options) {
             'UNAVAILABLE',
             'Audio, camera, activities and teaching are unavailable on this control path',
           );
-        emit(ws, 'command.ack', { mode: 'live', commandId: event.event_id, applied: result.ok });
-        if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
         if (
           result.ok &&
-          ws.data.playbackRates.length &&
           ((event.type === 'input.start' && current?.id !== coordinator.snapshot()?.id) ||
             event.type === 'input.resume')
         ) {
@@ -935,7 +932,7 @@ export function startControlGateway(options: Options) {
                 sessionId: selected.id,
                 expectedGeneration: selected.generation,
                 commandId: event.event_id,
-                language: 'en',
+                language: coordinator.language(),
               },
               ws.data.playbackRates,
               event.type === 'input.resume',
@@ -960,6 +957,8 @@ export function startControlGateway(options: Options) {
               broadcast();
             });
         }
+        emit(ws, 'command.ack', { mode: 'live', commandId: event.event_id, applied: result.ok });
+        if (!result.ok) error(ws, result.error.code, result.error.message, event.event_id);
         if (
           result.ok &&
           ws.data.playbackRates.length &&
@@ -978,7 +977,7 @@ export function startControlGateway(options: Options) {
                   sessionId: selected.id,
                   expectedGeneration: selected.generation,
                   commandId: event.event_id,
-                  language: 'en',
+                  language: coordinator.language(),
                 },
                 ws.data.playbackRates,
                 ws.data.outputWindow,

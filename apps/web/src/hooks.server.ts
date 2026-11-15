@@ -1,4 +1,5 @@
 import { conversationExitGuard, lockConversationResponse } from '#lib/server/conversation-exit.ts';
+import { participantEntryGuard } from '#lib/server/participant-entry.ts';
 import type { Handle } from '@sveltejs/kit/hooks';
 import {
   isLoopbackHost,
@@ -67,6 +68,8 @@ export const handle: Handle = async ({ event, resolve }) => {
       }
       const blocked = conversationExitGuard(event.request);
       if (blocked) return blocked;
+      const selection = await participantEntryGuard(event.request);
+      if (selection) return selection;
       if (event.url.pathname === '/')
         return new Response(null, {
           status: 303,

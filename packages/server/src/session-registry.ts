@@ -1,3 +1,4 @@
+import { configuredProfileLanguage } from './profile-language';
 import type { ProfileDetail } from '@lemmi/contracts';
 import { publicPhotoStoryPack } from '@lemmi/activities';
 import { caregiverProfile } from '@lemmi/contracts/fixtures';
@@ -17,6 +18,7 @@ export class SessionRegistry {
     private readonly changed: () => void = () => {},
     private readonly publicPhotoStory = false,
     private readonly decisions?: ConversationDecisionAdapter,
+    private readonly languageForProfile = configuredProfileLanguage,
   ) {
     this.acceptPersistentProfile({
       ...structuredClone(caregiverProfile),
@@ -65,7 +67,10 @@ export class SessionRegistry {
       );
       this.entries.set(profile.id, coordinator);
     }
-    coordinator.acceptPersistentProfile(profile, contextChanged);
+    coordinator.acceptPersistentProfile(
+      { ...profile, language: this.languageForProfile(profile.id) },
+      contextChanged,
+    );
   }
   pauseForProfileUpdate(patch: Record<string, unknown>, profileId = 'profile-alex') {
     this.forProfile(profileId).pauseForProfileUpdate(patch);

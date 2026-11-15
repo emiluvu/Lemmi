@@ -190,38 +190,12 @@ try {
   });
   const gateCookie = unlock.headers.get('set-cookie')?.split(';')[0];
   check(gateCookie, 'Unlock cookie missing');
-  const page = await request('/participant', 'GET', undefined, gateCookie);
-  const html = await page.text();
+  const unselectedPage = await request('/participant', 'GET', undefined, gateCookie);
   check(
-    page.status === 200 && html.includes('Choose a participant') && html.includes('caregiver exit'),
-    'Production participant setup page failed',
-  );
-  const navigationCookie = page.headers.get('set-cookie')?.split(';')[0];
-  check(navigationCookie, 'Conversation navigation cookie missing');
-  const lockedCookie = `${gateCookie}; ${navigationCookie}`;
-  check(
-    (await request('/caregiver', 'GET', undefined, lockedCookie)).status === 303,
-    'Conversation exit navigation bypass',
-  );
-  check(
-    (await request('/v1/demo/profiles', 'POST', { preferredName: 'Blocked fixture' }, lockedCookie))
-      .status === 403,
-    'Locked browser changed profiles',
-  );
-  check(
-    (await request('/v1/demo/conversation-exit', 'POST', { password: '1111' }, lockedCookie))
-      .status === 401,
-    'Wrong exit code accepted',
-  );
-  const exited = await request(
-    '/v1/demo/conversation-exit',
-    'POST',
-    { password: '7631' },
-    lockedCookie,
-  );
-  check(
-    exited.status === 200 && exited.headers.get('set-cookie')?.includes('Max-Age=0'),
-    'Configured exit code did not clear navigation lock',
+    unselectedPage.status === 303 &&
+      unselectedPage.headers.get('location') === '/caregiver' &&
+      !unselectedPage.headers.has('set-cookie'),
+    'Unselected conversation did not return to caregiver setup',
   );
   for (const [path, mime] of [
     ['/fonts/nunito-latin-variable.ttf', 'font/ttf'],
@@ -266,7 +240,8 @@ try {
       edited.ok &&
       edited.data.avatarId === 'cat' &&
       edited.data.revision === 1 &&
-      Object.keys(edited.data).length === 5,
+      Object.keys(edited.data).length === 6 &&
+      edited.data.language === 'en',
     'Durable safe demo identity edit failed',
   );
   check(
@@ -307,6 +282,41 @@ try {
     'Browser token leaked or cookie missing',
   );
   const browserCookie = `${gateCookie}; ${endpointCookie}`;
+  const page = await request('/participant', 'GET', undefined, browserCookie);
+  const html = await page.text();
+  check(
+    page.status === 200 &&
+      !html.includes('Choose a participant') &&
+      html.includes('Talk with Lemmi'),
+    'Selected participant conversation page failed',
+  );
+  const navigationCookie = page.headers.get('set-cookie')?.split(';')[0];
+  check(navigationCookie, 'Conversation navigation cookie missing');
+  const lockedCookie = `${browserCookie}; ${navigationCookie}`;
+  check(
+    (await request('/caregiver', 'GET', undefined, lockedCookie)).status === 303,
+    'Conversation exit navigation bypass',
+  );
+  check(
+    (await request('/v1/demo/profiles', 'POST', { preferredName: 'Blocked fixture' }, lockedCookie))
+      .status === 403,
+    'Locked browser changed profiles',
+  );
+  check(
+    (await request('/v1/demo/conversation-exit', 'POST', { password: '1111' }, lockedCookie))
+      .status === 401,
+    'Wrong exit code accepted',
+  );
+  const exited = await request(
+    '/v1/demo/conversation-exit',
+    'POST',
+    { password: '7631' },
+    lockedCookie,
+  );
+  check(
+    exited.status === 200 && exited.headers.get('set-cookie')?.includes('Max-Age=0'),
+    'Configured exit code did not clear navigation lock',
+  );
   const robot = (await (
     await request(
       '/v1/demo/enroll',
@@ -334,10 +344,11 @@ try {
     function send(type: string, payload: unknown = {}) {
       const session = [...events].reverse().find((event) => event.type === 'state.changed');
       const current = session?.type === 'state.changed' ? session.payload.session : null;
+      const commandId = crypto.randomUUID();
       socket.send(
         JSON.stringify({
           protocol_version: 1,
-          event_id: crypto.randomUUID(),
+          event_id: commandId,
           session_id: type === 'input.start' ? null : (current?.id ?? null),
           generation: type === 'input.start' ? 0 : (current?.generation ?? 0),
           turn_id: null,
@@ -346,6 +357,7 @@ try {
           payload,
         }),
       );
+      return commandId;
     }
     send('device.hello', {
       firmwareVersion: 'participant-smoke',
@@ -362,18 +374,34 @@ try {
     { 'x-lemmi-access-key': accessKey, authorization: `Bearer ${robot.data.credential}` },
     'robot',
   );
-  browser.send('input.start');
-  device.send('input.start');
+  const browserStart = browser.send('input.start');
+  const robotStart = device.send('input.start');
   await until(() =>
-    [browser, device].every((client) =>
-      client.events.some(
-        (event) => event.type === 'state.changed' && event.payload.session?.phase === 'ready',
-      ),
+    (
+      [
+        [browser, browserStart],
+        [device, robotStart],
+      ] as const
+    ).every(([client, id]) =>
+      client.events.some((event) => event.type === 'response.text' && event.payload.turnId === id),
     ),
   );
-  browser.send('input.text', { text: 'Hello fictional garden', language: 'en' });
-  await until(() => browser.events.some((event) => event.type === 'response.text'));
-  check(!device.events.some((event) => event.type === 'response.text'), 'Cross-profile reply leak');
+  check(
+    !browser.events.some((e) => e.type === 'response.text' && e.payload.turnId === robotStart) &&
+      !device.events.some((e) => e.type === 'response.text' && e.payload.turnId === browserStart),
+    'Cross-profile opening leak',
+  );
+  const robotBoundary = device.events.length;
+  const greeting = browser.send('input.text', { text: 'Hello fictional garden', language: 'en' });
+  await until(() =>
+    browser.events.some(
+      (event) => event.type === 'response.text' && event.payload.turnId === greeting,
+    ),
+  );
+  check(
+    !device.events.slice(robotBoundary).some((event) => event.type === 'response.text'),
+    'Cross-profile reply leak',
+  );
   let boundary = browser.events.length;
   browser.send('input.text', { text: 'Start Photo Story', language: 'en' });
   await until(() => browser.events.slice(boundary).some((event) => event.type === 'response.text'));
@@ -390,7 +418,12 @@ try {
   browser.send('input.text', { text: 'Back to conversation', language: 'en' });
   await until(() => browser.events.slice(boundary).some((event) => event.type === 'response.text'));
   // Public Photo Story uses the existing browser identity and scoped current-scene read.
-  browser.send('input.photo.start');
+  const photoStart = browser.send('input.photo.start');
+  await until(() =>
+    browser.events.some(
+      (event) => event.type === 'response.text' && event.payload.turnId === photoStart,
+    ),
+  );
   await until(() =>
     browser.events.some(
       (event) =>
@@ -488,7 +521,7 @@ try {
   const after = await request('/v1/demo/current', 'GET', undefined, browserCookie);
   check(after.status === 403, 'Revoked browser cookie accepted');
   console.info(
-    'PASS: production participant selector/profile creation, cookie enrollment, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release; scoped public Photo Story media/opening/Stop and gate-only/noncurrent/ended denials. Model and clients are fixtures; no real microphone or speaker.',
+    'PASS: production caregiver profile creation, enrollment before conversation, selected-profile entry/exit controls, verified simultaneous browser/robot WSS, isolated chat, durable restart assignment and individual release; scoped public Photo Story media/opening/Stop and gate-only/noncurrent/ended denials. Model and clients are fixtures; no real microphone or speaker.',
   );
 } finally {
   for (const client of clients) client.close();

@@ -218,6 +218,7 @@
       files = [];
       saved({
         id: result.data.profileId,
+        language: profile?.language ?? 'en',
         preferredName: result.data.preferredName,
         avatarId: result.data.avatarId,
         revision: result.data.revision,
@@ -309,7 +310,7 @@
           >{/each}
       </div>
       <label
-        >Conversation support<select bind:value={support}
+        >Conversation support<select aria-label="Conversation support" bind:value={support}
           ><option value="guided">Guided</option><option value="conversational"
             >Conversational</option
           ><option value="quiet">Quiet companionship</option></select

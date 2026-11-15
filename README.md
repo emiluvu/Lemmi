@@ -1,5 +1,25 @@
 # Lemmi
 
+**Undeployed Photo Story Start/Resume candidate:** `codex/photo-story-start-resume` includes current main, opening-before-listening, English/German prompts and capture-off text recovery. [Deploy-agent handoff and combined checks](docs/handoffs/photo-story-start-resume-2026-11-14.md). Existing deployed behavior is recorded below.
+
+**Stackchan gateway update deployed (`264df22`):** [twelve-frame negotiation, four-frame fallback and Stop/firmware handoff](docs/handoffs/stackchan-playback-window.md). Current deployment acceptance is recorded in backend status.
+
+**Profile context/memory + German deployed — runtime `a779c70`:** rich caregiver create/edit/photos, separately opted-in background memory (default off), and Tilda’s exact-ID German pilot are installed. English and German public synthetic speech checks passed; human voice/startup/hardware testing remains. Refresh/reconnect and explicitly Start. [Acceptance, permission behavior and three-integration test reminder](docs/handoffs/profile-german-backend-integration.md).
+
+**Jev activity routing deployed — gateway `07e66b7`:** [natural activity requests and explicit semantic confirmation](docs/handoffs/conversation-routing-repair.md). Activity-only evaluation passed 71/71; actual public spoken request → confirmation → spoken yes → teaching UI passed. Full conversation scope stays off. Web/speech retained; refresh/reconnect and explicitly Start after the gateway restart. [Current runtime and limits](docs/backend-status.md).
+
+**Deployed response/profile-entry update — web/gateway `3c5033e`:** caregiver Conversation selects/enrolls its profile before opening the participant screen. Browser silence defaults to 1 second; reviewed speech-recognition variants such as “Teach Lemmy” select Teach Lemmi. Family replies offer warmer grounded support. [Measured latency, current rollout and limitations](docs/handoffs/voice-response-and-profile-entry.md).
+
+**Earlier browser microphone release:** web `d6d2ff6`. Refresh, select a fictional profile, and click **Start conversation**; allow microphone access. Listening starts without separate Unmute/Speak clicks and returns after each normal reply. **Mute microphone**, **Type instead**, Pause/Stop/Get help are visible. Quiet waits after its first turn; silence pauses after 15 seconds and Resume restarts listening. Reconnect never restores recording automatically. The gateway and speech service were retained during this web-only update. [Current acceptance and limits](docs/backend-status.md), [microphone/Stackchan handoff](docs/handoffs/browser-default-listening.md).
+
+Earlier UI/backend release **`95bdcef`**: [reviewed spoken mode selection, caregiver name/avatar edits, single conversation screen and exit keypad](docs/handoffs/ui-voice-backend-review-2026-11-14.md). Unlock `/access`, create/select a fictional profile in `/caregiver`, then open Conversation and explicitly Start. Tap microphone status for Speak now or Type instead; reviewed phrases include “Start Teach Lemmi”, “Start Photo Story”, “Explore pictures” and “Back to conversation”. Pause/Stop/Get help remain visible. The live exit keypad code is stored privately as `LEMMI_CAREGIVER_EXIT_PASSWORD` in the protected host `.env`; local mock `1234` is not the live code. [Actual runtime, acceptance and remaining limits](docs/backend-status.md).
+
+German browser/backend conversation is available as an **undeployed candidate**
+with server-resolved per-profile language and optional pinned German voice
+provisioning. Follow the [Tilda release handoff](docs/handoffs/tilda-german-release.md)
+for exact-ID enrollment/configuration, staging checks and remaining human audio
+acceptance. Existing profiles keep English unless explicitly configured.
+
 Source branch increment: [richer profile form, private pictures and optional conversation summaries](docs/handoffs/profile-context-memory-2026-11-14.md). Requires migration `006` and coordinated web/gateway/proxy rollout; not part of the deployment stated below. Summary memory starts off. The handoff includes the safe fictional-profile backfill command.
 
 Current UI/backend release **`95bdcef`**: [reviewed spoken mode selection, caregiver name/avatar edits, single conversation screen and exit keypad](docs/handoffs/ui-voice-backend-review-2026-11-14.md). Unlock `/access`, create/select a fictional profile in `/caregiver`, then open Conversation and explicitly Start. Tap microphone status for Speak now or Type instead; reviewed phrases include “Start Teach Lemmi”, “Start Photo Story”, “Explore pictures” and “Back to conversation”. Pause/Stop/Get help remain visible. The live exit keypad code is stored privately as `LEMMI_CAREGIVER_EXIT_PASSWORD` in the protected host `.env`; local mock `1234` is not the live code. [Actual runtime, acceptance and remaining limits](docs/backend-status.md).
@@ -7,7 +27,7 @@ Current UI/backend release **`95bdcef`**: [reviewed spoken mode selection, careg
 Integrated release: [branch merges, tested CPU speech concurrency, HFC voice, browser turn ending and UI fixes](docs/handoffs/backend-integration-2026-11-14.md). Semantic decisions remain disabled after live evaluation; CUDA remains off after a driver initialization failure. See [current runtime and public acceptance](docs/backend-status.md).
 
 Public fictional demo: unlock [Lemmi](https://lemmi.chaoswarrior.dev/access), then open the [caregiver workspace](https://lemmi.chaoswarrior.dev/caregiver). `/` opens that workspace; its profile Conversation links open the designed [live companion screen](https://lemmi.chaoswarrior.dev/participant/conversation). Profile listing/creation and conversation/Teach Lemmi use the live backend; Photo Story is available with reviewed illustrations; other games are labeled previews, and camera/journals/private profile editing remain unavailable in this browser. The shared key does not authorize private caregiver APIs. See [current deployment and checks](docs/backend-status.md).
-Deployed open-conversation speech: [automatic browser turn ending and timing diagnostics](docs/handoffs/natural-speech-turns.md). Listening can finish after 1.5 seconds of detected non-speech; manual Finish speaking remains. Initial silence pauses without model submission. The selected backend voice is `en_US-hfc_female-medium` for browser and Stackchan output; whole-turn STT, capture bounds and firmware are unchanged; physical microphone/voice-quality review remains pending.
+Deployed open-conversation speech: [automatic browser turn ending and timing diagnostics](docs/handoffs/natural-speech-turns.md). Listening can finish after 1 second of detected non-speech; manual Finish speaking remains. Initial silence pauses without model submission. The selected backend voice is `en_US-hfc_female-medium` for browser and Stackchan output; whole-turn STT, capture bounds and firmware are unchanged; physical microphone/voice-quality review remains pending.
 
 Frontend/backend integration background: [original combined handoff](docs/handoffs/frontend-backend-integration.md), including Teach Lemmi/Alex content and browser wiring; the current release record supersedes its original deployment status.
 
@@ -33,7 +53,7 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
-**Current deployment:** web/gateway `95bdcef`; follow the current flow above. No microphone starts from enrollment, Start, unmute or mode selection alone.
+**Current deployment:** web `d6d2ff6`, gateway `95bdcef`; follow the microphone flow above. Enrollment, plain Unmute and mode selection alone do not grant capture. Browser Start is the explicit opt-in to conversation listening.
 
 
 **Teach Lemmi source increment (`codex/teach-lemmi`):** a playable scripted Alex text demo is available in the existing Participant page. Backend teaching handlers reuse the shared coordinator, OpenRouter and speech seams, with reviewed topics, session-only feedback and a fifteen-minute active-time limit. [Tester manual](docs/teach-lemmi-tester-manual.md) and [Anay/Kylie/Emilia handoff](docs/handoffs/lukas-teach-lemmi.md) cover launch and checks. Teach Lemmi and the integrated live participant shell are deployed as runtime `f5724a0`; start at `/access` → `/participant`. Public voice is enabled for fictional team tests; actual browser microphone/speaker, physical robot acceptance and durable teaching memory/journal observations remain pending.

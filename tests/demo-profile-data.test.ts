@@ -100,6 +100,7 @@ dbtest(
       'avatarId',
       'communicationSupport',
       'id',
+      'language',
       'preferredName',
       'revision',
     ]);

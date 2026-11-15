@@ -211,27 +211,34 @@ export class PersistentData {
         });
       if (request.operation === 'profile.context.read') return ok(view(current));
       if (request.operation === 'profile.image.upload') {
+        if (this.uploadBusy)
+          throw new DataError('UNAVAILABLE', 'An asset upload is already running');
+        this.uploadBusy = true;
         const image = request.input;
-        return ok(
-          await this.repository.createAsset(
-            principal,
-            {
-              profileId: id,
-              expectedRevision: image.expectedRevision,
-              commandId: image.commandId,
-              dataBase64: image.dataBase64,
-              kind: 'image',
-              mediaType: 'image/png',
-              caption: image.description,
-              discussionContext: null,
-              entityIds: ['profile:approved-photo'],
-              source: 'Fictional demo caregiver upload',
-              permission: 'Uploader approved for fictional demo conversation',
-              approved: true,
-            },
-            true,
-          ),
-        );
+        try {
+          return ok(
+            await this.repository.createAsset(
+              principal,
+              {
+                profileId: id,
+                expectedRevision: image.expectedRevision,
+                commandId: image.commandId,
+                dataBase64: image.dataBase64,
+                kind: 'image',
+                mediaType: 'image/png',
+                caption: image.description,
+                discussionContext: null,
+                entityIds: ['profile:approved-photo'],
+                source: 'Fictional demo caregiver upload',
+                permission: 'Uploader approved for fictional demo conversation',
+                approved: true,
+              },
+              true,
+            ),
+          );
+        } finally {
+          this.uploadBusy = false;
+        }
       }
       if (request.operation === 'profile.image.read') {
         if (!current.context?.photos.some((photo) => photo.assetId === request.input.assetId))
@@ -301,6 +308,7 @@ export class PersistentData {
       return ok(
         ParticipantProfileSchema.parse({
           id: profile.id,
+          language: profile.language,
           preferredName: profile.preferredName,
           avatarId: profile.avatarId,
           revision: profile.revision,

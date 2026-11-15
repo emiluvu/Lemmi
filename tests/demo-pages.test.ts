@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { handle } from '../apps/web/src/hooks.server';
 import { accessCookie } from '@lemmi/server';
+import { participantEntryGuard } from '../apps/web/src/lib/server/participant-entry';
+import { participantProfile } from '@lemmi/contracts/fixtures';
 
 const origin = 'https://demo-pages.fixture.invalid';
 const key = 'independent-demo-page-key-12345678901234567890';
@@ -48,7 +50,6 @@ test('designed demo pages require the domain gate and root opens the caregiver w
       '/caregiver/settings',
       '/caregiver/check-in',
       '/caregiver/sign-in',
-      '/participant/conversation',
     ]) {
       const locked = await page(path);
       expect(locked.response.status).toBe(303);
@@ -63,6 +64,59 @@ test('designed demo pages require the domain gate and root opens the caregiver w
     expect(root.response.status).toBe(303);
     expect(root.response.headers.get('location')).toBe('/caregiver');
     expect(root.resolved).toBe(false);
+    const unselected = await page('/participant/conversation', true);
+    expect(unselected.response.status).toBe(303);
+    expect(unselected.response.headers.get('location')).toBe('/caregiver');
+    expect(unselected.response.headers.get('set-cookie')).toBeNull();
+    expect(unselected.resolved).toBe(false);
+  });
+});
+
+test('participant entry requires the selected enrolled profile and does not enroll, substitute or lock on failure', async () => {
+  await configured(async () => {
+    const request = (query = '', extra = '') =>
+      new Request(origin + '/participant/conversation' + query, {
+        headers: {
+          cookie: `${accessCookie(key).split(';')[0]}; __Host-lemmi_endpoint=${'a'.repeat(43)}${extra}`,
+        },
+      });
+    let calls = 0;
+    const fetcher = async (_url: unknown, init?: RequestInit) => {
+      calls++;
+      const input = JSON.parse(init?.body as string);
+      expect(input.operation).toBe('endpoint.current');
+      expect(input.endpoint).toBe('browser');
+      return Response.json({
+        ok: true,
+        data: {
+          deviceId: 'selected-browser',
+          profileId: participantProfile.id,
+          endpoint: 'browser',
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+          profile: participantProfile,
+        },
+      });
+    };
+    expect(await participantEntryGuard(request('?profile=profile-alex'), fetcher)).toBeNull();
+    expect(await participantEntryGuard(request(), fetcher)).toBeNull();
+    const mismatch = await participantEntryGuard(request('?profile=another-profile'), fetcher);
+    expect(mismatch?.status).toBe(303);
+    expect(mismatch?.headers.get('location')).toBe('/caregiver');
+    expect(mismatch?.headers.get('set-cookie')).toBeNull();
+    const expired = await participantEntryGuard(request(), async () =>
+      Response.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Expired' } }),
+    );
+    expect(expired?.status).toBe(303);
+    expect(expired?.headers.get('set-cookie')).toContain('__Host-lemmi_endpoint=;');
+    const failed = await participantEntryGuard(request(), async () =>
+      Response.json({ unexpected: true }),
+    );
+    expect(failed?.status).toBe(503);
+    // An existing conversation still requires its exit code, including expired enrollment.
+    expect(
+      await participantEntryGuard(request('', '; lemmi_conversation_lock=live.fixture'), fetcher),
+    ).toBeNull();
+    expect(calls).toBe(3);
   });
 });
 test('public demo routes do not open mock operations or bypass the trusted proxy and demo switch', async () => {

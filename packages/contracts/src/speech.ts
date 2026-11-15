@@ -4,7 +4,9 @@ import { IdSchema, RevisionSchema } from './common';
 export const SPEECH_CAPTURE_MS = 20_000;
 export const SPEECH_FRAME_BYTES = 640;
 export const SPEECH_OUTPUT_WINDOW = 4;
-export const SPEECH_BROWSER_OUTPUT_WINDOW = 12;
+export const SPEECH_EXTENDED_OUTPUT_WINDOW = 12;
+// Retained for existing browser consumers; robots may negotiate the same bound.
+export const SPEECH_BROWSER_OUTPUT_WINDOW = SPEECH_EXTENDED_OUTPUT_WINDOW;
 export type SpeechOutputWindow = 4 | 12;
 export const SpeechSampleRateSchema = z.union([
   z.literal(16000),

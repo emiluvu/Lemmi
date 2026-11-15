@@ -111,7 +111,7 @@ An avatar may blink or make small, slow movements. Avoid flashing, sudden jumps,
 
 Starting conversation or an activity from home begins a session. Moving between conversation and activities keeps the session open. Stop ends it and triggers journal saving. Pause keeps it open without capture, speech, or advancing activity timers.
 
-For the initial demo, use turn-based voice interaction: capture audio only in the visible listening state. Keep the microphone off during Lemmi's speech, processing, pause, home, and ended states. A clearly labeled **Speak now** control lets the participant interrupt Lemmi: cancel output before activating capture. Continuous listening and simultaneous speech are deferred.
+For the demo, capture audio only in the visible listening state, with the microphone off during Lemmi's speech, processing, pause, home and ended states. Following the user's November 14 usability correction, browser **Start conversation** opts into microphone permission/unmute and an initial fresh capture grant in one action. Conversational/Guided request the next granted turn after actual consumed output; Quiet waits. Mute is a visible option rather than a separate startup hurdle. Type instead cancels the loop and uses capture-off ready; Pause/Stop/background/disconnect/authority changes retire intent. Browser Start listening or Resume conversation is an explicit new opt-in after interruption. Raw Unmute/Resume commands never grant capture. Half-duplex playback/capture and bounded turns remain; simultaneous speech and background recording are not implemented.
 
 | State | Visible wording | Microphone | Behavior |
 | --- | --- | --- | --- |
@@ -130,10 +130,10 @@ In Quiet companionship, completion of speech returns to capture-off `waiting`; n
 
 ### Proposed timing defaults
 
-Undeployed implementation note: [browser turn ending](handoffs/natural-speech-turns.md) implements the user-selected 1500 ms browser post-speech default (following Lukas’s timing trials) with local WebRTC detection and retains **Finish speaking**. Initial silence uses the existing **paused** cancellation path and visible Resume invitation rather than the waiting target below. No silence is submitted to the model or automatic continuation added. Physical microphone/room acceptance remains pending.
+Current browser implementation: [response timing and profile entry](handoffs/voice-response-and-profile-entry.md) reduces post-speech silence to 1000 ms at the user’s request for faster responses; longer pauses remain configurable. Local WebRTC detection retains **Finish speaking**. Initial silence uses the existing **paused** cancellation path with visible Resume. Conversational/Guided continuation requires the existing explicit Start intent, consumed playback and a fresh server grant; Quiet waits. Physical microphone/room acceptance remains pending.
 
 - Allow 15 seconds of initial silence during a listening turn before moving to waiting. Show one gentle invitation to tap **Speak now**; do not repeat it automatically.
-- After detected speech, use the selected 1.5-second (1500 ms) silence default before completing the turn. The user selected this following Lukas’s browser timing trials; Stackchan should use the same initial target when endpointing is integrated. **I'm finished** allows earlier submission. Tune this with the selected speech service during rehearsal; do not present it as a validated dementia setting.
+- After detected speech, use the selected 1-second (1000 ms) browser silence default before completing the turn, configurable up to 8 seconds for longer pauses. This supersedes the earlier 1500 ms trial setting after a request for faster responses. Stackchan endpointing remains a separate implementation/rehearsal task. **I'm finished** allows earlier submission. Tune this with the selected speech service during rehearsal; do not present it as a validated dementia setting.
 - If no usable transcript is returned, offer one gentle retry. Repeated failure leaves **Try speaking again**, **Type instead**, and **Stop** available without repeatedly prompting aloud.
 - If a response has not arrived after 20 seconds, end the wait with retry and exit options. Ignore late responses from that attempt.
 - Do not impose a maximum activity duration or display a countdown. No automatic session restart, difficulty increase, or repeated inactivity reminder.
@@ -202,7 +202,7 @@ Use the shared control table in [integration contracts section 5](integration-co
 
 ### Pause and resume
 
-Pause immediately halts capture, speech, queued model responses, and activity progression. Preserve the current activity position. Resume returns to a ready state with **Speak now** for conversation or the current activity in a ready state; do not replay queued speech or reopen the microphone automatically.
+Pause immediately halts capture, speech, queued model responses, and activity progression. Preserve the current activity position. The Photo Story Start/Resume candidate schedules one fresh reviewed reorientation on explicit Resume, keeping the current picture/question or conversation/teaching prompt. Start likewise offers one greeting before listening. Neither replays canceled queued work. Conversational/Guided browser Start/Resume listening intent requests a fresh microphone grant only after consumed opening output and current waiting authority; Quiet stays capture-off after the greeting. Typing, missing playback or failed synthesis uses capture-off approved text; text-only Resume remains available. Raw Resume/Unmute and reconnect never reopen the microphone. See the [candidate handoff](handoffs/photo-story-start-resume-2026-11-14.md); this change has not been deployed.
 
 ### Stop and session end
 
@@ -365,3 +365,6 @@ Solitaire is the bottom/last stretch item, after all committed work and other op
 
 
 November 14 integration clarification: the user explicitly authorized full fictional multi-profile support. Alex remains the initial profile; separately created fictional participants have isolated authorized context/assets/sessions. Existing labeled example cards remain preview-only. Multiple endpoints may observe one profile, with explicit handoff and one active audio owner. This supersedes earlier Alex-only demo restrictions for fictional profiles only; it does not authorize real participant data or infer care readiness. See [backend API](backend_api.md) and [endpoint handoff](handoffs/anay-multi-profile-endpoints.md).
+
+
+November 14 browser listening implementation: web `d6d2ff6` follows the explicit Start behavior above, with direct Mute/Type controls and manual finish on the listening indicator. Initial silence pauses after 15 seconds without model submission. Modal typing/reply/exit Resume never opts into listening. Real browser fixture and public synthetic audio checks are recorded in [backend status](backend-status.md); human microphone/room, hardware and full accessibility acceptance remain pending.

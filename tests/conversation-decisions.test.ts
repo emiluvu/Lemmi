@@ -141,8 +141,99 @@ test('disabled by default; enabled configuration rejects auto routing, missing k
     { LEMMI_DECISIONS_THRESHOLD: 'NaN' },
     { LEMMI_DECISIONS_THRESHOLD: '0.2' },
     { LEMMI_DECISIONS_TIMEOUT_MS: '30000' },
+    { LEMMI_DECISIONS_SCOPE: 'unrestricted' },
   ])
     expect(conversationDecisionConfig({ ...env, ...change }).ok).toBe(false);
+});
+
+test('activity-only scope asks one typed question without caregiver topic labels or conversation classifications', async () => {
+  let request: any;
+  const adapter = createOpenRouterDecisionAdapter(
+    { ...config, scope: 'activities' },
+    async (_url, init) => {
+      request = JSON.parse(init!.body as string);
+      return Response.json({ answers: { activity: answer().answers.activity } });
+    },
+  );
+  expect(adapter.scope).toBe('activities');
+  expect(await adapter.classify(input, new AbortController().signal)).toEqual(ok(idle));
+  expect(Object.keys(request.questions)).toEqual(['activity']);
+  expect(request.state.topics).toEqual([]);
+  expect(JSON.stringify(request)).not.toContain('previous employment');
+  expect(request.provider).toEqual({ data_collection: 'deny', zdr: true, allow_fallbacks: false });
+});
+
+test('an unoffered redirect cannot be declined or veto a clear current-topic decision', async () => {
+  const adapter = createOpenRouterDecisionAdapter(config, async () =>
+    Response.json(
+      answer({
+        declines_redirect: { type: 'noul', noul: 0.99 },
+      }),
+    ),
+  );
+  expect(await adapter.classify(input, new AbortController().signal)).toEqual(
+    ok({ ...idle, redirectTopicIds: ['topic_0'] }),
+  );
+});
+
+test('activity-only scope retains legacy redirect and reminder behavior', async () => {
+  let classifications = 0;
+  const f = setup({
+    scope: 'activities',
+    async classify() {
+      classifications++;
+      return ok(idle);
+    },
+  });
+  await f.say('My previous employment');
+  expect(f.chats[0]?.system).toContain('gentle subject transition');
+  await f.say('I am knitting a blue scarf');
+  const recap = await f.say('What were we talking about?');
+  expect(recap.ok && recap.data.kind === 'reply' && recap.data.reply.text).toContain(
+    'knitting a blue scarf',
+  );
+  expect(classifications).toBe(2);
+});
+
+test('an activity confirmation takes precedence over a phrase redirect and is actually spoken', async () => {
+  const f = setup({
+    scope: 'activities',
+    async classify() {
+      return ok({ ...idle, activity: 'teach_lemmi' });
+    },
+  });
+  const question = await f.say('My previous employment');
+  expect(question.ok && question.data.kind === 'reply' && question.data.reply.text).toBe(
+    'Would you like to start Teach Lemmi?',
+  );
+  expect(f.chats).toHaveLength(0);
+  const confirmed = await f.say('Yes, please!');
+  expect(confirmed.ok).toBe(true);
+  expect(f.c.snapshot()?.conversationMode).toBe('teach_lemmi');
+});
+
+test('diagnostics expose only typed scores or fixed failure categories, never provider text', async () => {
+  const diagnostics: unknown[] = [];
+  for (const response of [
+    new Response('private-provider-message', { status: 503 }),
+    Response.json({ error: 'private-provider-message' }),
+    Response.json(answer()),
+  ]) {
+    const adapter = createOpenRouterDecisionAdapter(
+      config,
+      async () => response,
+      (value) => diagnostics.push(value),
+    );
+    await adapter.classify(input, new AbortController().signal);
+  }
+  expect(diagnostics).toMatchObject([
+    { outcome: 'http_error', status: 503 },
+    { outcome: 'invalid_response' },
+    { outcome: 'answered' },
+  ]);
+  expect(JSON.stringify(diagnostics)).not.toContain('private-provider-message');
+  expect(JSON.stringify(diagnostics)).not.toContain(input.text);
+  expect(JSON.stringify(diagnostics)).not.toContain(input.topics[0]!.label);
 });
 
 test('low probability abstains, uncertain/clear refusal suppresses redirects, offered topics cannot repeat', async () => {
@@ -154,9 +245,17 @@ test('low probability abstains, uncertain/clear refusal suppresses redirects, of
   }
   for (const probability of [0.3, 0.99]) {
     const adapter = createOpenRouterDecisionAdapter(config, async () =>
-      Response.json(answer({ declines_redirect: { type: 'noul', noul: probability } })),
+      Response.json(
+        answer({
+          declines_redirect: { type: 'noul', noul: probability },
+          topic_1: { type: 'noul', noul: 0.99 },
+        }),
+      ),
     );
-    const result = await adapter.classify(input, new AbortController().signal);
+    const result = await adapter.classify(
+      { ...input, topics: [...input.topics, { id: 'topic_1', label: 'old job', offered: true }] },
+      new AbortController().signal,
+    );
     expect(result.ok && result.data.redirectTopicIds).toEqual([]);
   }
   const adapter = createOpenRouterDecisionAdapter(config, async () => Response.json(answer()));
@@ -321,16 +420,17 @@ test('pending decisions deduplicate; Stop, pause, mute, disconnect and config up
   }
 });
 
-test('semantic mode does not fall back to phrase routing; activity recognition never starts a game', async () => {
+test('semantic mode does not fall back to phrases; unavailable games get an honest fixed response', async () => {
   const { say, chats, c } = setup({
     async classify() {
       return ok({ ...idle, activity: 'music_playlist' });
     },
   });
-  await say('My previous employment');
-  expect(chats[0]?.system).not.toContain('gentle subject transition');
-  expect(chats[0]?.system).toContain('classification is advisory');
-  expect(chats[0]?.system).toContain('Other games remain unavailable');
+  const result = await say('Could we put on some songs now?');
+  expect(result.ok && result.data.kind === 'reply' && result.data.reply.text).toContain(
+    'not available here yet',
+  );
+  expect(chats).toHaveLength(0);
   expect(c.snapshot()?.conversationMode).toBe('open');
   const unavailable = setup({
     async classify() {

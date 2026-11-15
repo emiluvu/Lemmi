@@ -9,6 +9,7 @@ import {
 } from '@lemmi/contracts';
 import { caregiverProfile, controlHelloFixture } from '@lemmi/contracts/fixtures';
 import { startControlGateway } from '../apps/realtime/src/control';
+import { createProfileLanguageResolver } from '@lemmi/server';
 
 const publicOrigin = 'https://lemmi.invalid';
 const internalToken = 'multi-endpoint-test-internal-token-only';
@@ -171,7 +172,9 @@ function socketClient(
     const state = [...events].reverse().find((event) => event.type === 'state.changed');
     return state?.type === 'state.changed' ? state.payload.session : null;
   };
+  let negotiatedAudio = false;
   async function hello(audio = false) {
+    negotiatedAudio = audio;
     await opened;
     send('device.hello', null, {
       ...controlHelloFixture.payload,
@@ -201,6 +204,8 @@ function socketClient(
     const state = await wait((event) => event.type === 'state.changed', events.indexOf(ack) + 1);
     if (state.type !== 'state.changed' || !state.payload.session)
       throw new Error('Missing session');
+    if (!negotiatedAudio && ['input.start', 'input.resume'].includes(type))
+      await wait((e) => e.type === 'response.text' && e.payload.turnId === id, after);
     return state.payload.session;
   }
   async function rejected(
@@ -299,7 +304,7 @@ test('distinct robots connect concurrently and conversation, forged controls and
     await alex.closed;
     await casey.wait((event) => event.type === 'state.changed', before);
     expect(casey.latest()?.id).toBe(resumed.id);
-    expect(casey.latest()?.phase).toBe('ready');
+    expect(casey.latest()?.phase).toBe('waiting');
     expect(casey.latest()?.generation).toBe(resumed.generation);
   } finally {
     await h.close();
@@ -337,7 +342,7 @@ test('one robot and browser share a profile while explicit handoff rotates owner
     robot.send('heartbeat');
     await robot.wait((event) => event.type === 'heartbeat');
     expect(robot.latest()?.generation).toBe(active.generation);
-    expect(robot.latest()?.phase).toBe('ready');
+    expect(robot.latest()?.phase).toBe('waiting');
     const nextBrowser = h.connect(browserCredential, 'browser');
     await nextBrowser.hello();
     const oldTurn = robot.send('input.text', robot.latest(), {
@@ -412,7 +417,7 @@ test('revocation and heartbeat timeout close only their assigned device/profile'
     expect(revoked.response.status).toBe(200);
     await alex.closed;
     expect(casey.socket.readyState).toBe(WebSocket.OPEN);
-    expect(casey.latest()?.phase).toBe('ready');
+    expect(casey.latest()?.phase).toBe('waiting');
     const browser = h.connect(await h.issue('browser-alex', 'profile-alex'), 'browser');
     await browser.hello();
     await browser.apply('input.start', null);
@@ -423,7 +428,7 @@ test('revocation and heartbeat timeout close only their assigned device/profile'
     expect(casey.socket.readyState).toBe(WebSocket.OPEN);
     expect(casey.latest()?.id).toBe(other.id);
     expect(casey.latest()?.generation).toBe(other.generation);
-    expect(casey.latest()?.phase).toBe('ready');
+    expect(casey.latest()?.phase).toBe('waiting');
   } finally {
     await h.close();
   }
@@ -638,9 +643,12 @@ test('revoking an observing browser rejects its reconnect without canceling the 
     const stale = h.connect(token, 'browser', publicOrigin);
     await expect(stale.opened).rejects.toThrow('Endpoint upgrade rejected');
     finish(ok({ text: 'Hello from your companion.', language: 'en' }));
-    await robot.wait((event) => event.type === 'response.text' && event.payload.turnId === turn);
+    const reply = await robot.wait(
+      (event) => event.type === 'response.text' && event.payload.turnId === turn,
+    );
     await robot.wait(
       (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
+      robot.events.indexOf(reply) + 1,
     );
     expect(robot.latest()?.phase).toBe('waiting');
     expect(robot.latest()?.generation).toBe(started.generation);
@@ -850,6 +858,110 @@ test('public Photo Story Stop cancels an in-flight opening and suppresses a late
     expect(browser.latest()?.phase).toBe('ended');
     expect(browser.latest()?.captureGrant).toBeNull();
     expect(latestPhoto(browser).phase).toBe('ended');
+  } finally {
+    await h.close();
+  }
+});
+
+test('device readiness, text and capture use isolated server-resolved profile language', async () => {
+  const h = harness({
+    languageForProfile: createProfileLanguageResolver('profile-casey'),
+    demoEnrollment: true,
+    speech: {
+      stt: {
+        async transcribe(input) {
+          return ok({ text: 'Guten Morgen', language: input.language === 'de' ? 'de' : 'en' });
+        },
+      },
+      tts: {
+        async synthesize(input) {
+          return ok({
+            pcm: new Uint8Array(1764),
+            sampleRate: 22050,
+            channels: 1,
+            encoding: 'pcm_s16le',
+            language: input.language,
+          });
+        },
+      },
+    },
+    chatAdapter: {
+      async complete(input) {
+        return ok({
+          text: input.language === 'de' ? 'Guten Morgen.' : 'Good morning.',
+          language: input.language,
+        });
+      },
+    },
+  });
+  try {
+    const alex = h.connect(await h.issue('robot-alex', 'profile-alex'));
+    const german = h.connect(await h.issue('robot-casey', 'profile-casey'));
+    await Promise.all([alex.hello(true), german.hello(true)]);
+    const germanReady = german.events.find((e) => e.type === 'device.ready');
+    const alexReady = alex.events.find((e) => e.type === 'device.ready');
+    expect(germanReady?.type === 'device.ready' && germanReady.payload.language).toBe('de');
+    expect(germanReady?.type === 'device.ready' && germanReady.payload.teaching).toBe(false);
+    expect(germanReady?.type === 'device.ready' && germanReady.payload.photoStory).toBe(false);
+    expect(alexReady?.type === 'device.ready' && alexReady.payload.language).toBe('en');
+    await Promise.all([alex.apply('input.start', null), german.apply('input.start', null)]);
+    // Consume each localized greeting before testing ordinary text and capture.
+    await Promise.all(
+      [alex, german].map(async (client) => {
+        const first = await client.wait((e) => e.type === 'response.start');
+        if (first.type !== 'response.start') throw new Error('Missing localized greeting');
+        const meta = first.payload;
+        await client.wait((e) => e.type === 'audio.end' && e.turn_id === meta.turnId);
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          { leaseId: meta.leaseId, streamId: meta.streamId, status: 'started', playedChunks: 0 },
+          meta.turnId,
+        );
+        const after = client.events.length;
+        client.send(
+          'audio.receipt',
+          client.latest(),
+          {
+            leaseId: meta.leaseId,
+            streamId: meta.streamId,
+            status: 'completed',
+            playedChunks: meta.chunkCount,
+          },
+          meta.turnId,
+        );
+        await client.wait(
+          (e) => e.type === 'state.changed' && e.payload.session?.phase === 'waiting',
+          after,
+        );
+      }),
+    );
+
+    expect(
+      await german.rejected('input.text', german.latest(), { text: 'Hello', language: 'en' }),
+    ).toBe('VALIDATION_ERROR');
+    const deText = german.send('input.text', german.latest(), {
+      text: 'Guten Morgen',
+      language: 'de',
+    });
+    const enText = alex.send('input.text', alex.latest(), { text: 'Good morning', language: 'en' });
+    const [deReply, enReply] = await Promise.all([
+      german.wait((e) => e.type === 'response.text' && e.payload.turnId === deText),
+      alex.wait((e) => e.type === 'response.text' && e.payload.turnId === enText),
+    ]);
+    expect(deReply.type === 'response.text' && deReply.payload.language).toBe('de');
+    expect(enReply.type === 'response.text' && enReply.payload.language).toBe('en');
+    expect(await german.rejected('input.teaching.start')).toBe('UNAVAILABLE');
+    await german.apply('input.mute', german.latest(), { muted: false });
+    expect(await german.rejected('input.speak', german.latest(), { language: 'en' })).toBe(
+      'VALIDATION_ERROR',
+    );
+    expect(german.latest()?.captureGrant).toBeNull();
+    const listening = await german.apply('input.speak', german.latest(), { language: 'de' });
+    expect(listening.captureGrant?.language).toBe('de');
+    await german.apply('input.stop', listening);
+    expect(german.latest()?.captureGrant).toBeNull();
+    expect(alex.latest()?.phase).not.toBe('ended');
   } finally {
     await h.close();
   }

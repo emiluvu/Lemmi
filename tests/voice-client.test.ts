@@ -813,3 +813,34 @@ test('voice client enforces the negotiated four or twelve frame bound and stops 
     d.client.close();
   }
 });
+
+test('alternate browser voice route propagates server language to text and capture without teaching', async () => {
+  const d = await setup();
+  try {
+    const ready = {
+      mode: 'live',
+      deviceId: 'stackchan-alex',
+      profileId: 'profile-alex',
+      credentialExpiresAt: null,
+      audio: false,
+      camera: false,
+      teaching: false,
+      controls: ['start', 'stop', 'pause', 'resume', 'mute', 'help', 'text', 'speak'],
+    };
+    d.emit('device.ready', { ...ready, language: 'de' });
+    expect(d.state().language).toBe('de');
+    d.client.text('Guten Morgen');
+    expect(d.ws.sent.at(-1).payload.language).toBe('de');
+    d.client.command('resume');
+    d.emit('state.changed', { mode: 'live', session: d.session });
+    await d.client.speak();
+    expect(d.ws.sent.filter((e) => e.type === 'input.speak').at(-1).payload.language).toBe('de');
+    d.client.command('pause');
+    d.emit('device.ready', ready);
+    expect(d.state().language).toBe('en');
+    d.client.text('Good morning');
+    expect(d.ws.sent.at(-1).payload.language).toBe('en');
+  } finally {
+    d.client.close();
+  }
+});

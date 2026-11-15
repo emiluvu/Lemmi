@@ -4,6 +4,7 @@ import {
   DeviceEventSchema,
   ServerEventSchema,
   ok,
+  fail,
   type ServerEvent,
   type SessionSnapshot,
 } from '@lemmi/contracts';
@@ -16,6 +17,8 @@ async function device(
     negotiate?: boolean;
     manualStart?: boolean;
     photo?: boolean;
+    language?: 'en' | 'de';
+    disableSpeech?: boolean;
   } = {},
 ) {
   const internal = crypto.randomUUID(),
@@ -58,26 +61,29 @@ async function device(
         return ok({ text: 'We can enjoy the garden.', language: 'en' });
       },
     },
-    speech: {
-      stt: options.speech?.stt ?? {
-        async transcribe() {
-          return ok({ text: 'A fictional garden greeting', language: 'en' });
+    languageForProfile: () => options.language ?? 'en',
+    speech: options.disableSpeech
+      ? undefined
+      : {
+          stt: options.speech?.stt ?? {
+            async transcribe() {
+              return ok({ text: 'A fictional garden greeting', language: 'en' });
+            },
+          },
+          tts: {
+            async synthesize(input, signal) {
+              if (opening)
+                return ok({
+                  pcm: new Uint8Array(882 * 4).fill(1),
+                  sampleRate: 22050,
+                  encoding: 'pcm_s16le',
+                  channels: 1,
+                  language: 'en',
+                });
+              return (options.speech?.tts ?? defaultSpeech.tts).synthesize(input, signal);
+            },
+          },
         },
-      },
-      tts: {
-        async synthesize(input, signal) {
-          if (opening)
-            return ok({
-              pcm: new Uint8Array(882 * 4).fill(1),
-              sampleRate: 22050,
-              encoding: 'pcm_s16le',
-              channels: 1,
-              language: 'en',
-            });
-          return (options.speech?.tts ?? defaultSpeech.tts).synthesize(input, signal);
-        },
-      },
-    },
   });
   const base = `http://127.0.0.1:${gateway.server.port}`;
   async function privateCall(action: string, body: unknown) {
@@ -194,7 +200,8 @@ async function device(
   }
   if (!options.manualStart) {
     send('input.start');
-    if (options.negotiate === false) await until(() => session?.phase === 'ready');
+    if (options.negotiate === false || options.disableSpeech)
+      await until(() => session?.phase === 'waiting');
     else await completeOutput();
     opening = false;
     send('input.mute', { muted: false });
@@ -851,3 +858,52 @@ test('an explicit pause flushes already approved fixed output and rejects its ob
     d.close();
   }
 });
+
+for (const language of ['en', 'de'] as const)
+  for (const mode of ['no-playback', 'disabled', 'tts-failure'] as const)
+    test(`${language} Start/Resume sends current approved text with ${mode} and no capture`, async () => {
+      const d = await device({
+        manualStart: true,
+        language,
+        negotiate: mode !== 'no-playback',
+        disableSpeech: mode === 'disabled',
+        speech: {
+          stt: {
+            async transcribe() {
+              throw new Error('No capture requested');
+            },
+          },
+          tts: {
+            async synthesize() {
+              return fail('UNAVAILABLE', 'Fixture voice unavailable');
+            },
+          },
+        },
+      });
+      try {
+        for (const type of ['input.start', 'input.resume']) {
+          d.events.length = 0;
+          d.send(type);
+          await d.until(() => d.events.some((e) => e.type === 'response.text'));
+          const reply = d.events.find((e) => e.type === 'response.text')!;
+          expect(reply.type === 'response.text' && reply.payload.language).toBe(language);
+          expect(reply.type === 'response.text' && reply.payload.text).toContain(
+            language === 'de'
+              ? type === 'input.start'
+                ? 'Hallo'
+                : 'Wir sind wieder'
+              : type === 'input.start'
+                ? 'Hello'
+                : "We're back",
+          );
+          expect(d.events.some((e) => ['response.start', 'audio.chunk'].includes(e.type))).toBe(
+            false,
+          );
+          expect(d.session().captureGrant).toBeNull();
+          d.send('input.pause');
+          await d.until(() => d.session().phase === 'paused');
+        }
+      } finally {
+        d.close();
+      }
+    });
