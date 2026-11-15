@@ -1,5 +1,23 @@
 # Lemmi access page integration and deployment
 
+## Server integration completed — November 15, 2026
+
+Integrated source `c8a1cf9` into current `backend-deploy` with merge `7b2c3a3`.
+Deployed web `5b4c23e` at 19:29:48 UTC. Added only `no-transform` to the existing
+no-store access HTML cache policy after the public proxy injected analytics that
+CSP correctly blocked; no script permission was added. The final public Chromium
+run passed all four viewport layouts, assets/font, keyboard, wrong-key rejection,
+private-key unlock, cookie reload and relock with zero browser/CSP errors. No
+profile writes or notification sends occurred. Independent security review found
+no blockers. Focused access/voice/device/demo checks passed 22 tests and 249
+expectations; type/Svelte, build, formatting and whitespace passed with the three
+existing generic-photo-alt warnings. Full-suite and hardware checks were not rerun.
+Only web restarted. Gateway, speech, tunnel, private settings, proxy, database and
+media were preserved. Protected rollback: `.data/auth-welcome-rollback-path`.
+[Current deployment record](../backend-status.md#branded-access-page-deployed--november-15-2026).
+
+The original branch instructions and development-only observations follow.
+
 Branch: `codex/auth-welcome`  
 Base: `435b73a` (existing branding integration)  
 Handoff path: `docs/handoffs/auth-welcome.md`

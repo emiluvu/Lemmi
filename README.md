@@ -1,5 +1,10 @@
 # Lemmi
 
+**Branded login deployed — web `5b4c23e`:** `/access` now matches Lemmi's
+mascot, font, cream texture and sage controls. Public desktop/mobile, keyboard,
+wrong-key, unlock and relock checks passed. Conversation and Telegram runtimes
+are preserved. [Observed acceptance and rollback](docs/backend-status.md#branded-access-page-deployed--november-15-2026).
+
 **Telegram caregiver contact deployed — web/gateway `da95cc2`:** enabled for
 fictional Alex with one verified, opted-in team recipient. Manual Help works
 before a conversation; automatic reviewed/Jev alerts use the durable outbox.

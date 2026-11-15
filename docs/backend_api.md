@@ -1,5 +1,41 @@
 # Lemmi backend integration reference
 
+## Branded access page deployed — November 15, 2026
+
+**Web `5b4c23e`**, integrating `codex/auth-welcome/c8a1cf9` through merge
+`7b2c3a3`; final web-only rollout at **19:29:48 UTC**. The `/access` page now
+uses the Lemmi mascot, Nunito font, cream texture and sage controls, including
+rejected-key, unlocked, relocked and throttled states. Gateway `da95cc2`, speech
+`ea66280` and tunnel PIDs/start times retained. Private configuration, proxy,
+database, media, dependencies and the working conversation checkpoint retained.
+Telegram's existing Alex-only settings remain active; this check sent no alerts.
+
+The original origin validation, signed Secure/HttpOnly/SameSite cookie, access-key
+comparison, throttle and independent caregiver/resource authorization remain.
+Scripts remain denied by `default-src 'none'`; only the fixed stylesheet's SHA-256
+and same-origin images/fonts are authorized. Public verification initially found
+Cloudflare injecting a blocked analytics script. Access HTML now uses
+`Cache-Control: no-store, no-transform`, preserving the script-free document
+without widening CSP or changing the proxy. Final public Chromium observed zero
+CSP violations and zero browser errors.
+
+Observed: Bun 1.4.4 frozen install; **22 focused tests / 249 expectations**, zero
+failures; type/Svelte, production build, formatting and whitespace passed. Three
+preexisting generic-photo-alt warnings remain. The full application suite was
+not rerun for this bounded page change. Independent technical security review
+found no blocking shared-boundary issues. Isolated production and actual public
+Chromium passed 1280×900, 390×844, 320×740 and 640×450 layouts, keyboard controls,
+44px actions, no horizontal overflow, pre-unlock assets/font/MIME types, native
+wrong-key 401 with no key reflection, private-key unlock, cookie reload and relock.
+The shared live throttle was not exhausted; isolated tests cover 429. No profile
+writes, notification sends or hardware checks were performed.
+
+Protected pre-feature source/build/config rollback pointer:
+`.data/auth-welcome-rollback-path`; the intermediate pre-header-correction release
+is separately available at `.data/auth-no-transform-rollback-path`. Roll back only
+the web source/build while preserving current private configuration and data.
+[Integration and observed acceptance](handoffs/auth-welcome.md).
+
 ## Telegram caregiver contact deployed — November 15, 2026
 
 **Web/gateway `da95cc2`**, integrating `feat/telegram-caregiver-contact/af7ef12`

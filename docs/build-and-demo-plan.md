@@ -1557,3 +1557,19 @@ A read-only technical agent review found no blocking access/CSP issues. Next
 handoff: Kylie reviews visual integration; Anay integrates the server template
 and deploys the web build through the existing process. No live deployment,
 provider, participant data or hardware checks were performed in this task.
+
+## Access page server acceptance — November 15, 2026
+
+Anay's server integration merged `codex/auth-welcome/c8a1cf9` into the current
+backend-deploy release, preserving newer conversation/contact work. Independent
+technical review found no blocking authentication/CSP boundary issues. Web
+`5b4c23e` deployed at 19:29:48 UTC; only web restarted. Added no-transform to
+no-store HTML to suppress proxy analytics injection while retaining script denial.
+Bun 1.4.4 frozen install, 22 focused tests / 249 expectations, type/Svelte, build,
+formatting and whitespace passed; three existing photo-alt warnings remain.
+Isolated production and actual public Chromium passed four desktop/mobile/enlarged
+layouts, keyboard, pre-unlock assets/font, no overflow, wrong-key 401/no reflection,
+unlock/cookie/relock, zero CSP/browser errors. No profile writes or alert sends.
+Full application and hardware checks were not rerun for this page-only increment.
+Kylie may review the deployed visuals; observed automated acceptance does not claim
+human visual approval. [Release and rollback](backend-status.md#branded-access-page-deployed--november-15-2026).

@@ -1,5 +1,12 @@
 # Backend deployment branch
 
+Latest access UI rollout: **web `5b4c23e`**, November 15, 19:29:48 UTC.
+Gateway `da95cc2`, speech `ea66280`, tunnel, private configuration and data retained.
+Public Chromium passed four layouts, pre-unlock styling/assets, keyboard,
+wrong-key/unlock/cookie/relock and zero CSP/browser errors. Protected rollback
+pointer `.data/auth-welcome-rollback-path`.
+[Actual verification and header correction](backend-status.md#branded-access-page-deployed--november-15-2026).
+
 Latest Telegram contact rollout: **web/gateway `da95cc2`**, November 15, 19:04:31 UTC.
 Migrations 007/008 applied; exact Help proxy resources validated/reloaded. Privately
 configured primary recipient and automatic alerts enabled for fictional Alex only;
