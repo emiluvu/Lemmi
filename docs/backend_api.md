@@ -1,21 +1,33 @@
 # Lemmi backend integration reference
 
-## Photo Story and conversation fixes prepared — November 15, 2026
+## Photo Story and conversation fixes deployed — November 15, 2026
 
-Undeployed candidate `fix/photo-story-conversation-stalls`: fixes missed Photo Story
-voice requests, covered false model-display claims, clipped image layout and obsolete
-async errors that can disable a newer listening attempt. Integrates current
-`backend-deploy` through `435b73a`; greetings, teaching choices/Finish, startup
-recovery, saved-photo scope and branding are retained. No new API/schema/migration,
-configuration, dependency or provider change. Deploy web/gateway together after boundary review. Existing runtime is unchanged by this work.
+Current **web `d4e99d9`, gateway `1f1c2c4`** integrate
+`fix/photo-story-conversation-stalls/15851e1`. Web/gateway restarted together at
+12:10:50 UTC; a reviewed web-only image reload correction followed at 12:15:17 UTC.
+No new HTTP route, WSS event, contract, migration, dependency or configuration.
+Speech `a779c70`, tunnel/proxy/database and provider settings retained.
 
-[Completion status, evidence and server rollout handoff](handoffs/photo-story-conversation-stalls.md).
-Combined gate passed: **473 tests / 6,867 expectations, zero failures/skips** on
-five disposable PostgreSQL databases, a separate production HTTPS/WSS/private-photo
-smoke, type/Svelte/build/format/whitespace, 15 Python fixture checks, and desktop/mobile
-Chromium containment/failure/retry checks. A 30-turn gateway/controller fixture
-crossed spoken Photo Story entry/exit. Human speech,
-live-model and hardware acceptance remain pending.
+Existing `input.text` and captured-speech routes recognize reviewed explicit
+Photo Story phrases. English ungrounded display claims become a fixed offer;
+confirmation still uses the authoritative activity transition. Obsolete async
+results/errors cannot cancel a newer generation/lease/profile/privacy/policy/
+endpoint scope. Current failures remain visible. Scoped image layout contains
+both orientations, and identical activity snapshots retain the decoded blob;
+existing authority revisions still remount and reauthorize it.
+
+Server checks passed: **473 tests / 6,867 expectations**, five disposable databases,
+15 Python fixture tests, frozen install/type/build/format and production verified
+HTTPS/WSS/private-PNG smoke. Final UI correction repeated relevant build/browser/
+production checks. Public Chromium confirmed decoded scoped photo entry,
+setup/image error recovery, keyboard teaching/Finish and safe retry/Stop;
+synthetic public speech confirmed real local STT → external model → local TTS
+photo entry/discussion and continuation with one protected image read.
+Public robot-protocol TTS/receipts passed on rerun after one undiagnosed initial
+greeting-probe failure. No physical microphone/speaker or K151 acceptance.
+
+[Deployment evidence, limitations and protected rollback pointer](backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026),
+[source and server handoff](handoffs/photo-story-conversation-stalls.md).
 
 ## Lemmi branding deployed — November 15, 2026
 

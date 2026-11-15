@@ -1,9 +1,12 @@
 # Photo Story and conversation stall fixes
 
 November 15, 2026. Source branch: `fix/photo-story-conversation-stalls`.
-**Completion status: complete, verified locally and published; not deployed.**
-This is a source handoff for the backend-server agent. This session has not deployed,
-restarted or reconfigured the backend host.
+**Completion status: integrated, server-tested and deployed on November 15.**
+The original source session did not deploy or restart the host. The backend-server
+continuation integrated `15851e1` as gateway `1f1c2c4` and added the verified
+scalar-asset reload fix as web `d4e99d9`. Both are deployed; the sections below
+preserve the source session evidence and operational instructions. See
+[actual server/public verification and remaining limits](../backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026).
 
 ## Source and integration
 
@@ -153,4 +156,5 @@ network/heartbeat loss and physical device issues can still interrupt a conversa
 The mechanical photo-claim guard covers reviewed forms only. No new logging of
 prompts, transcripts, photo bytes/descriptions, contact details or credentials.
 No public-host, live-model, human microphone/speaker or K151 test was run here.
-The final server-side rollout and real-world reproduction remain the next handoff.
+The server rollout and synthetic public browser checks are complete. Human
+30-turn reproduction and this release's physical-device acceptance remain pending.

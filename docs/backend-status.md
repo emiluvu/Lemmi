@@ -1,21 +1,67 @@
 # Lemmi backend status
 
-## Photo Story and conversation fixes prepared — November 15, 2026
+## Photo Story and conversation fixes deployed — November 15, 2026
 
-Undeployed candidate `fix/photo-story-conversation-stalls`: fixes missed Photo Story
-voice requests, covered false model-display claims, clipped image layout and obsolete
-async errors that can disable a newer listening attempt. Integrates current
-`backend-deploy` through `435b73a`; greetings, teaching choices/Finish, startup
-recovery, saved-photo scope and branding are retained. No new API/schema/migration,
-configuration, dependency or provider change. Deploy web/gateway together after boundary review. Existing runtime is unchanged by this work.
+**Web `d4e99d9`, gateway `1f1c2c4`**. Integrated the published handoff
+`fix/photo-story-conversation-stalls/15851e1` with `backend-deploy/435b73a`.
+Web/gateway restarted together at **12:10:50 UTC**; the additional web-only
+photo reload correction rolled out at **12:15:17 UTC**. Speech `a779c70`,
+tunnel, database, proxy and private configuration retained. No migration,
+dependency, credential rotation, provider/model or diagnostic-setting change.
 
-[Completion status, evidence and server rollout handoff](handoffs/photo-story-conversation-stalls.md).
-Combined gate passed: **473 tests / 6,867 expectations, zero failures/skips** on
-five disposable PostgreSQL databases, a separate production HTTPS/WSS/private-photo
-smoke, type/Svelte/build/format/whitespace, 15 Python fixture checks, and desktop/mobile
-Chromium containment/failure/retry checks. A 30-turn gateway/controller fixture
-crossed spoken Photo Story entry/exit. Human speech,
-live-model and hardware acceptance remain pending.
+Missed explicit Photo Story requests now enter the application activity. Covered
+English model display claims become honest offers instead of invented pictures.
+Obsolete recognition/model/synthesis/opening results no longer emit errors into
+newer authority; current failures remain visible with capture off. Portrait and
+landscape images stay contained. Review found a further real speech-path defect:
+identical activity snapshots reloaded the image on every output update (189
+protected reads in one short run). `ScopedPhoto` now derives the scalar asset ID;
+the existing session/lease/profile/privacy/policy key still forces reauthorization.
+The browser regression reproduced 20 redundant reads before the fix, then zero
+for 20 identical snapshots and one fresh read after a privacy revision.
+
+Independent server verification with pinned Bun 1.4.4: frozen install, type/Svelte,
+production build, formatting/whitespace and **473 tests / 6,867 expectations,
+zero failures/skips** on five newly created disposable PostgreSQL databases.
+**15 Python boundary tests** passed with fixture engines. Production
+certificate-verified HTTPS/WSS/private-PNG smoke passed on separate disposable
+databases. The final UI-only correction repeated type/build/format, production
+smoke and Chromium staging; backend code was unchanged after the full suite.
+All disposable databases were removed.
+
+Actual public HTTPS Chromium on its own fictional enrollment passed text-request
+Photo Story entry and a decoded protected image, desktop/mobile containment,
+keyboard teaching choices/Finish, paused-photo Finish, stable captions, forced
+setup failure/Retry, image failure Pause/retry without Resume or capture, and Stop.
+Final build used three image reads for that complete browser scenario. Local
+landscape/portrait fixtures passed at 1280×900, 390×844 and 390×650. No browser
+runtime errors. Public WSS with real local TTS passed the greeting once despite
+duplicate Start, twelve-frame robot output credit, teaching menu, Finish and late
+receipt rejection. Its first probe failed at the generic greeting gate; an
+instrumented rerun passed without any code/configuration change. The original
+failure is not diagnosed. Synthetic public browser speech separately passed real
+local STT/TTS Photo Story entry, decoded protected image, automatic continuation,
+local mute and Stop. On final web `d4e99d9`, a two-input synthetic browser
+rehearsal passed Photo Story entry followed by real local STT → external model →
+local TTS discussion: three completed outputs, three capture requests, one
+protected image read and zero browser errors. Audio remained transient. An initial image assertion incorrectly expected a URL rather
+than the component's scoped blob rendering; the corrected check observes the
+successful protected network response plus the decoded image.
+
+Protected source/build/configuration/database/media/proxy backups and identity
+baseline: `.data/photo-stalls-rollback-path`. Original profile rows, endpoint
+assignments and credential fingerprints matched after fixture cleanup; Alex's
+five saved photos and remembering permission remain intact. All four supervisors
+are active with zero automatic restarts. Rollback must restore coordinated source
+and web build while preserving current permissions/deletions/data; do not blindly
+restore the database backup. Refresh/reconnect participant tabs and explicitly
+Start after the gateway restart.
+
+The 30-turn endurance check uses gateway/controller speech fixtures; 30 human
+turns, real microphone/speaker quality and physical K151 controls were not run.
+This rollout does not establish that every original reported stall is resolved.
+Kylie/Lukas/Emilia retain their UI/content/device acceptance handoffs. See the
+[updated source and rollout handoff](handoffs/photo-story-conversation-stalls.md).
 
 ## Lemmi branding deployed — November 15, 2026
 

@@ -1,5 +1,10 @@
 # Backend deployment branch
 
+Latest Photo Story/conversation rollout: **web `d4e99d9`, gateway `1f1c2c4`**,
+November 15, 12:10:50 UTC, with the web-only image reload correction at 12:15:17 UTC.
+No migration/configuration/proxy change; speech/tunnel retained. Protected rollback
+pointer: `.data/photo-stalls-rollback-path`. [Actual checks and remaining limits](backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026).
+
 Latest branding rollout: **web `f3f5199`**, gateway `5146030`, November 15,
 10:05:17 UTC. Web-only restart; installed Nginx `-t` and reload passed for exactly
 `/favicon.svg` and `/images/brand/lemmi.png`. Gateway/speech/tunnel retained.

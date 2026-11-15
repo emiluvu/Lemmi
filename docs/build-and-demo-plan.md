@@ -1336,3 +1336,25 @@ fixture crossed Photo Story entry/exit. Latest greetings/teaching/branding remai
 These checks do not upgrade human speech, live-provider, public-network or hardware
 acceptance. Anay reviews gateway/data boundaries; Kylie image layout; Lukas activity
 routing; Emilia actual endpoint/local controls before integrated release.
+
+
+## Server acceptance — Photo Story and conversation fixes, November 15, 2026
+
+Observed rollout: gateway `1f1c2c4` at 12:10:50 UTC; final web `d4e99d9` at
+12:15:17 UTC. Independently repeated 473 tests / 6,867 expectations without
+failures/skips, 15 Python fixture checks, pinned install/type/build/format,
+production HTTPS/WSS/private-photo smoke and isolated/public Chromium checks.
+Server review additionally reproduced photo refetches during playback and fixed
+scalar asset tracking; regression checks zero fetches for 20 unchanged snapshots
+and reauthorization on a privacy revision. Final public browser recovery,
+keyboard teaching/Finish and image error Pause/retry passed with zero runtime
+errors. Final synthetic public STT → external model → TTS photo entry/discussion
+passed with three outputs/three capture requests and one protected image read.
+Robot-protocol TTS/receipt
+checks passed; first generic greeting probe failure remains undiagnosed after a
+successful unchanged rerun. Original profiles/credentials and Alex's five saved
+photos preserved; only test-owned fixtures removed. No migration/configuration,
+model, speech/tunnel restart or physical flash. Protected rollback pointer:
+`.data/photo-stalls-rollback-path`. [Full evidence](backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026).
+Human 30-turn, microphone/speaker quality and this rollout's K151 acceptance remain
+unrun; Kylie/Lukas/Emilia review their UI/content/local-device boundaries.
