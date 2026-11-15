@@ -1,37 +1,57 @@
 # Lemmi backend integration reference
 
-## Browser noise endpointing prepared — November 15, 2026
+## Browser noise endpointing deployed — November 15, 2026
 
-**Source candidate only; not deployed.** The current public runtime remains
-web/gateway/local speech `ea66280`. User reports 20–30 seconds while the browser
-still shows Listening. A public synthetic control reproduced a steady 120 Hz hum
-(peak 0.03) preventing automatic submission: manual Finish after eight seconds
-submitted the turn, then response start took 3,130 ms. Clean speech submitted
-1,425 ms after speech ended and response start followed in 2,088 ms. Independent
-single-job engine probes measured STT 363 ms and TTS 99 ms. These observations
-locate a reproduced delay in browser endpointing; they do not capture the user's
-actual room or rule out other delays.
+**Web `405f5a3`**, deployed at **17:20:20 UTC**. Gateway/local speech remain
+`ea66280`; their PIDs/start times and the tunnel match the baseline. Private
+configuration, database schema, models, credentials and provider settings retained.
+Only web restarted. Frozen Bun 1.4.4 dependencies and the reviewed production build
+were installed; protected source/build/configuration/database/identity backups:
+`.data/noise-endpointing-rollback-path`.
 
-The candidate replaces the browser's WebRTC-only classification with local Silero
-v5 inference, pinned through `@ricky0123/vad-web` 0.0.31 and `onnxruntime-web`
-1.31.1. The 2.3 MB model and 14.8 MB WASM runtime load as same-origin application
-assets. It requests browser noise suppression, retains the configured 1,500 ms
-post-speech pause, and changes no server speech route, session authority, capture
-grant, provider, recording policy or firmware. Initialization has a ten-second
-bound before microphone authorization; detector failure/overload retains manual
-Finish speaking. Per-turn PCM/context/recurrent state is bounded and cleared;
-late inference cannot restore a destroyed detector.
+The reported 20–30-second wait while still Listening was reproduced with steady
+120 Hz hum at peak 0.03: the old browser detector kept resetting silence, requiring
+manual Finish eight seconds after speech ended. The server then responded in
+3,130 ms. Clean speech submitted after 1,425 ms and responded in 2,088 ms; separate
+local recognition/synthesis probes took 363/99 ms. This locates a reproduced
+browser endpointing defect without claiming the user's room was captured.
 
-Observed candidate Chromium matrix: speech followed by hum (peak 0.03/0.1),
-broadband noise (0.03/0.1), voice-band noise (0.03), clean speech at 0.1 scale,
-and speech at 0.25 scale with 0.01 hum/broadband noise all detected speech and
-submitted 1,278–1,298 ms after the generated utterance ended. These are synthetic
-signal levels, not calibrated physical room-noise measurements. Automated release
-checks, full production-browser noise validation and public rollout are still
-pending. No general room, human microphone/speaker or hardware acceptance is
-claimed. Nearby competing voices are not target-speaker isolation.
-[Implementation, license sources and rollout handoff](handoffs/browser-noise-endpointing.md).
+Replaced WebRTC-only classification with browser-local Silero v5, pinned through
+`@ricky0123/vad-web` 0.0.31 and `onnxruntime-web` 1.31.1. The 2.3 MB model/14.8 MB
+WASM runtime load lazily from same-origin app assets, with no new audio upload,
+CDN or inference service. Existing 20 ms wire frames/capture grants and privacy
+policy are unchanged; the model internally batches 512 samples plus 64 context.
+Per-turn state/PCM and eight queued frames are bounded; Stop clears owned buffers
+and late inference is discarded. Unclassified backlog never counts as speech.
+Noise suppression is requested. The 1.5-second post-speech setting and capture
+bounds remain; model initialization is bounded at ten seconds before capture
+permission, with explicit manual-Finish fallback on failure/overload.
 
+**501 tests / 12,788 expectations passed, no failures/skips**, using five fresh
+disposable databases. A final immediate-Stop clearing refinement separately passed
+four tests/22 assertions. Type/Svelte, production build, formatting, whitespace,
+frozen install and verified HTTPS/WSS/private-photo smoke passed. The existing
+three generic-photo-alt warnings remain. No speech engine/Python code changed.
+Chromium matrix passed hum 0.03/0.1, broadband 0.03/0.1, voice-band noise 0.03,
+quiet clean speech at 0.1 scale and speech at 0.25 scale with 0.01 hum/broadband:
+all detected speech and ended 1,278–1,298 ms after the generated utterance. These
+are synthetic amplitudes, not calibrated room sound levels.
+
+Final production Chromium under hum: end→submit **1,386 ms**, cold Start→Listening
+869 ms, no manual finish, continuation/mute/Stop and no overlap/runtime errors.
+Actual public HTTPS cold browser with the same hum: end→submit **1,395 ms**,
+submit→response **1,963 ms**, cold Start→Listening **4,463 ms**. Model, JS runtime
+and WASM all loaded same-origin with 200 responses; no manual Finish was needed,
+real local STT/external model/local TTS completed, and continuation/mute/Stop
+passed. Synthetic input stayed in memory; no microphone recordings or transcripts
+were retained. Test-owned profiles/endpoints and disposable databases were removed;
+original profile rows/credential assignments and Alex's five saved photos retained.
+
+Refresh/reconnect participant tabs and explicitly Start/Resume to load the new
+browser bundle. Keep the visible Listening/Finish control as fallback. Nearby
+competing speech is still speech to a single microphone: no target-speaker
+isolation or universal noisy-room/quiet-voice guarantee. Actual user/room and
+physical K151 checks remain separate. [Implementation, provenance and handoff](handoffs/browser-noise-endpointing.md).
 
 ## Conversation reliability deployed — November 15, 2026
 

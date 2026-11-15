@@ -1,5 +1,11 @@
 # Backend deployment branch
 
+Latest browser endpointing rollout: **web `405f5a3`**, November 15, 17:20:20 UTC.
+Gateway/local speech `ea66280`, tunnel, private settings and database retained.
+Pinned local Silero/ONNX dependencies added; no proxy/route/schema change.
+Protected rollback pointer `.data/noise-endpointing-rollback-path`.
+[Public noisy-speech acceptance and cold-start limits](backend-status.md#browser-noise-endpointing-deployed--november-15-2026).
+
 Latest reliability rollout: **web/gateway/local speech `ea66280`**, November 15,
 16:27:42–44 UTC. Matching 40-second capture support and post-speech configuration
 `PUBLIC_LEMMI_END_SILENCE_MS=1500`; tunnel/proxy/models retained. Protected rollback

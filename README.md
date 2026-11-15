@@ -1,9 +1,11 @@
 # Lemmi
 
-**Browser noise endpointing candidate — not deployed:** the browser can remain
-on Listening when background sound is classified as speech. A browser-local
-neural detector passed an initial synthetic hum/noise/quiet-speech matrix; final
-production checks and rollout remain pending. [Current evidence and limits](docs/handoffs/browser-noise-endpointing.md).
+**Browser noise endpointing deployed — web `405f5a3`:** local Silero detection
+replaces the noise-sensitive endpointing path. Public synthetic speech under the
+reproduced hum submitted automatically after 1.40 seconds; response began 1.96
+seconds later. Refresh and explicitly Start/Resume. First cold startup loads the
+browser model/runtime (4.46 seconds observed); actual room/microphone testing
+remains required. [Evidence and rollback](docs/backend-status.md#browser-noise-endpointing-deployed--november-15-2026).
 
 **Conversation reliability deployed — web/gateway/local speech `ea66280`:**
 Initial browser silence waits 30 seconds; post-speech ending uses 1.5 seconds.

@@ -310,3 +310,15 @@ Natural menu topic choices and whole-request photo next/previous/skip and activi
 exit/switch phrases reuse existing reviewed eligibility, reducers and commands.
 Photo openings avoid reciting approved captions; approved model grounding and existing activity caption metadata remain.
 See [handoff](handoffs/conversation-reliability.md) for checks and limitations.
+
+
+### Browser noise endpointing — deployed web `405f5a3`, November 15
+
+Internal `VoiceDetector.process` may return unknown (`null`) for unclassified
+backlog; this never establishes speech or advances the silence clock. Browser-local
+Silero v5 batches512 samples plus64 context, serialized with eight queued frames.
+Existing 640-byte/20-ms wire chunks, capture grants, session authority and 1500-ms
+post-speech policy remain unchanged. Stop/destroy clear owned PCM/state and reject
+late output; initialization/error/overload retains manual Finish speaking. The
+model/ONNX WASM load from same-origin versioned assets; no new public media/API or
+external speech service. [Actual acceptance and counterpart limits](backend-status.md#browser-noise-endpointing-deployed--november-15-2026).

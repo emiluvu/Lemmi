@@ -1431,3 +1431,19 @@ cases with 1,278–1,298 ms utterance-tail-to-submit. No user microphone media,
 transcripts or screenshots were retained. Final automated/production-browser and
 public rollout checks are pending. Human room testing, competing voices and K151
 remain separate acceptance. [Detailed handoff](handoffs/browser-noise-endpointing.md).
+
+
+## Server/public acceptance — browser noise endpointing, November 15
+
+Web `405f5a3` rolled out at 17:20:20 UTC; gateway/speech `ea66280` and tunnel
+retained. Full host gate 501 tests/12,788 assertions without failures/skips;
+final Stop-buffer refinement four tests/22 assertions. Frozen install/type/build/
+format, production TLS/WSS/private-media smoke and noise/quiet matrix passed.
+Production Chromium hum end→submit1,386 ms; actual public cold Chromium hum
+end→submit1,395 ms and submit→real STT/model/TTS response1,963 ms. Public cold
+Start→Listening4,463 ms; model/runtime/WASM same-origin200. Continuation/mute/Stop
+passed with zero runtime errors and no manual Finish. Only test-owned fixtures
+removed; original profiles/credentials/photos preserved. Protected pointer
+`.data/noise-endpointing-rollback-path`. [Full evidence/limits](backend-status.md#browser-noise-endpointing-deployed--november-15-2026).
+User/room rehearsal remains pending; synthetic amplitudes are not calibrated
+physical noise levels, and competing voices are not target-speaker isolation.

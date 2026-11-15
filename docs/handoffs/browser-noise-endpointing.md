@@ -1,9 +1,9 @@
 # Browser noise endpointing
 
-November 15, 2026. **Prepared source candidate; not deployed.** Current public
-web/gateway/local speech remains `ea66280`. This handoff must be updated with the
-actual tested source/release, service restart and acceptance before rollout is
-called complete.
+November 15, 2026. **Deployed as web `405f5a3` at 17:20:20 UTC.** Gateway/local
+speech remain `ea66280`; tunnel, configuration and data retained. Only web
+restarted. Final host/public evidence and rollback pointer are in
+[backend status](../backend-status.md#browser-noise-endpointing-deployed--november-15-2026).
 
 ## Reproduced problem
 
@@ -52,7 +52,10 @@ tests/22 assertions. Type/build/format and production HTTPS/WSS/private-media sm
 passed. Final candidate production Chromium with hum submitted automatically after
 1,386 ms; cold Start-to-Listening was 869 ms. Model/runtime/WASM loaded same-origin
 with 200 responses. Continuation, mute, Stop and zero overlap/runtime errors passed.
-Public deployed acceptance remains pending.
+Public HTTPS cold-browser acceptance passed: hum end→submit 1,395 ms,
+submit→response 1,963 ms, cold Start→Listening 4,463 ms; three same-origin
+model/runtime assets loaded 200. Automatic continuation/mute/Stop passed with
+real STT/external model/TTS and zero browser errors. Input was synthetic.
 
 The current manual workaround is tapping **Listening — tap to finish speaking**.
 Nearby competing speech can still be detected as speech; this feature does not
@@ -61,9 +64,9 @@ controls separate from software observations.
 
 ## Deployment handoff
 
-After source review and applicable checks pass, use the host's protected backup
-procedure, install the verified production build and restart web only if no server
-changes are added. Preserve gateway, speech, tunnel, database, private configuration,
+Completed source review and checks; protected backups and the verified build
+were used for a web-only rollout. Future rollback/updates must retain matching
+source/dependencies/build. Preserve gateway, speech, tunnel, database, private configuration,
 existing profile/asset records and credentials. Verify public same-origin model/
 WASM loading, fresh-gesture capture, noise ending, quiet speech, manual Finish,
 Pause/Resume, Mute, Stop and failed detector behavior on a test-owned fictional
