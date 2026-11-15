@@ -36,6 +36,21 @@ fixture to preserve monotonic sequences. Zero browser runtime errors; capture
 and playback disabled, no screenshots, microphone or recordings. Real human
 speech/speaker quality and physical K151 controls remain unrun.
 
+## Current handoff — additional bugs unresolved
+
+November 15, 2026: user reports that bugs still remain after the conversation
+startup recovery rollout. Exact remaining symptoms/reproduction are not yet
+specified; defer investigation to the user's next debugging session. Do not
+treat the successful fixture/browser checks below as complete user acceptance
+or claim the original incident is fully resolved.
+
+Current deployed revisions: **web `9b218b9`, gateway `c44f092`, speech `a779c70`**.
+Recovery source and earlier deployment records were pushed in `2d15004`.
+Stackchan transport diagnostics are off; evidence and rollback pointers remain
+saved. No further code change, deployment, restart or test was performed for
+this final handoff. Next session should reproduce the user's remaining bugs
+against these exact revisions before choosing another fix.
+
 ## Conversation startup recovery deployed — November 15, 2026
 
 **Web runtime `9b218b9`**, gateway `c44f092` and speech/tunnel retained.
