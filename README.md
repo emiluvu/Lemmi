@@ -1,12 +1,13 @@
 # Lemmi
 
-**Local conversation reliability candidate — not deployed:** branch
-`fix/lemmi-conversation-reliability` fixes premature silence pauses, stale
-cancellations after Resume, natural teaching-topic selection, spoken photo
-navigation and activity exits. Browser initial silence is 30 seconds; normal
-post-speech ending defaults to the requested 1.5 seconds. Deploy matching web, gateway and local speech
-wrapper together for the new bounded 40-second input contract.
-[Changes, local checks and host/robot retest](docs/handoffs/conversation-reliability.md).
+**Conversation reliability deployed — web/gateway/local speech `ea66280`:**
+Initial browser silence waits 30 seconds; post-speech ending uses 1.5 seconds.
+Fresh listening/Resume survives retired-output cancellation. Natural teaching
+choices, photo navigation and activity exits are integrated. Matching services
+support bounded 40-second input. 497 tests and public synthetic speech/browser
+checks passed; human microphone/speaker and hardware acceptance remain pending.
+[Deployment evidence and rollback](docs/backend-status.md#conversation-reliability-deployed--november-15-2026).
+Earlier release notes below retain their historical timings.
 
 **Known issues remain:** user reports additional bugs after the latest rollout.
 Debugging will continue in a later session; the checks below are not complete
@@ -81,7 +82,7 @@ An early hardware check will determine how much interaction can live on the avai
 
 Deployed Photo Story/conversation fixes: web `d4e99d9`, gateway `1f1c2c4`. Explicit photo requests, image containment, repeated image reads and obsolete asynchronous errors are fixed; 473 backend tests plus production/public browser checks passed. [Evidence, remaining human/hardware checks and rollback](docs/backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026).
 
-**Current deployment:** web `d4e99d9`, gateway `1f1c2c4`; follow the microphone flow above. Enrollment, plain Unmute and mode selection alone do not grant capture. Browser Start is the explicit opt-in to conversation listening.
+**Current deployment:** web/gateway/local speech `ea66280`; follow the microphone flow above. Enrollment, plain Unmute and mode selection alone do not grant capture. Browser Start is the explicit opt-in to conversation listening.
 
 
 **Teach Lemmi source increment (`codex/teach-lemmi`):** a playable scripted Alex text demo is available in the existing Participant page. Backend teaching handlers reuse the shared coordinator, OpenRouter and speech seams, with reviewed topics, session-only feedback and a fifteen-minute active-time limit. [Tester manual](docs/teach-lemmi-tester-manual.md) and [Anay/Kylie/Emilia handoff](docs/handoffs/lukas-teach-lemmi.md) cover launch and checks. Teach Lemmi and the integrated live participant shell are deployed as runtime `f5724a0`; start at `/access` → `/participant`. Public voice is enabled for fictional team tests; actual browser microphone/speaker, physical robot acceptance and durable teaching memory/journal observations remain pending.

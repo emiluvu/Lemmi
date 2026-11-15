@@ -1,11 +1,28 @@
 # Conversation reliability fixes
 
 November 15, 2026. Local branch `fix/lemmi-conversation-reliability`, isolated
-worktree `/tmp/lemmi-conversation-reliability`. Not deployed. The original shared
+worktree `/tmp/lemmi-conversation-reliability`. **Deployed as web/gateway/local
+speech `ea66280` by the backend-server continuation.** The original shared
 checkout and other dirty worktrees retain their work. Integration includes the
 latest fetched backend release `8a08430`, including scalar photo asset tracking
-and unsupported image-claim safeguards. No credentials, database
-records, host configuration or firmware were changed.
+and unsupported image-claim safeguards. The original source session changed no
+credentials, database records, host configuration or firmware. The server
+continuation changed only the documented silence setting and deployed services.
+
+## Server continuation — completed rollout
+
+Integrated published `48686bf` with `backend-deploy/8a08430`. Web/gateway and speech
+wrapper deployed together at 16:27:42–44 UTC with only the documented root silence
+setting changed to `1500`. Tunnel/proxy/model and speech configuration retained.
+Independent host verification passed 497 tests / 12,767 expectations with **zero
+skips**, 15 Python checks, production TLS/WSS/private-photo smoke and staging/public
+Chromium. Actual public synthetic 22.1-second initial silence plus 1,280 input
+frames passed real STT/model/TTS; gardening selection continued through two
+substantive model replies. Pure silence pauses without inference; photo
+navigation, keyboard/recovery, mute/Stop and original-data preservation passed.
+[Detailed evidence, initial probe limitation and rollback](../backend-status.md#conversation-reliability-deployed--november-15-2026).
+The local source-session statements below are historical; human/room, 30-human-turn
+and this release's K151 acceptance remain pending.
 
 ## Behavior and causes
 
@@ -27,7 +44,7 @@ records, host configuration or firmware were changed.
   Polite exit/switch phrases run before model generation. Quoted, negated and
   historical mentions do not execute commands. Global Stop keeps precedence.
 - Photo openings and participant presentation omit detailed approved captions.
-  Those captions remain server-side grounding; model instructions invite the
+  Those captions remain approved model grounding and existing activity metadata; model instructions invite the
   participant to describe the picture without reciting the supplied narrative.
 
 ## Changed interfaces and rollout

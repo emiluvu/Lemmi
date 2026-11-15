@@ -198,7 +198,7 @@ Activity journal events: `activity_started`, `activity_ended`, `track_selected`,
 
 **Feature branch increment:** `anay/speech-pipeline` implements the backend voice seam; [exact protocol and handoff](handoffs/anay-speech-pipeline.md) and [API reference](backend_api.md#opt-in-voice-turns-and-playback) cover configuration, capabilities, current capture grant, indexed PCM/end, bounded output and consumed-playback receipts. Shared `speech*Fixture` exports contain fictional IDs/generated silence. Legacy hello remains audio-disabled without negotiated playback. K151 integration and actual browser microphone/speaker acceptance remain pending. The multi-profile increment now supplies browser transport and local controls.
 
-The current engine accepts a bounded complete utterance after explicit `audio.end`; the technical-spec incremental-recognition target is **not yet implemented**; the current browser performs local end-of-speech detection. The local reliability candidate bounds one current explicit turn at 40 seconds/1,280,000 input bytes (2,000 frames); four output frames may be ahead of consumed receipts. All presets return capture-off waiting after completion. The computer player's receipts are simulated, not hardware proof.
+The current engine accepts a bounded complete utterance after explicit `audio.end`; the technical-spec incremental-recognition target is **not yet implemented**; the current browser performs local end-of-speech detection. The deployed reliability release (`ea66280`) bounds one current explicit turn at 40 seconds/1,280,000 input bytes (2,000 frames); four output frames may be ahead of consumed receipts. All presets return capture-off waiting after completion. The computer player's receipts are simulated, not hardware proof.
 
 The robot's WebSocket connects to Anay's realtime gateway, not to a second app-owned backend. The SvelteKit app subscribes to the same session and can use the browser endpoint as fallback. Firmware never knows LLM keys, caregiver destinations, database credentials, or private guidance.
 
@@ -293,9 +293,9 @@ Anay supplies protected `GET /v1/profiles/:id/overview` through the shared careg
 
 After a successful new `input.start`, configured/negotiated speech reads a fixed English/German introduction through the existing bounded speech owner and receipts. It grants no capture. The browser’s explicit Start intent waits for consumed output, then requests its first fresh capture; raw Start/Resume/Unmute do not record. Reconnect does not start output; Resume uses the existing activity/conversation reorientation instead of starting another session introduction. Approved greeting/topic text is emitted only to the current authenticated output owner. Finish uses existing `input.teaching.finish` or `input.photo.action` with `activity.leave`; photo leave is permitted during pause and preserves that pause. No new HTTP route, firmware change, migration or provider is introduced. See [handoff](handoffs/participant-greetings-exit.md).
 
-### Local conversation reliability candidate — November 15
+### Conversation reliability deployed — November 15
 
-Not deployed. Browser initial no-speech waits 30 seconds; post-speech ending
+Web/gateway/local speech `ea66280` deployed together. Browser initial no-speech waits 30 seconds; post-speech ending
 uses the user-selected 1,500 ms default, configurable over 1,000–8,000 ms. Browser capture ends at 39.5 seconds
 or 1,975 frames; server grants and both audio.end schemas cap at 40 seconds /
 2,000 frames / 1,280,000 bytes. The local STT wrapper accepts that same byte cap;
@@ -308,5 +308,5 @@ Gateway async failures remain scoped to their original authority and endpoint
 operation; stale work cannot cancel Resume or Mute/Unmute continuation.
 Natural menu topic choices and whole-request photo next/previous/skip and activity
 exit/switch phrases reuse existing reviewed eligibility, reducers and commands.
-Photo openings avoid reciting approved captions; server-side grounding remains.
+Photo openings avoid reciting approved captions; approved model grounding and existing activity caption metadata remain.
 See [handoff](handoffs/conversation-reliability.md) for checks and limitations.

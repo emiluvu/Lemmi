@@ -1395,3 +1395,26 @@ model, speech/tunnel restart or physical flash. Protected rollback pointer:
 `.data/photo-stalls-rollback-path`. [Full evidence](backend-status.md#photo-story-and-conversation-fixes-deployed--november-15-2026).
 Human 30-turn, microphone/speaker quality and this rollout's K151 acceptance remain
 unrun; Kylie/Lukas/Emilia review their UI/content/local-device boundaries.
+
+
+## Server acceptance — conversation reliability, November 15, 2026
+
+Web/gateway/local speech `ea66280` deployed at 16:27:42–44 UTC after independent
+Bun 1.4.4 frozen install/type/build/format/whitespace, **497 tests / 12,767
+expectations with no skips/failures**, 15 Python checks, production verified
+TLS/WSS/private-photo smoke and Chromium staging. This includes all 46 database
+checks skipped in the source handoff. All disposable test databases removed.
+Public browser checks passed natural teaching/photo controls, keyboard/Finish,
+setup and image failure/retry, containment and Stop. Actual synthetic speech after
+22.1 seconds crossed the old capture limit with 1,280 frames through real STT,
+external model and TTS; one protected photo read. Separate teaching rehearsal
+passed natural gardening selection and two substantive model replies (five total
+outputs/turn grants). Pure silence paused with no submitted audio; its initial
+probe failed before listening and passed after correcting the synthetic context.
+All original profiles/credentials, Alex's five photos and existing remembering
+setting preserved after test-owned cleanup. Tunnel/proxy/models retained; only
+root post-speech silence changed to 1500 ms. Rollback pointer
+`.data/reliability-rollback-path` covers coordinated source/build/config/data/media.
+[Evidence and limits](backend-status.md#conversation-reliability-deployed--november-15-2026).
+Thirty-human-turn, actual microphone/room/speaker and this release's K151 checks
+remain unrun; Kylie/Lukas/Emilia retain their counterpart rehearsal handoffs.

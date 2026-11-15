@@ -1,41 +1,72 @@
 # Lemmi backend status
 
-## Local conversation reliability candidate — November 15, 2026
+## Conversation reliability deployed — November 15, 2026
 
-Branch `fix/lemmi-conversation-reliability`, integrating fetched backend release
-`8a08430`. Not deployed. Browser initial no-speech allowance is 30 seconds;
-post-speech silence defaults to the user's selected **1.5 seconds** (range 1–8).
-Shared capture/input bounds are 40 seconds / 2,000 frames / 1,280,000 bytes;
-matching web, gateway and local speech wrapper must ship together. Set existing
-`PUBLIC_LEMMI_END_SILENCE_MS` configuration to `1500` when rolling out, since an
-explicit older `1000` overrides the new default. No migration or provider change.
+**Web, gateway and local speech wrapper `ea66280`**, integrating
+`fix/lemmi-conversation-reliability/48686bf` with `backend-deploy/8a08430`.
+Speech restarted at **16:27:42 UTC**, web/gateway at **16:27:44 UTC**. The tunnel,
+proxy, database and existing engine/model/worker settings were retained. The only
+private configuration change is `PUBLIC_LEMMI_END_SILENCE_MS=1500`; speech's private
+configuration is byte-identical. No migration, dependency, credential rotation,
+provider selection, diagnostic enablement or firmware change.
 
-Fixed retired output cancellation interrupting fresh listening/Resume; strengthened
-async error scoping for same-generation Mute/Unmute. Natural Teach Lemmi topic
-selection now accepts “I would like to talk about gardening” and continues with
-the model. Spoken photo next/back/skip, easier deliberate activity exits/switches
-and simple photo invitations reuse current authority, eligibility and reducers.
-Approved photo grounding remains server-side. Latest deployed image-load and
-unsupported picture-claim safeguards are retained.
+Browser initial silence now waits 30 seconds before capture-off Pause, without
+submitting silence. Post-speech silence defaults to 1.5 seconds (configurable
+1–8). Matching server/wrapper capture bounds are 40 seconds / 2,000 frames /
+1,280,000 bytes; the designed browser reserves 0.5 seconds (1,975 frames).
+Post-capture inference retains its 20-second deadline. A retired output cancel
+cannot retire newer browser listening/Resume intent. Gateway error delivery also
+tracks superseding endpoint operations, including same-generation Mute/Unmute;
+genuinely current failures remain explicit. Natural teaching selections, photo
+next/previous/skip and polite exits reuse existing eligibility/reducers. Photo
+openings/visible text/alt no longer recite detailed approved captions. Approved
+captions remain available for model grounding and in the existing activity metadata;
+this is a presentation change, not a new confidentiality boundary.
 
-Observed locally with pinned Bun 1.4.4: frozen install, type/Svelte, production
-build, formatting and whitespace checks passed. **451 tests passed, 46 skipped,
-zero failures; 12,391 expectations across 58 files**. Skips require configured
-PostgreSQL test databases, unavailable here. Seven Python speech-wrapper boundary
-tests passed. Gateway fixture coverage includes 30-turn continuation, paused
-STT/model/TTS cancellation, same-generation Mute/Unmute, fresh capture, spoken
-photo next/back, gardening menu selection and substantive follow-up, current
-synthesis failures and the 40-second ready advertisement. Browser tests cover
-30-second no-speech, a late answer, the 1.5-second default and speech resetting
-its timer; a 32-second server input verifies both end schemas and buffer clearing.
+Independent host gate with Bun 1.4.4: frozen install, type/Svelte, build, formatting,
+whitespace and **497 tests / 12,767 expectations, zero failures/skips**, including
+the source handoff's 46 previously skipped database checks on five newly created
+disposable PostgreSQL databases. **15 Python boundary tests** passed, including
+over-20-second wrapper input with fixture engines. Production certificate-verified
+HTTPS/WSS/private-PNG smoke passed on separate disposable databases. All temporary
+databases were removed. Chromium staging/public checks passed desktop/mobile
+containment, stable captions, keyboard teaching selection/Finish, natural gardening
+selection/exit, photo next/previous, setup Retry, photo failure Pause/retry without
+Resume/capture and Stop. The prior scalar-photo regression still passes zero
+extra reads for 20 identical snapshots and fresh authorization on privacy change.
 
-These are software/fictional-adapter observations; no live ASR/LLM, current
-Chromium/keyboard, actual microphone/speaker or K151 acceptance was run. The
-intermittent user-reported stall is not claimed universally resolved. Anay reviews
-contracts/cancellation, Kylie participant text/controls, Lukas topic/navigation,
-and Emilia actual endpoint controls/timing. The legacy local `/participant/voice`
-path retains its earlier 19.5-second cap; current designed modes use the updated
-LiveParticipant path. [Detailed handoff](handoffs/conversation-reliability.md).
+Actual public Chromium with synthetic in-memory speech passed a **22.1-second
+initial pause**, then **1,280 input frames** through real local STT → external
+model → local TTS. It decoded the protected photo with one image read, completed
+three outputs, requested three granted turns, and passed local mute/Stop with zero
+browser errors. Another public fictional profile selected gardening naturally
+from Teach Lemmi and completed **two substantive model replies**, five total
+outputs/five capture requests, continuation, mute and Stop. A pure-silence browser
+probe paused with capture off and no `audio.end` submission (33.7 seconds from
+Start, including greeting/setup before the 30-second listening timer). Its first
+probe timed out before listening; the synthetic input context was corrected to run
+and the rerun passed without application changes. Public robot-protocol WSS also
+passed the greeting once, 12-frame playback credit, teaching menu, Finish and late
+receipt rejection. Public internal/mock/private/unlisted and missing-gate denials
+passed. These are real network/browser/provider checks with synthetic input and
+simulated robot receipts, not human microphone/speaker or physical K151 proof.
+
+Protected source/build/root-and-speech configuration/database/media/proxy backups,
+service state and original identity baseline: `.data/reliability-rollback-path`.
+After releasing/deleting only test-owned fixtures, original profile rows, endpoint
+assignments and credential fingerprints matched. Alex's five saved photos and
+existing remembering setting were preserved. All four supervisors are active,
+zero automatic restarts, and both STT/TTS workers are ready. Rollback must restore
+matching web/gateway/wrapper source/build and the prior silence setting while
+preserving current permissions/deletions/data; never blindly restore the database
+snapshot. Refresh/reconnect participant tabs and explicitly Start after restart.
+
+Human/room quality, this release's physical K151 controls/timing and a 30-human-turn
+rehearsal remain unrun; firmware and legacy local `/participant/voice` may retain
+shorter capture limits. Thirty-turn software endurance uses fixture adapters.
+No universal resolution of intermittent stalls or unattended-care readiness is
+claimed. Kylie/Lukas/Emilia retain UI/content/device review and rehearsal handoffs.
+[Source and rollout handoff](handoffs/conversation-reliability.md).
 
 ## Photo Story and conversation fixes deployed — November 15, 2026
 

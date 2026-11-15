@@ -1,5 +1,34 @@
 # Lemmi backend integration reference
 
+## Conversation reliability deployed — November 15, 2026
+
+**Web/gateway/local speech `ea66280`**, integrating reliability source `48686bf`;
+coordinated rollout at 16:27:42–44 UTC. Private post-speech setting now `1500` ms;
+other configuration, models, workers, proxy, tunnel and database retained. No new
+route/event, migration or dependency. Existing audio schemas now accept up to
+2,000 frames/1,280,000 bytes; `device.ready.audio.maxCaptureMs` advertises 40,000.
+New parsers also accept the old 20,000 advertisement. Deploy/roll back matching
+web/gateway/speech: old wrappers reject input over 20 seconds. Firmware and legacy
+local `/participant/voice` may still stop earlier.
+
+Designed browser initial silence pauses after 30 seconds without inference;
+post-speech silence is 1.5 seconds (range 1–8), capture max 39.5 seconds/1,975
+frames, inference deadline still 20 seconds. Retired stream cancellations and
+obsolete async errors cannot cancel newer listening/Resume or Mute/Unmute work.
+Natural eligible teaching topics, photo next/previous/skip and polite exits reuse
+existing commands and reducers. Participant photo presentation omits detailed
+captions, which remain in approved context/existing activity metadata.
+
+Host gate: **497 tests / 12,767 expectations, no skips/failures**, 15 Python checks,
+production TLS/WSS/private-photo smoke and Chromium checks passed. Actual public
+synthetic speech accepted 1,280 frames after a 22.1-second initial pause through
+real STT/model/TTS; teaching completed two substantive model replies. Silence,
+continuation, mute/Stop, photo navigation, keyboard/recovery and public denials
+passed. Physical microphone/speaker/K151 and human endurance remain unrun.
+[Full evidence and coordinated rollback](backend-status.md#conversation-reliability-deployed--november-15-2026),
+[handoff](handoffs/conversation-reliability.md).
+
+
 ## Photo Story and conversation fixes deployed — November 15, 2026
 
 Current **web `d4e99d9`, gateway `1f1c2c4`** integrate
@@ -804,7 +833,7 @@ Exact examples, configuration, cancellation semantics and morning handoff: [spee
 
 Speech requires `LEMMI_SPEECH_ENABLED=1`, valid private independent STT/TTS settings and configured OpenRouter. No output resampling: advertise an actual supported native rate (16/22.05/24/44.1/48 kHz); current Piper is 22.05 kHz. Legacy clients and default startup stay audio-disabled. No new public HTTP audio or raw inference endpoints are added.
 
-One bounded 40-second/1,280,000-byte capture, one turn/output, no inference queue. Current engine seam buffers the bounded complete utterance then recognizes after explicit end; incremental STT and silence end detection remain pending against the technical-spec target. Frame-time checks allow at most a one-second lead. Rate/watchdog/media durations use monotonic elapsed time; credential expiry uses UTC. A single 20-second deadline covers STT→model→TTS. Four output chunks ahead of consumed receipts; started deadline five seconds and playback deadline duration plus five seconds. For ordinary replies, only a started receipt sets speaking; completion returns capture-off waiting. Fixed concern/refusal replies follow the paused-session behavior below. Completion never grants capture.
+One bounded 40-second/1,280,000-byte capture, one turn/output, no inference queue. Current engine seam buffers the bounded complete utterance then recognizes after explicit end; browser end-of-speech detection is implemented; incremental STT remains pending against the technical-spec target. Frame-time checks allow at most a one-second lead. Rate/watchdog/media durations use monotonic elapsed time; credential expiry uses UTC. A single 20-second deadline covers STT→model→TTS. Four output chunks ahead of consumed receipts; started deadline five seconds and playback deadline duration plus five seconds. For ordinary replies, only a started receipt sets speaking; completion returns capture-off waiting. Fixed concern/refusal replies follow the paused-session behavior below. Completion never grants capture.
 
 Mic mute cancels pending input work but preserves approved output. Repeated unmute during capture cancels it; unmute alone never opens capture. Pause/Stop/help/disconnect/revoke/context change cancel; late results/receipts cannot restore state. There is no raw audio/transcript/journal persistence. Endpoint receipts remain reports, not independent proof of hardware output. Unsupported rate/language/engine, malformed/expired/gapped frames and backpressure fail explicitly.
 
@@ -876,7 +905,7 @@ Use [Ubuntu speech setup/configuration/API/privacy guide](../services/local-spee
 
 STT input: **16 kHz mono**, positive even byte count ≤1,280,000 (40 seconds); this bounded whole-turn wrapper receives the assembled, validated 640-byte device frames after explicit end. TTS text ≤600 chars; output ≤30 seconds at 8–48 kHz. Current English Piper voice outputs **22,050 Hz**. Live output negotiates native playback rates; test-only resampling is only for synthetic input fixtures. Unsupported German voice is unavailable, never silently English.
 
-One inference job, no queue; eight request-thread cap, five-second connection/body bounds, 20-second inference bound. Best-effort cancel can terminate/reload the engine worker; callers independently reject late results. A client disconnect alone is not proof of immediate native inference cancellation. Speech errors are bounded/sanitized; no engine prompt/audio/transcript tracebacks are returned. Host RAM/IPC/native buffers remain transient without a secure-erasure claim; model/dependency caches persist, raw audio/transcripts do not intentionally persist.
+One inference job per worker, no wrapper inference queue; configurable 1–4 STT and 1–4 TTS workers (this host retains two of each), sixteen request-thread cap, five-second connection/body bounds and 20-second inference bound. Best-effort cancel can terminate/reload the engine worker; callers independently reject late results. A client disconnect alone is not proof of immediate native inference cancellation. Speech errors are bounded/sanitized; no engine prompt/audio/transcript tracebacks are returned. Host RAM/IPC/native buffers remain transient without a secure-erasure claim; model/dependency caches persist, raw audio/transcripts do not intentionally persist.
 
 Server adapter interfaces (`@lemmi/server` exports type-only speech/chat types and adapter factories):
 

@@ -1,5 +1,11 @@
 # Backend deployment branch
 
+Latest reliability rollout: **web/gateway/local speech `ea66280`**, November 15,
+16:27:42–44 UTC. Matching 40-second capture support and post-speech configuration
+`PUBLIC_LEMMI_END_SILENCE_MS=1500`; tunnel/proxy/models retained. Protected rollback
+pointer `.data/reliability-rollback-path`. Roll back all three runtimes and the
+silence setting together; retain current data. [Actual checks and remaining limits](backend-status.md#conversation-reliability-deployed--november-15-2026).
+
 Latest Photo Story/conversation rollout: **web `d4e99d9`, gateway `1f1c2c4`**,
 November 15, 12:10:50 UTC, with the web-only image reload correction at 12:15:17 UTC.
 No migration/configuration/proxy change; speech/tunnel retained. Protected rollback
