@@ -123,7 +123,7 @@ test('STT-recognized help creates one request and speaks fixed contact status us
     expect(JSON.stringify(requests)).not.toContain('I need assistance');
     expect(f.chats()).toBe(0);
     expect(f.spoken).toHaveLength(1);
-    expect(f.spoken[0]).toContain('trying to contact your caregiver');
+    expect(f.spoken[0]).toBe("I'm notifying your caregiver.");
     const output = f.c.speechOutputInfo()!;
     expect(output.turnId).toBe(result.data.reply.turnId);
     const batch = f.c.drainSpeechOutput()!;

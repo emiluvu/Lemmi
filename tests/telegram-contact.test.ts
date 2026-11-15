@@ -39,10 +39,9 @@ const decisionConfig = {
 function scores(category: ConcernCategory = 'none') {
   return {
     answers: Object.fromEntries(
-      ['help_request', 'urgent', 'concern', 'safeguarding'].map((key) => [
-        key,
-        { type: 'noul', noul: key === category ? 0.99 : 0.01 },
-      ]),
+      ['help_request', 'urgent', 'concern', 'safeguarding', 'departure', 'contact_request'].map(
+        (key) => [key, { type: 'noul', noul: key === category ? 0.99 : 0.01 }],
+      ),
     ),
   };
 }
@@ -126,6 +125,8 @@ test('Jev concern questions are bounded, multilingual and cannot choose recipien
       expect(body.state).toEqual({ text: 'A fictional report', language: 'de' });
       expect(Object.keys(body.questions).sort()).toEqual([
         'concern',
+        'contact_request',
+        'departure',
         'help_request',
         'safeguarding',
         'urgent',
@@ -416,7 +417,8 @@ dbtest(
     await expect(service.update('profile-alex', id, 'acknowledge', 'foreign')).rejects.toThrow();
     const ack = await service.update('profile-alex', id, 'acknowledge', config.subject);
     expect(ack.status).toBe('acknowledged');
-    expect(ack.message).toContain('does not confirm arrival');
+    expect(ack.message).toContain('acknowledged');
+    expect(ack.message).not.toMatch(/has arrived|on the way/i);
     finish({ status: 'accepted', messageId: 2 });
     await pending;
     expect((await service.read('profile-alex', id)).status).toBe('acknowledged');
@@ -615,5 +617,106 @@ dbtest(
     expect((await service.read('profile-alex', original.id)).status).toBe('canceled');
     expect((await service.read('profile-alex', fresh.id)).status).toBe('accepted');
     await service.stop();
+  },
+);
+
+dbtest(
+  'followup categories honor automatic-alert permission and deliver fixed templates without retaining requested names or utterances',
+  async () => {
+    const requestedName = 'MayaFixtureUnique';
+    const utterance =
+      'Please call my sister MayaFixtureUnique about this fictional private conversation';
+    const messages: string[] = [];
+    const destinations: string[] = [];
+    const sender: TelegramSender = {
+      async send(destination, message) {
+        destinations.push(destination);
+        messages.push(message);
+        return { status: 'accepted', messageId: messages.length };
+      },
+    };
+    const manualOnly = await setup(sender, { autoAlerts: false });
+    try {
+      const trigger = {
+        ...request('contact_request'),
+        source: 'participant_phrase' as const,
+        requestedName,
+        utterance,
+      };
+      const contactRequest = accepted(await manualOnly.create(trigger));
+      expect(contactRequest.reason).toBe('manual');
+      expect(
+        (await manualOnly.create({ ...request('departure'), source: 'participant_phrase' })).ok,
+      ).toBe(false);
+      expect(
+        (await manualOnly.create({ ...request('human_support'), source: 'model_reply' })).ok,
+      ).toBe(false);
+      await manualOnly.tick();
+      expect(destinations).toEqual([config.chatId]);
+      expect(messages[0]).toContain('Call/contact requested');
+      expect((await manualOnly.read('profile-alex', contactRequest.id)).status).toBe('accepted');
+      expect((await sql`SELECT * FROM lemmi.help_requests`).length).toBe(1);
+    } finally {
+      await manualOnly.stop();
+    }
+
+    messages.length = 0;
+    destinations.length = 0;
+    const automatic = await setup(sender, { autoAlerts: true });
+    try {
+      const categories = [
+        {
+          category: 'contact_request' as const,
+          source: 'participant_phrase' as const,
+          label: 'Call/contact requested',
+        },
+        {
+          category: 'departure' as const,
+          source: 'participant_phrase' as const,
+          label: 'Departure/travel plan reported',
+        },
+        {
+          category: 'human_support' as const,
+          source: 'model_reply' as const,
+          label: 'Lemmi recommended trusted human support',
+        },
+      ];
+      for (const { category, source } of categories) {
+        const trigger = { ...request(category), source, requestedName, utterance };
+        accepted(await automatic.create(trigger));
+      }
+      await automatic.tick();
+      await automatic.tick();
+      await automatic.tick();
+      expect(destinations).toEqual([config.chatId, config.chatId, config.chatId]);
+      expect(messages).toHaveLength(3);
+      for (const { label } of categories)
+        expect(messages.some((message) => message.includes(label))).toBe(true);
+      const modelRecommendation = messages.find((message) =>
+        message.includes('Lemmi recommended trusted human support'),
+      )!;
+      expect(modelRecommendation).toContain('Lemmi suggested support from a trusted person');
+      expect(modelRecommendation).not.toContain('Participant request/report');
+      const rows =
+        await sql`SELECT category,source,status FROM lemmi.help_requests ORDER BY category`;
+      expect(rows.map((row: any) => row.category)).toEqual([
+        'contact_request',
+        'departure',
+        'human_support',
+      ]);
+      expect(rows.every((row: any) => row.status === 'accepted')).toBe(true);
+      expect(rows.find((row: any) => row.category === 'human_support')?.source).toBe('model_reply');
+      const durable = JSON.stringify({
+        requests: await sql`SELECT * FROM lemmi.help_requests`,
+        receipts: await sql`SELECT * FROM lemmi.help_receipts`,
+        attempts: await sql`SELECT * FROM lemmi.help_attempts`,
+      });
+      for (const value of [durable, ...messages]) {
+        expect(value).not.toContain(requestedName);
+        expect(value).not.toContain(utterance);
+      }
+    } finally {
+      await automatic.stop();
+    }
   },
 );

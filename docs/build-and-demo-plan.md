@@ -1424,3 +1424,29 @@ remain unrun; Kylie/Lukas/Emilia retain their counterpart rehearsal handoffs.
 Implementation: `feat/telegram-caregiver-contact`, persistent worktree `.worktrees/telegram-caregiver-contact`; [handoff](handoffs/telegram-caregiver-contact.md). Added durable requests/leased bounded send attempts, manual/fixed/Jev triggers, protected acknowledgment/cancel/resolve, resource-scoped status events, participant status copy and proxy-template routes. Technical agent review found and prompted fixes for cancellation during SQL, full pre-send authorization, startup consent resurrection and stale-revision deduplication; regression tests cover those findings.
 
 Observed against isolated PostgreSQL 14.24 and Bun 1.4.4: initial full suite 489 passed / 19 skipped / 0 failed; separate gateway tests 2 passed / 25 expectations; speech-contact tests 2 passed / 37 expectations; reviewed contact suite 14 passed / 154 expectations. Final combined checks are recorded in the contact handoff. Actual manual help and actual Jev classification each reached Telegram acceptance using the existing private tg-notify configuration; the user confirmed both fictional alerts arrived. Requests were stored only in a disposable smoke database and future smoke attempts canceled. No conversational LLM generation, real participant data or hardware was used. No production configuration, deployed database or running public service changed.
+
+### Contact follow-up extension — pending acceptance
+
+The follow-up source adds a participant departure/travel heads-up, explicit
+call/contact requests, and a notification when an admitted Lemmi response
+recommends trusted human support. These reuse the durable contact service and
+fixed application templates. Departure is an unverified report, with no diagnosis
+or inferred wandering. A call/contact request sends a caregiver notification only
+and never claims a phone call was placed. Lemmi's recommendation is separately
+attributed with source `model_reply`; it must not be presented as a participant
+report. Automatic departure/support alerts require the configured opt-in, while
+an explicit contact request follows manual-help permission. Safe-alternate
+safeguarding rules retain precedence.
+
+Anay owns coordinator/classifier execution, additive migration `008`, recipient
+policy, typed scope and tests. Kylie consumes the existing status event and
+request APIs; Emilia verifies actual local controls and status presentation.
+No extra utterance/model text may enter durable requests, jobs or notifications.
+The prior observed test counts and two Telegram alerts do not mark these new
+triggers passed. Still required: positive/negative/quoted/historical trigger
+fixtures, correct event attribution, policy gating, migration upgrade, duplicate
+and cancellation checks, then a separately authorized fictional live rehearsal.
+No production deployment or hardware result is claimed for this extension.
+
+
+Observed follow-up acceptance: **513 Bun tests passed / 19 skipped / 0 failed; 13,127 expectations**, with isolated PostgreSQL 14.24 and fixture Telegram responses. Type/Svelte checks, production build, formatting and whitespace passed. Fifteen contact-database tests cover additive migration008, new categories/source attribution, policy, privacy and durable delivery. Eleven coordinator follow-up tests include positive copy, long-output bounds, refusal and cancellation. Five adapter/gate tests cover reviewed phrasing/validated decisions. Six actual Jev checks passed for named contact request, departure plan, past-trip exclusion, trusted-support recommendation, safeguarding precedence and ordinary family-mention exclusion, without sending another Telegram message. Existing null-snapshot timing in one speech Stop test was guarded without weakening the ended-state assertion. Live deployment, real microphone/speaker/device and human semantic review remain separate.

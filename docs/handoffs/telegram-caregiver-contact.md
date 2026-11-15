@@ -52,7 +52,8 @@ alternate. A suspected caregiver/family-mistreatment report uses only the safe
 alternate. Without one, safe contact is explicitly unavailable; the ordinary
 caregiver is not notified about that report.
 
-Apply `007_telegram_contact.sql` using `bun run db:migrate`, build/check the web
+Apply `007_telegram_contact.sql` and additive `008_contact_followup_triggers.sql`
+using `bun run db:migrate`, build/check the web
 app, then coordinate gateway/web restart through the existing deployment process.
 The existing database logging requirements still apply. The durable send loop runs
 inside the gateway; a separate worker process is unnecessary for this increment.
@@ -150,3 +151,36 @@ rendering. No hardware or real-patient readiness is claimed.
 Final combined verification: **496 tests passed, 19 skipped, 0 failures; 12,827 expectations** across 61 files, using isolated PostgreSQL and fixture provider responses. Type/Svelte checks, production build, formatting and whitespace checks passed. The 19 skipped cases need their additional dedicated database variables; they were not marked passed. Three existing generic-photo alt-text warnings remain in Svelte diagnostics/build. The two real manual/Jev smoke alerts reached Telegram, confirmed by the user; no deployed service or production data changed.
 
 Same-destination contact opt-out, removed verification and disabled routes survive ordinary restart. A changed trusted recipient destination/configuration is deliberate reprovisioning under the operator attestation. Caregiver/API and real device counterpart review remains required before integrated production use.
+
+## Follow-up trigger extension
+
+The contact contract additionally accepts these internal categories. Existing
+manual-help, urgent, wellbeing and safeguarding behavior remains in the same
+request/outbox service; no new provider or session authority is introduced.
+
+| Category | Trigger meaning | Alert/source distinction | Policy |
+| --- | --- | --- | --- |
+| `departure` | A current participant departure/travel plan requiring the configured caregiver heads-up | **Departure/travel plan reported**. It does not infer wandering, impairment or danger from an ordinary plan. | Requires automatic alerts enabled |
+| `contact_request` | The participant explicitly asks to call/contact a person | **Call/contact requested**. The configured recipient is notified; no requested relative is dialed, impersonated or promised a call. | Like explicit help, does not require the automatic-concern switch |
+| `human_support` | Lemmi's admitted response recommends trusted human support | **Lemmi recommended trusted human support**, with `source=model_reply` and attribution that this is Lemmi's recommendation, not a participant report | Requires automatic alerts enabled |
+
+The classifier/prompt integration decides whether a current input or admitted
+response meets those conditions. A mere quoted, negated, hypothetical, historical
+or third-person statement must not become a current participant report. Model
+output cannot choose destinations, compose alert text, call people, or change a
+profile. Safeguarding still takes precedence and never falls back to the ordinary
+caregiver when a safe alternate is unavailable.
+
+`008_contact_followup_triggers.sql` extends only the bounded request category and
+source CHECK constraints. `HelpSnapshot.reason` remains `manual` for help/contact
+requests, `urgent_concern` for urgent reports, and `concern` for the remaining
+categories. Public requests/events do not gain utterance or model-response fields.
+Only the fixed category/source/template is persisted and sent; neither the
+participant's departure/contact wording nor Lemmi's recommendation is retained.
+
+The follow-up adds positive participant wording: **I'm notifying your caregiver** while queued/sending and **I've sent a notification to your caregiver** only after Telegram accepts it. Failed/uncertain states remain explicit; acknowledgment/arrival are still separate internally. The generic notification preview retains only category/source, not a named requested relative or the conversation text.
+
+Observed follow-up checks: 15 contact database tests / 182 expectations, 9 coordinator follow-up tests / 100 expectations, 5 adapter/gate tests / 144 expectations. Six actual Jev decisions passed for contact, departure, historical exclusion, support recommendation, safeguarding precedence and ordinary family-mention exclusion. The real Jev checks sent **zero additional Telegram messages**. The full combined result is recorded below; production rollout and actual device acceptance remain pending.
+
+
+Follow-up final verification: **513 passed, 19 skipped, 0 failures; 13,127 expectations** across 63 files. Type/Svelte checks, production build, formatting and whitespace checks passed. All six real Jev scenarios passed with zero extra Telegram sends. Review additionally caught and fixed long reply/status overflow, refusal cancellation during support classification, and alerting from an output discarded by topic redirection. An existing speech test now waits safely through its initial null snapshot before asserting Stop ended the session. No production environment/database/services were changed. Apply additive migration **008** in addition to **007** before deploying this update.

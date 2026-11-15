@@ -4,8 +4,14 @@ import type { HelpSnapshot, Result } from '@lemmi/contracts';
 
 export type ConcernCategory = typeof ConcernCategorySchema._output;
 export type ContactCategory = Exclude<ConcernCategory, 'none'>;
-export type ContactSource = 'manual' | 'participant_phrase' | 'model';
+export type ContactSource = 'manual' | 'participant_phrase' | 'model' | 'model_reply';
 export interface ConcernAdapter {
+  classifyReply?(
+    text: string,
+    reply: string,
+    language: 'en' | 'de',
+    signal: AbortSignal,
+  ): Promise<Result<ConcernCategory>>;
   classify(
     text: string,
     language: 'en' | 'de',
@@ -33,16 +39,14 @@ export function contactStatusText(status: HelpSnapshot['status'], language: 'en'
       : 'The message status is uncertain. A caregiver response is not confirmed.';
   if (status === 'accepted')
     return de
-      ? 'Die Nachricht wurde an Telegram übergeben. Eine Antwort ist noch nicht bestätigt.'
-      : 'The message was accepted by Telegram. A caregiver response is not confirmed.';
+      ? 'Ich habe eine Nachricht an deine Betreuungsperson gesendet.'
+      : "I've sent a notification to your caregiver.";
   if (status === 'acknowledged')
     return de
-      ? 'Eine Betreuungsperson hat bestätigt. Das bestätigt nicht, dass sie angekommen ist.'
-      : 'A caregiver has acknowledged the request. This does not confirm arrival.';
+      ? 'Deine Betreuungsperson hat deine Anfrage bestätigt.'
+      : 'Your caregiver has acknowledged your request.';
   if (status === 'created' || status === 'sending')
-    return de
-      ? 'Ich versuche, deine Betreuungsperson zu kontaktieren. Eine Antwort ist noch nicht bestätigt.'
-      : "I'm trying to contact your caregiver. A response is not confirmed.";
+    return de ? 'Ich benachrichtige deine Betreuungsperson.' : "I'm notifying your caregiver.";
   if (status === 'no_response' || status === 'expired')
     return de ? 'Ich konnte keine Antwort bestätigen.' : "I couldn't confirm a caregiver response.";
   if (status === 'canceled')

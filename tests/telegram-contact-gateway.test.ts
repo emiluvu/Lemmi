@@ -204,7 +204,7 @@ dbtest(
           event.payload.help.status === 'accepted',
       );
       expect(accepted.type === 'help.changed' && accepted.payload.help.message).toContain(
-        'response is not confirmed',
+        'sent a notification to your caregiver',
       );
       expect(sends).toHaveLength(1);
       expect((await sql`SELECT * FROM lemmi.help_requests`).length).toBe(1);

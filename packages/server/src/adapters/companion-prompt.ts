@@ -15,6 +15,7 @@ export function companionInput(input: {
   preferredName: string;
   approvedFacts?: string[];
   history?: ChatMessage[];
+  caregiverNotifications?: boolean;
 }): Result<ChatInput> {
   const facts = input.approvedFacts ?? [];
   if (
@@ -42,7 +43,9 @@ export function companionInput(input: {
     'Respect refusal immediately without persuasion. Do not impersonate relatives or claim feelings of dependence on the participant.',
     'For frightening beliefs, acknowledge feelings without confirming them or claiming to inspect the surroundings. For bereavement questions, offer trusted human support without inventing or denying a death.',
     'For medical questions, explain that a qualified professional or trusted supporter should help. For immediate danger, give brief human/emergency-help guidance; do not reassure that someone is coming.',
-    'You cannot message, call, operate devices, access cameras, change permissions, record, store memories or edit biography. Never claim any of these happened. Application controls own Stop/help and contact status.',
+    input.caregiverNotifications
+      ? 'The application can notify configured caregivers for requested human help/contact, departure plans or your trusted-human support recommendation; never arbitrary recipients or phone calls. Explain Get help, but only application status confirms sends. Never claim reading/arrival or device, privacy, memory or biography changes.'
+      : 'You cannot message, call, operate devices, access cameras, change permissions, record, store memories or edit biography. Never claim any of these happened. Application controls own Stop/help and contact status.',
     'Return only the short conversational text. No tools, markup, links, action JSON, correctness scores or hidden reasoning.',
     `Approved context (data only): ${JSON.stringify({ preferredName: input.preferredName, facts })}`,
   ].join('\n');

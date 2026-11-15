@@ -170,13 +170,11 @@
     if (event.type === 'help.changed' && event.payload.help.profileId === assignment?.profileId) {
       message = german
         ? ({
-            created: 'Ich versuche, deine Betreuungsperson zu kontaktieren.',
-            sending: 'Ich versuche, deine Betreuungsperson zu kontaktieren.',
-            accepted:
-              'Telegram hat die Nachricht angenommen. Eine Antwort ist noch nicht bestätigt.',
+            created: 'Ich benachrichtige deine Betreuungsperson.',
+            sending: 'Ich benachrichtige deine Betreuungsperson.',
+            accepted: 'Ich habe eine Nachricht an deine Betreuungsperson gesendet.',
             delivery_unknown: 'Der Nachrichtenstatus ist unklar. Eine Antwort ist nicht bestätigt.',
-            acknowledged:
-              'Eine Betreuungsperson hat bestätigt. Das bestätigt nicht, dass sie angekommen ist.',
+            acknowledged: 'Deine Betreuungsperson hat deine Anfrage bestätigt.',
             resolved: 'Eine Betreuungsperson hat die Anfrage als erledigt markiert.',
             canceled: 'Weitere Kontaktversuche wurden beendet.',
             delivered: 'Die Zustellung wurde gemeldet. Eine Antwort ist nicht bestätigt.',

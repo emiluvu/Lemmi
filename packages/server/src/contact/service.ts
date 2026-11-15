@@ -29,12 +29,11 @@ export class TelegramContactService implements CaregiverContact {
       id: row.id,
       profileId: row.profile_id,
       mode: 'real',
-      reason:
-        row.category === 'help_request'
-          ? 'manual'
-          : row.category === 'urgent'
-            ? 'urgent_concern'
-            : 'concern',
+      reason: ['help_request', 'contact_request'].includes(row.category)
+        ? 'manual'
+        : row.category === 'urgent'
+          ? 'urgent_concern'
+          : 'concern',
       status: row.status,
       message: contactStatusText(row.status, 'en'),
     });
@@ -93,7 +92,10 @@ export class TelegramContactService implements CaregiverContact {
         const routes =
           await tx`SELECT r.* FROM lemmi.telegram_routes r JOIN lemmi.profile_access a ON a.profile_id=r.profile_id AND a.subject=r.subject WHERE r.profile_id=${input.profileId} AND r.subject=${this.config.subject} AND r.enabled FOR SHARE OF r`;
         const route = routes[0];
-        if (!route || (input.category !== 'help_request' && !route.auto_alerts))
+        if (
+          !route ||
+          (!['help_request', 'contact_request'].includes(input.category) && !route.auto_alerts)
+        )
           return fail(
             'UNAVAILABLE',
             'Caregiver contact or automatic concern alerts are not configured',
@@ -251,7 +253,7 @@ export class TelegramContactService implements CaregiverContact {
       if (!jobs.length) return null;
       const a = jobs[0];
       const valid =
-        await tx`SELECT c.destination,p.preferred_name FROM lemmi.contacts c JOIN lemmi.profiles p ON p.id=c.profile_id JOIN lemmi.telegram_routes t ON t.profile_id=p.id JOIN lemmi.profile_access pa ON pa.profile_id=p.id AND pa.subject=t.subject WHERE c.id=${a.contact_id}::uuid AND p.id=${a.profile_id} AND p.deletion_state='active' AND p.is_demo AND p.revision=${a.profile_revision} AND p.privacy_revision=${a.privacy_revision} AND p.policy_revision=${a.policy_revision} AND c.revision=${a.contact_revision} AND c.opted_in AND c.verified_at IS NOT NULL AND c.tested_at IS NOT NULL AND c.channel='telegram' AND t.enabled AND t.subject=${this.config.subject} AND t.revision=${a.route_revision} AND (rtrim(${a.category})='help_request' OR t.auto_alerts) AND c.id=CASE WHEN ${a.slot}='safe' THEN t.safe_contact_id WHEN ${a.slot}='backup' THEN t.backup_contact_id ELSE t.primary_contact_id END FOR SHARE OF p,c,t`;
+        await tx`SELECT c.destination,p.preferred_name FROM lemmi.contacts c JOIN lemmi.profiles p ON p.id=c.profile_id JOIN lemmi.telegram_routes t ON t.profile_id=p.id JOIN lemmi.profile_access pa ON pa.profile_id=p.id AND pa.subject=t.subject WHERE c.id=${a.contact_id}::uuid AND p.id=${a.profile_id} AND p.deletion_state='active' AND p.is_demo AND p.revision=${a.profile_revision} AND p.privacy_revision=${a.privacy_revision} AND p.policy_revision=${a.policy_revision} AND c.revision=${a.contact_revision} AND c.opted_in AND c.verified_at IS NOT NULL AND c.tested_at IS NOT NULL AND c.channel='telegram' AND t.enabled AND t.subject=${this.config.subject} AND t.revision=${a.route_revision} AND (${a.category} IN ('help_request','contact_request') OR t.auto_alerts) AND c.id=CASE WHEN ${a.slot}='safe' THEN t.safe_contact_id WHEN ${a.slot}='backup' THEN t.backup_contact_id ELSE t.primary_contact_id END FOR SHARE OF p,c,t`;
       if (!valid.length || !this.config.profileIds.includes(a.profile_id)) {
         await tx`UPDATE lemmi.help_attempts SET state='canceled' WHERE id=${a.id}::uuid`;
         const canceled =
@@ -268,7 +270,7 @@ export class TelegramContactService implements CaregiverContact {
     if (!job || this.stopped) return;
     // Recheck after claiming and before network I/O. Already in-flight messages cannot be recalled.
     const current = await this
-      .sql`SELECT 1 FROM lemmi.help_requests r JOIN lemmi.profiles p ON p.id=r.profile_id JOIN lemmi.telegram_routes t ON t.profile_id=p.id JOIN lemmi.contacts c ON c.id=${job.contact_id}::uuid JOIN lemmi.profile_access pa ON pa.profile_id=p.id AND pa.subject=t.subject WHERE r.id=${job.request_id}::uuid AND r.status IN ('created','sending','accepted','delivery_unknown') AND r.expires_at>now() AND p.deletion_state='active' AND p.is_demo AND p.revision=r.profile_revision AND p.privacy_revision=r.privacy_revision AND p.policy_revision=r.policy_revision AND t.enabled AND t.subject=${this.config.subject} AND t.revision=r.route_revision AND (r.category='help_request' OR t.auto_alerts) AND c.profile_id=p.id AND c.channel='telegram' AND c.opted_in AND c.verified_at IS NOT NULL AND c.tested_at IS NOT NULL AND c.revision=${job.contact_revision} AND c.id=CASE WHEN ${job.slot}='safe' THEN t.safe_contact_id WHEN ${job.slot}='backup' THEN t.backup_contact_id ELSE t.primary_contact_id END`;
+      .sql`SELECT 1 FROM lemmi.help_requests r JOIN lemmi.profiles p ON p.id=r.profile_id JOIN lemmi.telegram_routes t ON t.profile_id=p.id JOIN lemmi.contacts c ON c.id=${job.contact_id}::uuid JOIN lemmi.profile_access pa ON pa.profile_id=p.id AND pa.subject=t.subject WHERE r.id=${job.request_id}::uuid AND r.status IN ('created','sending','accepted','delivery_unknown') AND r.expires_at>now() AND p.deletion_state='active' AND p.is_demo AND p.revision=r.profile_revision AND p.privacy_revision=r.privacy_revision AND p.policy_revision=r.policy_revision AND t.enabled AND t.subject=${this.config.subject} AND t.revision=r.route_revision AND (r.category IN ('help_request','contact_request') OR t.auto_alerts) AND c.profile_id=p.id AND c.channel='telegram' AND c.opted_in AND c.verified_at IS NOT NULL AND c.tested_at IS NOT NULL AND c.revision=${job.contact_revision} AND c.id=CASE WHEN ${job.slot}='safe' THEN t.safe_contact_id WHEN ${job.slot}='backup' THEN t.backup_contact_id ELSE t.primary_contact_id END`;
     if (!current.length || this.stopped) {
       await this
         .sql`UPDATE lemmi.help_attempts SET state='canceled',lease_id=NULL,lease_expires_at=NULL WHERE id=${job.id}::uuid AND lease_id=${job.leaseId}::uuid`;
@@ -277,17 +279,25 @@ export class TelegramContactService implements CaregiverContact {
     const reason =
       job.category === 'help_request'
         ? 'Help requested — Human assistance requested'
-        : job.category === 'urgent'
-          ? 'Urgent concern reported'
-          : 'Wellbeing or safety concern detected';
+        : job.category === 'contact_request'
+          ? 'Call/contact requested'
+          : job.category === 'departure'
+            ? 'Departure/travel plan reported'
+            : job.category === 'human_support'
+              ? 'Lemmi recommended trusted human support'
+              : job.category === 'urgent'
+                ? 'Urgent concern reported'
+                : 'Wellbeing or safety concern detected';
     const attribution =
-      job.source === 'model'
-        ? 'Automated classification; unverified.'
-        : 'Participant request/report; unverified.';
+      job.source === 'model_reply'
+        ? 'Lemmi suggested support from a trusted person.'
+        : job.source === 'model'
+          ? 'Automated classification; unverified.'
+          : 'Participant request/report; unverified.';
     const portal = this.config.portalUrl
       ? `Please check the caregiver portal: ${this.config.portalUrl}`
       : 'Please check the caregiver portal.';
-    const message = `Lemmi fictional demo: ${reason}\nParticipant: ${job.preferred_name}\nRequest: ${job.request_id}\nTime: ${new Date(job.created_at).toISOString()}\n${attribution}\n${portal}\nContact the participant directly if help is needed. Telegram acceptance does not confirm reading, arrival or resolution.`;
+    const message = `Lemmi fictional demo: ${reason}\nParticipant: ${job.preferred_name}\nRequest: ${job.request_id}\nTime: ${new Date(job.created_at).toISOString()}\n${attribution}\n${portal}\nPlease check in with the participant when you can.`;
     const result = await this.sender
       .send(job.destination, message, this.sending.signal)
       .catch(() => ({ status: 'unknown' as const }));

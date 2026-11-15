@@ -1,3 +1,4 @@
+import { humanSupportRecommended, requestedHumanContact } from './contact/triggers';
 import {
   contactStatusText,
   ConcernCategorySchema,
@@ -877,8 +878,11 @@ export class SessionCoordinator {
     this.summaryController = null;
   }
   private contactWorkRevision = 0;
+  private supportController: AbortController | null = null;
   private cancelChat(inputOnly = false, preserveSpeech?: object, preserveReminder = false) {
     this.contactWorkRevision++;
+    this.supportController?.abort();
+    this.supportController = null;
     if (!preserveReminder && !inputOnly) {
       this.photoReminder = null;
       this.conversationReminder = null;
@@ -920,6 +924,7 @@ export class SessionCoordinator {
     category: ContactCategory,
     source: ContactSource,
     speechOwner?: object,
+    supportReply?: string,
   ): Promise<Result<ConversationTextResult>> {
     const token = this.session!;
     const pause = () => this.interrupt({ type: 'system.pause', reason: 'help' });
@@ -980,6 +985,12 @@ export class SessionCoordinator {
       text += de
         ? ' Ich kann keinen Notruf absetzen. Rufe bei unmittelbarer Gefahr den örtlichen Notruf an oder bitte jemanden in der Nähe darum.'
         : ' I cannot call emergency services. If you are in immediate danger, call local emergency services or ask someone nearby to call.';
+    if (
+      supportReply &&
+      category === 'human_support' &&
+      supportReply.length + text.length + 1 <= 600
+    )
+      text = `${supportReply} ${text}`;
     const result = ok<ConversationTextResult>({
       kind: 'reply',
       reply: { turnId, text, language: input.language, source: 'fixed' },
@@ -987,6 +998,56 @@ export class SessionCoordinator {
     });
     this.lastChat = { commandId: input.commandId, result };
     return result;
+  }
+  private async assessSupportReply(
+    text: string,
+    reply: string,
+    language: 'en' | 'de',
+    parent?: AbortSignal,
+  ) {
+    const token = this.snapshot();
+    const revision = this.contactWorkRevision;
+    if (!token || !this.concerns?.classifyReply) return ok('none' as const);
+    const controller = new AbortController();
+    this.supportController = controller;
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(2500),
+      ...(parent ? [parent] : []),
+    ]);
+    const current = () => {
+      const latest = this.session;
+      return (
+        !signal.aborted &&
+        this.contactWorkRevision === revision &&
+        !!latest &&
+        latest.id === token.id &&
+        latest.generation === token.generation &&
+        latest.leaseId === token.leaseId &&
+        latest.profileRevision === token.profileRevision &&
+        latest.privacyRevision === token.privacyRevision &&
+        latest.policyRevision === token.policyRevision
+      );
+    };
+    try {
+      const result = await abortable(
+        () => this.concerns!.classifyReply!(text, reply, language, signal),
+        signal,
+      );
+      if (!current()) return fail('REVISION_CONFLICT', 'Support recommendation was canceled');
+      if (!result.ok) return result;
+      const category = ConcernCategorySchema.safeParse(result.data);
+      if (!category.success || !['none', 'human_support', 'safeguarding'].includes(category.data))
+        return fail('UNAVAILABLE', 'Invalid support recommendation decision');
+      return ok(category.data);
+    } catch {
+      return fail(
+        current() ? 'UNAVAILABLE' : 'REVISION_CONFLICT',
+        'Support recommendation check unavailable or canceled',
+      );
+    } finally {
+      if (this.supportController === controller) this.supportController = null;
+    }
   }
   private async submitTextInternal(
     raw: unknown,
@@ -1056,9 +1117,13 @@ export class SessionCoordinator {
       });
       return result.ok ? ok({ kind: 'control', action: route, session: this.snapshot()! }) : result;
     }
+    if (this.contact && requestedHumanContact(input.text, input.language)) {
+      if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
+      return this.contactReply(input, 'contact_request', 'participant_phrase', speechOwner);
+    }
     if (
       this.contact &&
-      ['help', 'urgent', 'unwell', 'frightening', 'safeguarding'].includes(route)
+      ['help', 'urgent', 'unwell', 'frightening', 'safeguarding', 'navigation'].includes(route)
     ) {
       if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
       return this.contactReply(
@@ -1067,9 +1132,11 @@ export class SessionCoordinator {
           ? 'help_request'
           : route === 'urgent'
             ? 'urgent'
-            : route === 'safeguarding'
-              ? 'safeguarding'
-              : 'concern',
+            : route === 'navigation'
+              ? 'departure'
+              : route === 'safeguarding'
+                ? 'safeguarding'
+                : 'concern',
         'participant_phrase',
         speechOwner,
       );
@@ -1080,6 +1147,8 @@ export class SessionCoordinator {
         commandId: input.commandId,
         mode: 'real',
       }) as Result<ConversationTextResult>;
+    if (this.supportController && !['topic_refusal', 'privacy_refusal'].includes(route))
+      return fail('REVISION_CONFLICT', 'A support recommendation check is pending');
     const photoAction =
       !input.purpose &&
       route === 'ordinary' &&
@@ -1142,6 +1211,17 @@ export class SessionCoordinator {
     if (fixed) {
       if (!interrupts && this.pendingChat)
         return fail('REVISION_CONFLICT', 'A conversation turn is pending');
+      if (
+        this.contact &&
+        this.concerns?.classifyReply &&
+        humanSupportRecommended(fixed, input.language)
+      ) {
+        if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
+        const support = await this.assessSupportReply(input.text, fixed, input.language);
+        if (!support.ok) return support;
+        if (support.data === 'human_support' || support.data === 'safeguarding')
+          return this.contactReply(input, support.data, 'model_reply', speechOwner, fixed);
+      }
       if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
       const previousDialogue = interrupts ? [] : this.dialogue;
       const previousRedirectedMessage = interrupts ? null : this.lastRedirectedMessage;
@@ -1463,6 +1543,7 @@ export class SessionCoordinator {
       preset: session.communicationSupport.preset,
       preferredName: this.profile.preferredName,
       history: this.dialogue,
+      caregiverNotifications: !!this.contact,
       approvedFacts:
         photo?.ok && photo.data.kind === 'conversation_context'
           ? photo.data.context.caregiverFacts
@@ -1709,6 +1790,42 @@ export class SessionCoordinator {
           input.language === 'en' &&
           !photo?.ok &&
           claimsPhotoPresentation(response.data.text);
+        if (
+          this.contact &&
+          this.concerns?.classifyReply &&
+          response.ok &&
+          !fixedDecisionReply &&
+          !photoClaim &&
+          !(redirect && mentionsTopic(response.data.text, redirectSettings!.awayFrom)) &&
+          response.data.language === input.language &&
+          ConversationReplySchema.safeParse({
+            ...response.data,
+            turnId: input.commandId,
+            source: 'model',
+          }).success &&
+          permittedModelReply(response.data.text, session.communicationSupport) &&
+          (!teachingTopic ||
+            teachingReplyWithinTopic(response.data.text, teachingTopic.entityId)) &&
+          humanSupportRecommended(response.data.text, input.language)
+        ) {
+          const support = await this.assessSupportReply(
+            input.text,
+            response.data.text,
+            input.language,
+            signal,
+          );
+          if (!current() || signal.aborted)
+            return fail('REVISION_CONFLICT', 'Discarded obsolete support recommendation');
+          if (!support.ok) throw new Error('Support recommendation check unavailable');
+          if (support.data === 'human_support' || support.data === 'safeguarding')
+            return this.contactReply(
+              input,
+              support.data,
+              'model_reply',
+              speechOwner,
+              response.data.text,
+            );
+        }
         if (
           this.summaryMemoryEnabled &&
           response.ok &&

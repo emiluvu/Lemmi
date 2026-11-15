@@ -28,6 +28,9 @@ export const ConcernCategorySchema = z.enum([
   'urgent',
   'concern',
   'safeguarding',
+  'departure',
+  'contact_request',
+  'human_support',
 ]);
 export const HelpCreateBodySchema = z.strictObject({ commandId: IdSchema });
 export const HelpHttpRequestSchema = z.discriminatedUnion('action', [
