@@ -1,5 +1,17 @@
 # Lemmi backend status
 
+## Redirects and thread reminders — local, undeployed
+
+The general-chat branch adds optional private caregiver `conversationRedirects` configuration through the existing scoped profile PATCH, backed by migration 005. Open-mode whole-phrase matches offer a subject transition; configured alternative subjects are optional and conflicting ones are filtered. The model may choose a neutral subject when none remain. A local phrase guard replaces a redirect response that repeats the avoided phrase. Recognition is bounded phrase matching, not semantic/clinical detection. Participants may continue their subject after an offer. Existing urgent/help/sensitive/refusal routes take priority. Automatic learned preferences, live caregiver editing and voice activity launch are not added.
+
+Verification on Windows: zero type/Svelte errors/warnings and successful production build. Full suite: 246 pass, 35 skipped, 3 fail (two missing-OpenSSL TLS fixtures and one POSIX-mode expectation on Windows). PostgreSQL/migration/persistence tests were not executed without a configured isolated database. New fixture tests cover redirect precedence, optional alternatives, current-session reminders and canceled late output. These results do not establish human voice/model quality.
+
+Explicit English lost-thread requests now produce a fixed reminder quoting the latest ordinary participant message in bounded transient context. No suitable context produces a fresh-start offer; configured away subjects are not replayed. Reminders use no provider call, storage, cross-session memory, diagnosis or preset change. Both existing typed and recognized-speech turns share this coordinator path. Migration/database acceptance and real human voice/model quality must be verified separately; no deployment occurred.
+
+## General chat branch — local, undeployed
+
+`codex/general-chat-handsfree` adds explicit open-conversation instructions: participant-led everyday subjects, direct answers, free topic changes and optional follow-ups. Open mode does not require teaching/catalog selection. Non-interrupting fixed replies retain the bounded recent dialogue (six messages) so an identity question does not erase the preceding subject. Stop, pause, mute, disconnect and revision cancellation continue clearing transient context. No new route, protocol, provider configuration, persistence or deployment change. Participant UI shows conversation state and up to eight transient visible messages; spoken input is not transcribed into this display. Voice activity launching and automatic open-chat turn continuation remain unfinished. Teaching and Photo Story remain accessible in a collapsed activities section.
+
 Updated November 14, 2026 (America/Los_Angeles). Branch: `backend-deploy`.
 
 Deployed web and gateway runtime revision: **`da731c8`** (bounded browser playback buffering, retaining the integrated voice UI, public Photo Story and checkpoint recovery). Later documentation-only commits do not require a runtime restart.

@@ -15,6 +15,7 @@ export type InputRoute =
   | 'personal_location'
   | 'navigation'
   | 'privacy_refusal'
+  | 'recap'
   | 'ordinary';
 
 // Small reviewed phrase fixtures, not reliable emergency detection or universal language coverage.
@@ -98,6 +99,12 @@ export function routeParticipantText(text: string): InputRoute {
     return 'personal_location';
   if (/^(?:i(?:'m| am) going home|take me home|show me the way home)$/.test(value))
     return 'navigation';
+  if (
+    /^(?:oh[, ]+)?(?:what (?:was i|were we) (?:just )?(?:talking|speaking) about|what was i (?:just )?saying|where (?:was i|were we)|i (?:lost|forgot) my train of thought|i(?:'ve| have) (?:lost|forgotten) my train of thought|i forgot what i was (?:saying|talking about)|remind me what we were talking about|what were we discussing)$/.test(
+      value,
+    )
+  )
+    return 'recap';
   return 'ordinary';
 }
 

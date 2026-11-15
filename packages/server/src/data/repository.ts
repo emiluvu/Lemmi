@@ -102,6 +102,7 @@ export class DataRepository {
       source: 'caregiver_provided',
       interests: row.interests,
       sensitiveTopicGuidance: row.sensitive_guidance,
+      conversationRedirects: row.conversation_redirects,
       rememberingEnabled: row.remembering_enabled,
       excerptSavingEnabled: row.excerpt_saving_enabled,
       communicationSupport: { preset: row.communication_preset, configVersion: 1 },
@@ -194,7 +195,7 @@ export class DataRepository {
       const changed =
         await tx`UPDATE lemmi.profiles SET preferred_name=${next.preferredName},avatar_id=${next.avatarId},
         communication_preset=${next.communicationSupport.preset},interests=${tx.json(next.interests)},
-        sensitive_guidance=${next.sensitiveTopicGuidance},revision=revision+1,updated_at=now() WHERE id=${input.profileId} RETURNING *`;
+        sensitive_guidance=${next.sensitiveTopicGuidance},conversation_redirects=${tx.json(next.conversationRedirects ?? { awayFrom: [], toward: [] })},revision=revision+1,updated_at=now() WHERE id=${input.profileId} RETURNING *`;
       if (input.patch.approvedFacts) {
         await tx`DELETE FROM lemmi.profile_facts WHERE profile_id=${input.profileId}`;
         for (const fact of input.patch.approvedFacts)
