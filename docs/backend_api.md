@@ -1,7 +1,8 @@
 # Lemmi backend integration reference
 
-## Lemmi branding integration — validated candidate, November 15, 2026
+## Lemmi branding deployed — November 15, 2026
 
+**Web runtime `f3f5199`**, gateway `5146030`, speech/tunnel retained.
 Integrated `e1a5bf9` with the current participant release while retaining scoped
 saved-photo smoke checks. Changes are supplied logo/favicon, route titles and
 metadata, plus exactly `/favicon.svg` and `/images/brand/lemmi.png` in the static
@@ -17,8 +18,27 @@ Chromium with the candidate production build passed desktop/mobile logo bounds,
 route titles/metadata, menu keyboard/Escape, no overflow or runtime errors, and
 32px favicon decode with 626 opaque pixels. These used a separate mock browser;
 its navigation lock was isolated between page inspections. No profile/session
-writes, microphone, screenshots or hardware tests. Host rollout/proxy validation
-and public read-only Chromium checks remain pending.
+writes, microphone, screenshots or hardware tests.
+
+Web-only rollout at **10:05:17 UTC**; Nginx `-t` passed and the installed proxy
+reloaded with only the two exact static additions. Gateway/speech/tunnel PID and
+start state and private `.env` hash were unchanged. All four services active,
+zero automatic restarts. Protected prior source/build/proxy/runtime record:
+`.data/branding-rollback-path`. No database migration or profile/credential write.
+
+Actual public HTTPS Chromium at desktop/mobile passed byte-exact PNG, expected
+PNG/SVG MIME, a painted 32px favicon (626 opaque pixels), caregiver/settings
+titles and global metadata, keyboard menu/Escape and no overflow/runtime errors.
+The unassigned participant entry correctly redirected to caregiver setup; no
+profile was enrolled to bypass that behavior. Tests waited for hydration and
+isolated only their disposable browser's navigation cookie between pages.
+Unlisted brand files/README, favicon suffixes, `.env`, internal and mock paths
+remained 404. No public screenshots, microphone, profile/session writes or
+hardware acceptance. Reload/reopen the tab if the favicon is cached.
+
+The reviewed source and this acceptance record are synchronized to `main` and
+`backend-deploy` by fast-forward; the deployment checkout stays `backend-deploy`.
+Earlier unspecified bugs and physical K151/audio acceptance remain open.
 
 ## Participant greetings, teaching choices and Finish deployed — November 15, 2026
 

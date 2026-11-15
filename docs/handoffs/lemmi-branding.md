@@ -31,3 +31,22 @@ After rollout, verify the caregiver header, browser tab title and icon, and succ
 - Headless Chromium at 1280×900 and 390×844 verified the header logo, home/caregiver/settings/participant titles, global metadata/favicon and keyboard menu open/Escape. A 32×32 canvas decode confirmed the favicon paints the supplied artwork (547 opaque pixels), rather than a broken or blank icon. No page errors or horizontal overflow were observed. Screenshots are in `/tmp/lemmi-branding-home-1280.png`, `/tmp/lemmi-branding-home-390.png`, `/tmp/lemmi-branding-caregiver-1280.png` and `/tmp/lemmi-branding-caregiver-390.png`.
 
 These checks use the local mock app and fictional fixtures. No real profile data, providers, hardware, production proxy or live deployment were used. Anay reviews/reloads the narrow static proxy rules; Kylie reviews the supplied branding in the actual deployed UI.
+
+## Backend integration and public deployment — November 15, 2026
+
+Integrated into `backend-deploy` as `f3f5199`, retaining newer private Photo Story
+smoke paths and participant recovery/teaching behavior. Web restarted at
+10:05:17 UTC; Nginx validated/reloaded the two exact static additions. Gateway
+`5146030`, speech/tunnel PID/start state and private environment retained.
+Protected rollback pointer: `.data/branding-rollback-path`.
+
+Observed: pinned frozen install, type/Svelte, production build, formatting and
+whitespace; 16 targeted tests / 159 expectations; production HTTP/verified
+TLS/WSS/private-photo/brand-MIME smoke on a disposable database; isolated and
+public Chromium desktop/mobile logo/title/favicon/keyboard checks, 626 painted
+favicon pixels, zero overflow/runtime errors. Public PNG bytes match the source;
+unlisted/private paths remain blocked. Unassigned participant entry correctly
+redirected to caregiver setup. No profile/session writes, screenshots, microphone
+or hardware acceptance. Main fast-forwards to the same reviewed backend source
+and deployment record; no deployment-checkout branch switch. Reload the browser
+or reopen its tab if the favicon remains cached.

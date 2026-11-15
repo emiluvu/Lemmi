@@ -1,5 +1,10 @@
 # Backend deployment branch
 
+Latest branding rollout: **web `f3f5199`**, gateway `5146030`, November 15,
+10:05:17 UTC. Web-only restart; installed Nginx `-t` and reload passed for exactly
+`/favicon.svg` and `/images/brand/lemmi.png`. Gateway/speech/tunnel retained.
+[Public asset/browser acceptance and rollback](backend-status.md).
+
 Latest reviewed participant release: **web/gateway `5146030`**, November 15,
 09:39:52 UTC. Eligible spoken/visible teaching choices, Finish, stable mobile
 captions and short English/German Start greeting reuse the deployed opening and
