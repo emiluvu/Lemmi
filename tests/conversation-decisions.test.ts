@@ -329,7 +329,8 @@ test('semantic mode does not fall back to phrase routing; activity recognition n
   });
   await say('My previous employment');
   expect(chats[0]?.system).not.toContain('gentle subject transition');
-  expect(chats[0]?.system).toContain('Voice activity launching is not connected');
+  expect(chats[0]?.system).toContain('classification is advisory');
+  expect(chats[0]?.system).toContain('Other games remain unavailable');
   expect(c.snapshot()?.conversationMode).toBe('open');
   const unavailable = setup({
     async classify() {

@@ -19,25 +19,34 @@
   let photoJournal = $state<Journal | null>(null);
   import { previewProfiles } from '@lemmi/contracts/fixtures';
   import LiveProfilePanel from '#lib/features/LiveProfilePanel.svelte';
-  let { data } = $props();
+  import type { PageData } from './$types';
+  let { data, preview = false }: { data: PageData; preview?: boolean } = $props();
   let overview = $state<OperationOutput<'overview.load'> | null>(null);
   const setup = createParticipantSetup();
   let liveProfiles = $state<ParticipantProfile[]>([]);
   let selectedProfile = $state<ParticipantProfile | null>(null);
   let creating = $state(false);
+  let newAvatar = $state<ParticipantProfile['avatarId']>('lemming');
   let newName = $state('');
   let busy = $state(false);
   const displayedProfiles = $derived(data.live ? liveProfiles : overview ? [overview.profile] : []);
   const previews = $derived(data.live ? previewProfiles : (overview?.previews ?? []));
   async function createProfile(event: SubmitEvent) {
     event.preventDefault();
+    if (preview) {
+      message = 'Visual preview only. No profile is created or saved.';
+      return;
+    }
     if (busy || !newName.trim()) return;
     busy = true;
-    const result = await setup.create(newName.trim());
+    const result = await setup.create(newName.trim(), newAvatar);
     busy = false;
     if (result.ok) {
       liveProfiles = [...liveProfiles, result.data];
       newName = '';
+      newAvatar = 'lemming';
+      search = '';
+      selectedProfile = result.data;
       creating = false;
       message = '';
     } else message = result.error.message;
@@ -88,6 +97,14 @@
     if (profileBackground) URL.revokeObjectURL(profileBackground);
   });
   async function load() {
+    if (preview) {
+      const result = await clients.profile.load({ profileId: 'profile-alex' });
+      liveProfiles = result.ok ? [result.data] : [];
+      message = result.ok
+        ? 'Main app UI · local mock backend · saves reset on server restart'
+        : result.error.message;
+      return;
+    }
     if (data.live) {
       if (!data.demoEnrollment) {
         message = 'Fictional demo setup is disabled.';
@@ -186,7 +203,15 @@
             required
             autocomplete="off"
           />
-          <button disabled={busy || !newName.trim()}>Create fictional profile</button>
+          <label for="new-profile-avatar">Animal avatar</label>
+          <select id="new-profile-avatar" bind:value={newAvatar} disabled={busy}>
+            {#each Object.entries(avatarArtwork) as [id, artwork]}<option value={id}
+                >{artwork.label}</option
+              >{/each}
+          </select>
+          <button disabled={busy || !newName.trim()}
+            >{busy ? 'Creating…' : 'Create fictional profile'}</button
+          >
           <button type="button" class="quiet" onclick={() => (creating = false)}>Cancel</button>
         </form>{/if}
       <p class="profile-scope">
@@ -236,13 +261,18 @@
               <div class="profile-actions">
                 <a
                   class="profile-action-button"
-                  href={data.live
-                    ? `/participant/conversation?profile=${encodeURIComponent(profile.id)}`
-                    : '/participant/conversation'}><UIIcon name="leaf" size={18} /> Conversation</a
+                  href={preview
+                    ? '/preview/application?screen=conversation'
+                    : data.live
+                      ? `/participant/conversation?profile=${encodeURIComponent(profile.id)}`
+                      : '/participant/conversation'}
+                  ><UIIcon name="leaf" size={18} /> Conversation</a
                 >
                 {#if data.live}<a
                     class="profile-action-button"
-                    href={`/participant/photo-story?profile=${encodeURIComponent(profile.id)}`}
+                    href={preview
+                      ? '/preview/application?screen=conversation'
+                      : `/participant/photo-story?profile=${encodeURIComponent(profile.id)}`}
                     ><UIIcon name="leaf" size={18} /> Photo Story</a
                   >{/if}
                 <a class="profile-action-button" href="/caregiver/check-in"
@@ -335,7 +365,12 @@
 
 {#if selectedProfile}<LiveProfilePanel
     profile={selectedProfile}
+    {preview}
     close={() => (selectedProfile = null)}
+    saved={(profile) => {
+      liveProfiles = liveProfiles.map((current) => (current.id === profile.id ? profile : current));
+      selectedProfile = profile;
+    }}
   />{/if}
 
 {#if data.photoStoryRehearsal}

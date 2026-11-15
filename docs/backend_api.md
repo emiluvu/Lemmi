@@ -593,3 +593,72 @@ Historical runtime `d067ac0` first deployed both features and both new migration
 ### Current endpoint deployment checkpoint
 
 `17a8522` is deployed with normal migrations `002_multi_profile_endpoints.sql` and `004_endpoint_revocations.sql` alongside the unchanged four previously applied files. The runtime preserves existing indefinite persistent keys, scopes current profile support reads/applies to their profile coordinator, and uses transactionally checked membership/gateway ownership for credential issuance. Existing shared credentials require no replacement. Ordinary demo browser/robot enrollment lasts 30 days; the legacy Python pairing helper still explicitly requests indefinite persistent keys by default. Finite enrollment now also survives normal restart until its expiry; all sessions/grants/output end. The combined suite passed 169 tests / 3,585 expectations; public new-profile/enrollment/concurrent-WSS tests passed with test-only cleanup. Frontend authentication/interaction, real-device local controls, browser voice permissions and Teach Lemmi integration remain distinct acceptance tasks.
+
+## Local candidate: fictional profile editing and spoken activity choice
+
+Based on main `01b6ffb`; not a deployed API claim.
+
+`createParticipantSetup().update(input)` posts `/v1/demo/profile-update` with
+`DemoProfileUpdateSchema`: `{profileId, expectedRevision, commandId,
+patch:{preferredName, avatarId}}`. Both patch fields are required. Success returns
+only `ParticipantProfile`; private caregiver fields and unexpected keys are
+rejected. Same-origin/private domain gate, explicit `LEMMI_DEMO_ENROLLMENT=1`,
+current gateway epoch, assigned fictional profile, existing revision/deduplication
+and profile-update cancellation all apply. A paired endpoint cookie alone is not
+setup authority. Existing private caregiver routes are unchanged. Add this exact
+operation to the deployed Nginx demo allowlist before enabling the UI release.
+
+`createParticipantSetup().create(name, avatarId?)` consumes the existing profile
+creation schema, with lemming as the default avatar. It does not copy Alex's
+interests, biography, media or credentials to newly created profiles.
+
+Existing `input.text` and speech recognition now recognize explicit English
+“Start Teach Lemmi”, “Start Photo Story” and “Explore pictures” requests before
+ordinary model generation. Photo selection requires an enabled browser endpoint.
+Selection uses the existing activity/session transitions and generation-bound
+speech replacement; no new device event or capture permission is added.
+Stop/help/privacy routes retain priority. Incidental or negated mentions do not
+select activities. Music/guessing/matching requests explicitly report unavailable.
+
+### Voice-mode phrase refinements — local branch only
+
+The existing `input.text` / STT path also accepts reviewed English invitation
+prefixes such as “Let's play”, “Let us play”, “I'd like to play”, “Can we play” and
+“Switch to”. Curly apostrophes and terminal punctuation are normalized. Supported
+mode names remain Teach Lemmi, Photo Story/photo album and Explore pictures.
+“Back to conversation”, “Finish teaching” and “Finish Photo Story” explicitly end
+the active mode, rotate generation, invalidate pending work and return a bounded
+fixed reply through fresh speech output authority. They do not restart capture.
+Safety routes still precede ordinary mode selection; neither models nor clients
+choose arbitrary game IDs, assets or URLs.
+
+Explicit capture for mode-selection commands is permitted from a photo Just look
+state and when no teaching topic is eligible, using the same endpoint/grant and
+configuration fences. Ordinary unavailable/ineligible activity discussion is still
+rejected after mode-control routing. This prevents an empty topic list from
+trapping someone in a mode; it is not permission to ignore content policy.
+Music, guessing and matching hosting is still unavailable and requests report that
+fact instead of entering an invented game. No new HTTP/device schema or deployment.
+
+### Conversation exit passcode — local branch, not deployed
+
+The conversation uses the restored four-digit number pad. `POST
+/v1/demo/conversation-lock` establishes an HttpOnly, SameSite=Strict session lock
+(Secure on HTTPS), including on client-only page transitions. `POST
+/v1/demo/conversation-exit` accepts exactly `{password: string}` and verifies a
+four-digit code on the server. Both require a same-origin POST and the existing
+live private-domain gate. GET never verifies or unlocks. While locked, caregiver
+page navigation (including Back/direct URLs) returns to conversation; demo profile
+creation/edit mutations are rejected. The independent caregiver/resource
+credentials remain required for protected APIs. This is an application navigation
+gate, not OS kiosk confinement or a replacement for caregiver identity.
+
+Local mock uses fictional code `1234`. Live mode requires server-only
+`LEMMI_CAREGIVER_EXIT_PASSWORD` containing exactly four digits; it has no default.
+Missing/invalid live configuration fails closed. Password data is transient and
+not echoed/logged. Five failed attempts per lock in a one-minute window block
+further attempts until expiry; bookkeeping is bounded. A successful POST expires
+only the conversation lock cookie, not endpoint credentials or the domain gate.
+The production proxy allowlist must include both exact operations on deployment.
+No database migration. Cookie removal/browser administration is outside this
+navigation barrier; private caregiver authorization remains separate.

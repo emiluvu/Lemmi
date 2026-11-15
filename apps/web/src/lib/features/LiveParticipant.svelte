@@ -1,19 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { goto, beforeNavigate } from '$app/navigation';
+  import { clients } from '#lib/clients.ts';
   import { BrowserAudio } from './browser-audio.ts';
   import {
     PUBLIC_LEMMI_AUTO_TURN_END,
     PUBLIC_LEMMI_END_SILENCE_MS,
     PUBLIC_LEMMI_SPEECH_DIAGNOSTICS,
   } from '$app/env/public';
-  import AvatarArt from './AvatarArt.svelte';
-  import VoiceTeaching from './VoiceTeaching.svelte';
-  import { mayPresentReply } from '#lib/participant-presentation.ts';
   import {
     appendConversationTurn,
     type ConversationTranscriptEntry,
   } from '#lib/conversation-transcript.ts';
+  import AvatarArt from './AvatarArt.svelte';
+  import SpeechBubble from './SpeechBubble.svelte';
+  import ActivityVoicePhrases from './ActivityVoicePhrases.svelte';
+  import ConversationExit from './ConversationExit.svelte';
+  import { participantProfile, controlSessionFixture } from '@lemmi/contracts/fixtures';
+  import { mayPresentReply } from '#lib/participant-presentation.ts';
   import {
     createParticipantSetup,
     ParticipantConnection,
@@ -30,7 +34,8 @@
   let {
     demoEnrollment = false,
     requestedProfileId = null,
-  }: { demoEnrollment?: boolean; requestedProfileId?: string | null } = $props();
+    preview = false,
+  }: { demoEnrollment?: boolean; requestedProfileId?: string | null; preview?: boolean } = $props();
   const setup = createParticipantSetup();
   let profiles = $state<ParticipantProfile[]>([]);
   let assignment = $state<ParticipantEndpoint | null>(null);
@@ -44,21 +49,16 @@
   let transcript = $state<ConversationTranscriptEntry[]>([]);
   let textAvailable = $state(false);
   let speechAvailable = $state(false);
-  let typeInsteadOpen = $state(true);
   let teachingAvailable = $state(false);
   let photoAvailable = $state(false);
   let photo = $state<Extract<ActivityView, { activityId: 'photo_album' }> | null>(null);
   let photoLoadError = $state(false);
-  const photoBlocksConversation = $derived(
-    !!photo && photo.phase !== 'ended' && (photo.viewingMode !== 'talk' || photoLoadError),
-  );
+  const photoBlocksConversation = $derived(!!photo && photo.phase !== 'ended' && photoLoadError);
   let outputBlocked = true;
   let replyBlocked = true;
   let outputAfterGeneration: number | null = null;
   let listening = $state(false);
   let speaking = $state(false);
-  let voiceTeaching = $state(false);
-  let teachingView = $state<{ stopForExit: () => Promise<boolean> }>();
   let audio: BrowserAudio | null = null;
   let connectionEpoch = 0;
   let connection: ParticipantConnection | null = null;
@@ -68,23 +68,6 @@
       : profiles.find((p) => p.id === requestedProfileId),
   );
   let ownsEndpoint = $derived(!!assignment && session?.activeEndpointId === assignment.deviceId);
-  let conversationStatus = $derived(
-    !connected
-      ? 'Conversation is disconnected.'
-      : !session
-        ? 'Start when you are ready.'
-        : session.phase === 'paused'
-          ? 'Paused. Microphone off.'
-          : session.phase === 'processing'
-            ? 'Lemmi is thinking.'
-            : speaking
-              ? 'Lemmi is speaking.'
-              : listening
-                ? 'Listening. Take your time.'
-                : session.phase === 'ended'
-                  ? 'This conversation has ended.'
-                  : 'You can speak or type a message.',
-  );
   function clearConversation() {
     reply = '';
     transcript = [];
@@ -113,7 +96,6 @@
       connected = true;
       textAvailable = event.payload.textChat ?? false;
       speechAvailable = event.payload.audio !== false;
-      typeInsteadOpen = !speechAvailable;
       teachingAvailable = event.payload.teaching ?? false;
       photoAvailable = event.payload.photoStory ?? false;
     }
@@ -166,7 +148,8 @@
   function control(type: string, payload: unknown = {}, independent = false) {
     if (type === 'input.mute') audio?.cancelInput();
     else audio?.cancel();
-    clearConversation();
+    const preserveCaption = type === 'input.mute' && speaking;
+    if (!preserveCaption) clearConversation();
     const requestsOutput =
       type.startsWith('input.teaching.') ||
       type === 'input.start' ||
@@ -176,7 +159,7 @@
         typeof payload === 'object' &&
         'action' in payload &&
         (payload.action as ActivityAction).type === 'photo.talk');
-    replyBlocked = !requestsOutput;
+    if (!preserveCaption) replyBlocked = !requestsOutput;
     // Microphone mute preserves unrelated approved playback. Other controls cancel it locally.
     if (type !== 'input.mute') {
       outputBlocked = !requestsOutput;
@@ -194,30 +177,6 @@
       expectedRevision: photo.revision,
       action,
     });
-  }
-  function sessionNeedsStop() {
-    return !!session && session.phase !== 'ended';
-  }
-  async function startVoiceTeaching() {
-    if (ownsEndpoint && session && session.phase !== 'ended') {
-      control('input.stop');
-      const deadline = Date.now() + 3000;
-      while (sessionNeedsStop() && Date.now() < deadline)
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      if (sessionNeedsStop()) {
-        message = 'Stop could not be confirmed. Reconnect before starting Teach Lemmi.';
-        return;
-      }
-    }
-    audio?.close();
-    audio = null;
-    connectionEpoch++;
-    connection?.close();
-    connection = null;
-    connected = false;
-    session = null;
-    clearConversation();
-    voiceTeaching = true;
   }
   function connect() {
     const epoch = ++connectionEpoch;
@@ -323,32 +282,43 @@
       }
     });
   }
-  async function changeParticipant() {
-    await run(async () => {
-      audio?.cancel();
-      if (ownsEndpoint && session?.phase !== 'ended') connection?.send('input.stop');
-      connectionEpoch++;
-      audio?.close();
-      audio = null;
-      connection?.close();
-      connection = null;
-      session = null;
-      clearConversation();
-      text = '';
-      connected = false;
-      const released = show(await setup.release());
-      assignment = null;
-      if (released) await refreshProfiles();
-    });
+  let exitGate = $state<{ requestExit: () => void }>(null!);
+  let controlsDialog = $state<HTMLDialogElement>(null!);
+  let typingDialog = $state<HTMLDialogElement>(null!);
+  let replyDialog = $state<HTMLDialogElement>(null!);
+  let navigationAllowed = false;
+  function prepareExit() {
+    audio?.cancel();
+    if (!preview && ownsEndpoint && session && !['paused', 'ended'].includes(session.phase))
+      control('input.pause');
+  }
+  async function pauseBeforeExit() {
+    if (preview || !ownsEndpoint || !session || ['paused', 'ended'].includes(session.phase))
+      return true;
+    prepareExit();
+    const deadline = Date.now() + 3000;
+    while (session && !['paused', 'ended'].includes(session.phase) && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    return !session || ['paused', 'ended'].includes(session.phase);
   }
   function leaveConversation() {
+    navigationAllowed = true;
     audio?.cancel();
-    if (ownsEndpoint && session && session.phase !== 'ended') control('input.pause');
     connectionEpoch++;
     audio?.close();
     connection?.close();
-    void goto('/caregiver');
+    void goto(preview ? '/preview/application' : '/caregiver');
   }
+  beforeNavigate(({ to, from, cancel }) => {
+    if (
+      navigationAllowed ||
+      !to ||
+      (to.url.pathname === from?.url.pathname && to.url.search === from?.url.search)
+    )
+      return;
+    cancel();
+    exitGate?.requestExit();
+  });
   function sendText(event: SubmitEvent) {
     event.preventDefault();
     if (
@@ -368,9 +338,40 @@
       transcript = appendConversationTurn(transcript, { speaker: 'participant', text });
       text = '';
       message = '';
+      typingDialog?.close();
     }
   }
   onMount(() => {
+    if (preview) {
+      let disposed = false;
+      void clients.profile.load({ profileId: 'profile-alex' }).then((result) => {
+        if (!disposed && result.ok) {
+          profiles = [result.data];
+          if (assignment) assignment = { ...assignment, profile: result.data };
+        } else if (!disposed && !result.ok) message = result.error.message;
+      });
+      assignment = {
+        deviceId: 'preview-browser',
+        profileId: participantProfile.id,
+        endpoint: 'browser',
+        expiresAt: null,
+        profile: participantProfile,
+      };
+      session = {
+        ...controlSessionFixture,
+        mode: 'mock',
+        endpoint: 'browser',
+        activeEndpointId: 'preview-browser',
+        phase: 'ready',
+      };
+      teachingAvailable = true;
+      photoAvailable = true;
+      speechAvailable = true;
+      message = 'Local preview · microphone off.';
+      return () => {
+        disposed = true;
+      };
+    }
     let disposed = false;
     void run(async () => {
       if (!demoEnrollment) {
@@ -411,523 +412,512 @@
   });
 </script>
 
-{#if voiceTeaching && assignment && currentProfile}
-  <VoiceTeaching
-    bind:this={teachingView}
-    live
-    profile={currentProfile}
-    deviceId={assignment.deviceId}
-  />
-  <button
-    class="quiet"
-    onclick={async () => {
-      if (await teachingView?.stopForExit()) {
-        voiceTeaching = false;
-        connect();
-      }
-    }}>Return to conversation</button
-  >
-{:else}
-  <section class="conversation-screen live-companion" aria-labelledby="conversation-title">
-    <div class="conversation-wordmark">Lemmi</div>
+{#snippet safetyControls()}
+  <div class="safety-controls" aria-label="Session safety controls">
     <button
-      class="conversation-exit"
-      onclick={leaveConversation}
-      aria-label="Return to caregiver workspace"
-      title="Pause and return to caregiver workspace">✕</button
+      onclick={() => control(session?.phase === 'paused' ? 'input.resume' : 'input.pause')}
+      disabled={!session ||
+        session.phase === 'ended' ||
+        (session.phase === 'paused' && !ownsEndpoint)}
+      >{session?.phase === 'paused' ? 'Resume' : 'Pause'}</button
     >
-    <header class="conversation-center live-companion-heading">
-      <p class="eyebrow">Your companion</p>
-      <h1 id="conversation-title">Talk with Lemmi</h1>
-      {#if currentProfile}<div class="conversation-avatar live-avatar">
-          <AvatarArt avatarId={currentProfile.avatarId} animated talking={speaking} />
-        </div>{/if}
-      <h2>
-        {session?.phase === 'paused'
-          ? 'Take your time'
-          : session?.phase === 'ended'
-            ? 'Here when you need me'
-            : 'Ready when you are'}
-      </h2>
-      <p class="conversation-capture" aria-live="polite">
-        {listening
-          ? PUBLIC_LEMMI_AUTO_TURN_END
-            ? 'Microphone listening — listening ends after a pause. You can also tap Finish speaking.'
-            : 'Microphone listening — tap Finish speaking when ready.'
-          : 'Microphone off'} · Camera off
-      </p>
-    </header>
-    <div class="conversation-workspace">
-      {#if assignment}
-        <section class="connection-status" aria-label="Conversation connection">
-          <p class="participant-name">
-            <strong>{currentProfile?.preferredName ?? assignment.profileId}</strong>
-          </p>
-          <p>
-            {connected ? 'Connected' : 'Disconnected'} · Session: {session?.phase ?? 'not started'}
-          </p>
-          {#if session && session.phase !== 'ended'}
-            <p>
-              {ownsEndpoint
-                ? 'This browser is the active endpoint.'
-                : session.endpoint === 'robot'
-                  ? 'The robot is currently active.'
-                  : 'Another browser is currently active.'}
-            </p>
-            {#if !ownsEndpoint}<button
-                onclick={() => control('input.handoff')}
-                disabled={!connected}>Use this browser</button
-              >{/if}
-          {:else}<button onclick={() => control('input.start', {}, true)} disabled={!connected}
-              >Start conversation</button
-            >{/if}
-          {#if !connected}<button onclick={connect} disabled={busy}>Reconnect</button>{/if}
-          <button class="quiet" onclick={changeParticipant} disabled={busy}
-            >Change participant</button
-          >
-        </section>
-        {#if session && session.phase !== 'ended'}
-          <div class="controls session-controls" aria-label="Session controls">
-            <button
-              onclick={() => {
-                control(session?.phase === 'paused' ? 'input.resume' : 'input.pause');
+    <button onclick={() => control('input.stop')} disabled={!session || session.phase === 'ended'}
+      >Stop</button
+    >
+    <button
+      onclick={() => control('input.help')}
+      disabled={!connected || !session || session.phase === 'ended'}>Get help</button
+    >
+  </div>
+{/snippet}
+
+<section
+  class="conversation-screen"
+  class:captioning={speaking && !!(reply || session?.teaching?.prompt)}
+  aria-labelledby="conversation-title"
+>
+  <h1 id="conversation-title" class="sr-only">Talk with Lemmi</h1>
+  <ConversationExit
+    bind:this={exitGate}
+    prepare={prepareExit}
+    beforeExit={pauseBeforeExit}
+    exited={leaveConversation}
+    controls={safetyControls}
+  />
+  {@render safetyControls()}
+  <div class="companion-scene">
+    <div class="scene-portrait">
+      <div class="scene-art">
+        {#if photo && photo.phase !== 'ended' && photo.currentAssetId}
+          {#key photo.currentAssetId}<img
+              class="scene-photo"
+              src={`/v1/demo/photo-assets/${encodeURIComponent(photo.currentAssetId)}`}
+              alt={photo.caption ?? 'Reviewed picture'}
+              onerror={() => {
+                photoLoadError = true;
+                audio?.cancel();
+                if (ownsEndpoint) control('input.pause');
               }}
-              disabled={!connected || (session.phase === 'paused' && !ownsEndpoint)}
-              >{session.phase === 'paused' ? 'Resume to ready' : 'Pause'}</button
-            >
-            <button
-              onclick={() => {
-                control('input.stop');
-              }}
-              disabled={!connected}>Stop</button
-            >
-            <button
-              onclick={() => {
-                control('input.mute', { muted: !session?.micMuted });
-              }}
-              disabled={!connected || !ownsEndpoint}
-              >{session.micMuted ? 'Unmute (capture stays off)' : 'Mute microphone'}</button
-            >
-            <button
-              onclick={() => {
-                control('input.help');
-              }}
-              disabled={!connected}>Ask for help</button
-            >
-          </div>
-          {#if photo && photo.phase !== 'ended'}
-            <section class="card public-photo" aria-labelledby="photo-story-title">
-              <h2 id="photo-story-title">Photo Story</h2>
-              <p>Reviewed illustrations · Caption-based conversation · No image analysis</p>
-              {#if photo.currentAssetId}
-                {#key photo.currentAssetId}
-                  <img
-                    src={`/v1/demo/photo-assets/${encodeURIComponent(photo.currentAssetId)}`}
-                    alt={photo.caption ?? 'Reviewed illustration'}
-                    onerror={() => {
-                      photoLoadError = true;
-                      audio?.cancel();
-                      if (ownsEndpoint) control('input.pause');
-                    }}
-                  />
-                {/key}
-                <p>{photo.caption}</p>
-              {/if}
-              {#if photoLoadError}<p role="alert">
-                  The picture could not be loaded. Resume and skip it, or finish Photo Story.
-                </p>{/if}
-              <p>{photo.phase === 'paused' ? 'Paused. Resume when ready.' : photo.prompt}</p>
-              <div class="controls">
-                {#each photo.choices as choice}
-                  <button
-                    onclick={() => photoAction(choice.action)}
-                    disabled={!connected ||
-                      !ownsEndpoint ||
-                      session.phase === 'paused' ||
-                      (photoLoadError && choice.action.type === 'photo.talk')}
-                    >{choice.label}</button
-                  >
-                {/each}
-                <button
-                  onclick={() => control('input.photo.repeat')}
-                  disabled={!connected ||
-                    !ownsEndpoint ||
-                    photo.viewingMode !== 'talk' ||
-                    photoBlocksConversation ||
-                    !['ready', 'waiting'].includes(session.phase)}>Repeat question</button
-                >
-                <button
-                  onclick={() => photoAction({ type: 'activity.leave' })}
-                  disabled={!connected || !ownsEndpoint || session.phase === 'paused'}
-                  >Finish Photo Story</button
-                >
-              </div>
-            </section>
-          {/if}
-          {#if !photo || photo.phase === 'ended'}
-            <section class="general-conversation" aria-labelledby="general-conversation-title">
-              <p class="eyebrow">General conversation</p>
-              <h2 id="general-conversation-title">Talk about what is on your mind</h2>
-              <p aria-live="polite">{conversationStatus}</p>
-              <p class="helper">
-                Lemmi asks one gentle question at a time. You can pause or stop at any time.
-              </p>
-            </section>
-            <section class="activity-invitations" aria-labelledby="activity-invitations-title">
-              <h2 id="activity-invitations-title">No topic needed</h2>
-              <p>Talk about your day, ask a question, or change the subject whenever you like.</p>
-              <details>
-                <summary>Other things to do</summary>
-                <p>
-                  Activities currently open with these controls. Voice requests are not connected
-                  yet.
-                </p>
-                {#if teachingAvailable && speechAvailable}<button
-                    onclick={startVoiceTeaching}
-                    disabled={!connected ||
-                      !ownsEndpoint ||
-                      !['ready', 'waiting'].includes(session.phase)}>Teach Lemmi</button
-                  >{/if}
-                {#if photoAvailable}<button
-                    onclick={() => control('input.photo.start')}
-                    disabled={!connected ||
-                      !ownsEndpoint ||
-                      !!session.teaching ||
-                      !['ready', 'waiting'].includes(session.phase)}>Photo Story</button
-                  >{/if}
-              </details>
-            </section>
-          {/if}
-          {#if speechAvailable && ownsEndpoint}
-            {#if listening}<button onclick={() => audio?.finish()}>Finish speaking</button>
-            {:else}<button
-                onclick={() => {
-                  outputBlocked = false;
-                  replyBlocked = false;
-                  outputAfterGeneration = null;
-                  reply = '';
-                  void audio?.speak();
-                }}
-                disabled={!connected ||
-                  session.micMuted ||
-                  photoBlocksConversation ||
-                  !['ready', 'waiting'].includes(session.phase)}>Speak now</button
-              >{/if}
-          {/if}
-          <details class="type-instead" bind:open={typeInsteadOpen}>
-            <summary>Type instead</summary>
-            <form onsubmit={sendText} class="card">
-              <label for="participant-text">Message to Lemmi</label>
-              <textarea
-                id="participant-text"
-                bind:value={text}
-                maxlength="1000"
-                rows="3"
-                disabled={!connected ||
-                  !ownsEndpoint ||
-                  photoBlocksConversation ||
-                  !['ready', 'waiting'].includes(session.phase) ||
-                  !textAvailable ||
-                  (!!session.teaching && !session.teaching.entityId)}
-              ></textarea>
-              <button
-                type="submit"
-                disabled={!connected ||
-                  !ownsEndpoint ||
-                  photoBlocksConversation ||
-                  !['ready', 'waiting'].includes(session.phase) ||
-                  (!!session.teaching && !session.teaching.entityId) ||
-                  !textAvailable ||
-                  !text.trim()}>Send</button
-              >
-              {#if !textAvailable}<p>Conversation service is not configured.</p>{/if}
-            </form>
-          </details>
-          {#if transcript.length}
-            <section
-              class="card conversation-turns"
-              aria-live="polite"
-              aria-label="This conversation"
-            >
-              <h2>This conversation</h2>
-              {#each transcript as turn}
-                <div
-                  class:participant-turn={turn.speaker === 'participant'}
-                  class="conversation-turn"
-                >
-                  <strong>{turn.speaker === 'participant' ? 'You' : 'Lemmi'}</strong>
-                  <p>{turn.text}</p>
-                </div>
-              {/each}
-            </section>
-          {:else if reply}<section class="card" aria-live="polite">
-              <h2>Lemmi</h2>
-              <p>{reply}</p>
-            </section>{/if}
-        {/if}
-      {:else if demoEnrollment}
-        <section class="card" aria-label="Participant profiles">
-          <h2>Choose a participant</h2>
-          {#each profiles as profile}<button onclick={() => select(profile.id)} disabled={busy}
-              >{profile.preferredName}</button
-            >{/each}
-          {#if !profiles.length}<p>No profiles available.</p>{/if}
-        </section>
-        <form
-          class="card"
-          onsubmit={(event) => {
-            event.preventDefault();
-            void createProfile();
-          }}
-        >
-          <label for="participant-name">New fictional participant name</label>
-          <input
-            id="participant-name"
-            bind:value={newName}
-            maxlength="80"
-            required
-            autocomplete="off"
+            />{/key}
+        {:else if currentProfile}
+          <AvatarArt
+            avatarId={currentProfile.avatarId}
+            animated
+            talking={speaking}
+            thinking={session?.phase === 'processing'}
           />
-          <button disabled={busy || !newName.trim()}>Create fictional profile</button>
-        </form>
+        {:else}<p>Loading your companion…</p>{/if}
+      </div>
+      {#if speaking && (reply || session?.teaching?.prompt)}
+        <div class="caption-anchor">
+          <SpeechBubble
+            text={reply || session?.teaching?.prompt || ''}
+            side
+            readFull={() => replyDialog.showModal()}
+          />
+        </div>
       {/if}
-      <p role="status" aria-live="polite">{busy ? 'Working…' : message}</p>
-      <p class="helper">
-        Fictional demo. Listening uses local speech processing and an external language model. Audio
-        is not saved.
-      </p>
     </div>
-  </section>
-{/if}
+    <h2 class:sr-only={speaking}>
+      {session?.phase === 'paused'
+        ? 'Take your time'
+        : session?.phase === 'ended'
+          ? 'Here when you need me'
+          : 'Ready when you are'}
+    </h2>
+    <button
+      class="capture-state"
+      aria-live="polite"
+      aria-label={listening ? 'Stop conversation immediately' : 'Open voice controls'}
+      onclick={() => {
+        if (listening) {
+          audio?.cancel();
+          control('input.stop');
+        } else controlsDialog.showModal();
+      }}
+    >
+      {listening
+        ? 'Microphone listening'
+        : session?.micMuted
+          ? 'Microphone muted'
+          : 'Microphone off'} · Camera off
+    </button>
+  </div>
+  <div class="conversation-panel" class:has-reply={!!(reply || session?.teaching?.prompt)}>
+    {#if assignment}
+      {#if !connected && !preview}<p role="status">Connection unavailable.</p>
+        <button onclick={connect} disabled={busy}>Reconnect</button>{/if}
+      {#if !session || session.phase === 'ended'}
+        <p>Start when you are ready.</p>
+        <button onclick={() => control('input.start', {}, true)} disabled={!connected}
+          >Start conversation</button
+        >
+      {:else if !ownsEndpoint}<p>
+          The {session.endpoint === 'robot' ? 'robot' : 'other browser'} is active.
+        </p>
+        <button onclick={() => control('input.handoff')} disabled={!connected}
+          >Use this browser</button
+        >
+      {:else}
+        <ActivityVoicePhrases
+          teaching={teachingAvailable}
+          photos={photoAvailable}
+          voice={!preview && speechAvailable}
+          compact
+        />
+        {#if session.teaching}<p class="active-mode">
+            Teach Lemmi · {session.teaching.topicLabel ?? 'No eligible topics'}
+          </p>{/if}
+        {#if photo && photo.phase !== 'ended'}<p class="active-mode">
+            Photo Story · Say “Next photo” or “Back to conversation”.
+          </p>{/if}
+        {@const visibleReply = reply || session.teaching?.prompt || ''}
+        {#if visibleReply && !speaking}<p class="reply" aria-live="polite">
+            {visibleReply.length > 120 ? visibleReply.slice(0, 120) + '…' : visibleReply}
+          </p>
+          {#if visibleReply.length > 70}<button
+              class="text-button"
+              onclick={() => replyDialog.showModal()}>Read full reply</button
+            >{/if}
+        {/if}
+      {/if}
+    {:else if demoEnrollment}
+      <label for="choose-participant">Choose a participant</label>
+      <select
+        id="choose-participant"
+        onchange={(event) => {
+          if (event.currentTarget.value) void select(event.currentTarget.value);
+        }}
+        disabled={busy}
+      >
+        <option value="">Choose a profile</option>
+        {#each profiles as profile}<option value={profile.id}>{profile.preferredName}</option
+          >{/each}
+      </select>
+      <p>Use the caregiver exit to set up a new profile.</p>
+    {/if}
+    {#if photoLoadError}<p role="alert">
+        The picture is unavailable. Pause or choose another activity.
+      </p>{/if}
+    {#if message}<p class="connection-message" role="status">{message}</p>{/if}
+  </div>
+</section>
+
+<dialog bind:this={controlsDialog} class="conversation-dialog" aria-labelledby="controls-title">
+  <div class="dialog-heading">
+    <h2 id="controls-title">Voice controls</h2>
+    <button
+      class="secondary"
+      aria-label="Close voice controls"
+      onclick={() => controlsDialog.close()}>✕</button
+    >
+  </div>
+  <div class="conversation-controls" aria-label="Conversation and safety controls">
+    <button
+      onclick={() => control(session?.phase === 'paused' ? 'input.resume' : 'input.pause')}
+      disabled={!connected ||
+        !session ||
+        session.phase === 'ended' ||
+        (session.phase === 'paused' && !ownsEndpoint)}
+      >{session?.phase === 'paused' ? 'Resume' : 'Pause'}</button
+    >
+    <button
+      onclick={() => control('input.stop')}
+      disabled={!connected || !session || session.phase === 'ended'}>Stop</button
+    >
+    <button
+      onclick={() => control('input.mute', { muted: !session?.micMuted })}
+      disabled={!connected || !ownsEndpoint || !session || session.phase === 'ended'}
+      >{session?.micMuted ? 'Unmute' : 'Mute mic'}</button
+    >
+    <button onclick={() => control('input.help')} disabled={!connected}>Get help</button>
+    {#if listening}<button onclick={() => audio?.finish()}>Finish speaking</button>
+    {:else}<button
+        class="speak"
+        onclick={() => {
+          outputBlocked = false;
+          replyBlocked = false;
+          outputAfterGeneration = null;
+          reply = '';
+          controlsDialog.close();
+          void audio?.speak();
+        }}
+        disabled={!connected ||
+          !ownsEndpoint ||
+          !speechAvailable ||
+          !session ||
+          session.micMuted ||
+          photoBlocksConversation ||
+          !['ready', 'waiting'].includes(session.phase)}>Speak now</button
+      >{/if}
+    <button
+      onclick={() => {
+        audio?.cancel();
+        controlsDialog.close();
+        typingDialog.showModal();
+      }}
+      disabled={!assignment}>Type instead</button
+    >
+  </div>
+</dialog>
+
+<dialog bind:this={typingDialog} class="conversation-dialog" aria-labelledby="typing-title">
+  <div class="dialog-heading">
+    <h2 id="typing-title">Type to Lemmi</h2>
+    <button class="secondary" aria-label="Close typing" onclick={() => typingDialog.close()}
+      >✕</button
+    >
+  </div>
+  {@render safetyControls()}
+  <form onsubmit={sendText}>
+    <label for="participant-text">Your message or activity phrase</label>
+    <textarea
+      id="participant-text"
+      bind:value={text}
+      maxlength="1000"
+      rows="3"
+      disabled={!connected ||
+        !ownsEndpoint ||
+        !session ||
+        !['ready', 'waiting'].includes(session.phase) ||
+        !textAvailable}
+    ></textarea>
+    <button
+      disabled={!connected ||
+        !ownsEndpoint ||
+        !session ||
+        !textAvailable ||
+        !text.trim() ||
+        !['ready', 'waiting'].includes(session.phase)}>Send</button
+    >
+    {#if preview}<p>
+        Local visual preview. Voice and conversation services are not connected.
+      </p>{/if}
+  </form>
+</dialog>
+<dialog bind:this={replyDialog} class="conversation-dialog" aria-labelledby="reply-title">
+  <div class="dialog-heading">
+    <h2 id="reply-title">Lemmi’s reply</h2>
+    <button class="secondary" aria-label="Close reply" onclick={() => replyDialog.close()}>✕</button
+    >
+  </div>
+  {@render safetyControls()}
+  <p>{reply || session?.teaching?.prompt}</p>
+  {#if transcript.length}
+    <section aria-label="This conversation">
+      <h3>This conversation</h3>
+      {#each transcript as turn}
+        <p><strong>{turn.speaker === 'participant' ? 'You' : 'Lemmi'}</strong>: {turn.text}</p>
+      {/each}
+    </section>
+  {/if}
+</dialog>
 
 <style>
+  .safety-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .safety-controls button {
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 18px;
+  }
+  .conversation-screen > .safety-controls {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 70px;
+    z-index: 2;
+  }
+  dialog .safety-controls {
+    margin-bottom: 16px;
+  }
   .conversation-screen {
     position: fixed;
     inset: 0;
     z-index: 10;
-    overflow-y: auto;
-    padding: 96px 24px 32px;
+    height: 100dvh;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 52px 20px 16px;
     background:
       linear-gradient(#fffaf066, #fffaf066),
-      #fbf3df url('/images/surfaces/conversation-meadow-v1.png') center / cover no-repeat;
-    display: grid;
-    place-items: center;
-    text-align: center;
-  }
-  .conversation-exit {
-    position: absolute;
-    right: max(24px, env(safe-area-inset-right));
-    top: 20px;
-    width: 56px;
-    min-height: 56px;
-    padding: 8px;
-    border: 1px solid #bdc8aa;
-    background: #fffdf7;
-    color: #22331f;
-    font-size: 24px;
-    border-radius: 50%;
-    box-shadow:
-      inset 0 2px 0 #ffffff,
-      0 3px 0 #684b3226,
-      0 5px 12px #684b3212;
-  }
-  .conversation-center {
-    display: grid;
-    justify-items: center;
-    width: min(100%, 720px);
-  }
-  .conversation-wordmark {
-    position: absolute;
-    top: 24px;
-    left: 32px;
-    color: #35482d;
-    font-size: 28px;
-    font-weight: 750;
-    letter-spacing: -1px;
-  }
-  h1 {
-    margin: 4px 0 12px;
-    font-size: clamp(32px, 4vw, 44px);
+      #fbf3df url('/images/surfaces/conversation-meadow-v1.png') center/cover no-repeat;
     color: #22331f;
   }
-  h2 {
-    margin: 16px 0 0;
-    font-size: 28px;
-  }
-  .conversation-center > p {
-    margin: 8px 0;
-    font-size: 20px;
-  }
-  .conversation-center > .eyebrow {
-    font-size: 14px;
-  }
-  .conversation-avatar {
-    display: block;
-    width: min(440px, 100%);
-    height: clamp(200px, 34dvh, 340px);
-    flex-shrink: 0;
-  }
-  .conversation-capture {
-    color: #2b3c24;
-    font-weight: 700;
-  }
-  @media (max-height: 700px) {
-    .conversation-screen {
-      place-items: start center;
-    }
-    .conversation-avatar {
-      height: 180px;
-    }
-  }
-  /* Keep the same layout while calming the scenery behind narrow-screen text. */
-  @media (max-width: 600px) {
-    .conversation-wordmark {
-      left: 24px;
-    }
-    .conversation-screen {
-      background-image:
-        linear-gradient(#fff8e34d, #fff8e34d), url('/images/surfaces/conversation-meadow-v1.png');
-    }
-  }
-
-  .public-photo img {
+  .companion-scene {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
     width: 100%;
-    max-height: 40dvh;
+  }
+  .scene-portrait {
+    position: relative;
+  }
+  .caption-anchor {
+    position: absolute;
+    left: calc(100% - 24px);
+    top: 8%;
+    width: min(320px, 30vw);
+    z-index: 1;
+  }
+  .scene-art {
+    width: min(360px, 68vw, 40dvh);
+    height: min(360px, 68vw, 40dvh);
+    flex: none;
+  }
+  .scene-photo {
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     border-radius: 20px;
   }
-  .live-companion {
-    padding: 96px 24px 48px;
-    align-content: start;
-    gap: 0;
-  }
-  .live-companion-heading {
+  .companion-scene h2 {
+    margin: 0;
+    font-size: clamp(22px, 3vw, 28px);
     text-align: center;
   }
-  .live-avatar {
-    width: min(440px, 100%);
-    height: clamp(200px, 34dvh, 340px);
-    margin: 0 auto;
-  }
-  .live-companion-heading {
-    padding-top: 0;
-  }
-  .conversation-workspace {
-    width: min(720px, 100%);
-    margin: 16px auto 0;
-    min-width: 0;
-  }
-  .conversation-workspace > :global(.card) {
+  .capture-state {
+    margin: 0;
+    padding: 6px 12px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: #34492d;
+    font-size: 15px;
     text-align: center;
   }
-  .type-instead {
-    margin: 24px 0;
+  .conversation-panel {
+    width: min(620px, 100%);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
   }
-  .general-conversation {
-    margin: 24px 0 16px;
-    padding: 20px;
+  .conversation-panel p {
+    margin: 0;
+  }
+  .conversation-panel :global(.activity-phrases) {
+    margin: 0;
+    max-width: 100%;
+  }
+  .conversation-panel :global(.activity-phrases h2),
+  .conversation-panel :global(.activity-phrases .helper) {
+    text-align: center;
+  }
+  .active-mode {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .reply {
+    font-size: 19px;
+    line-height: 1.35;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .connection-message {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .text-button {
+    min-height: 44px;
+    padding: 8px;
+    background: #fffdf7;
+  }
+  .conversation-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 20px 0 0;
+  }
+  .conversation-controls button {
+    min-height: 48px;
+    margin: 0;
+    padding: 10px;
+    font-size: 18px;
+  }
+  .speak {
+    background: #dce8c9;
+    color: #22331f;
+  }
+  .conversation-dialog {
+    width: min(560px, calc(100% - 24px));
+    max-height: calc(100dvh - 24px);
+    padding: 24px;
     border: 1px solid #bdc8aa;
     border-radius: 24px;
-    background: #fffdf7e8;
-    text-align: center;
+    background: #fffdf7;
+    color: #22331f;
+    overflow: auto;
   }
-  .general-conversation h2 {
-    margin: 4px 0 8px;
-    font-size: clamp(22px, 3vw, 28px);
+  .conversation-dialog::backdrop {
+    background: #25362088;
   }
-  .general-conversation p {
-    margin: 8px 0;
-  }
-  .activity-invitations {
-    margin: 16px 0 24px;
-    padding: 4px 12px;
-    text-align: left;
-  }
-  .activity-invitations h2 {
-    font-size: 20px;
-    text-align: center;
-  }
-  .conversation-turns {
-    display: grid;
+  .dialog-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 12px;
-    text-align: left;
   }
-  .conversation-turns h2 {
+  .dialog-heading h2 {
     margin: 0;
-    text-align: center;
-  }
-  .conversation-turn {
-    padding: 12px 14px;
-    border-radius: 16px;
-    background: #eff2e9;
-  }
-  .conversation-turn.participant-turn {
-    background: #f8ead0;
-  }
-  .conversation-turn p {
-    margin: 4px 0 0;
-  }
-  summary {
-    min-height: 56px;
-    padding: 12px;
-    cursor: pointer;
-    font-weight: 800;
   }
   textarea,
-  input {
-    display: block;
+  select {
     width: 100%;
-    font: inherit;
-    padding: 12px;
+    padding: 10px;
     margin: 12px 0;
+    font: inherit;
   }
-  .controls {
-    flex-wrap: wrap;
-    justify-content: center;
+  .has-reply :global(.activity-phrases h2),
+  .has-reply :global(.activity-phrases .helper) {
+    display: none;
   }
-  .connection-status {
-    padding: 0 0 16px;
-  }
-  .connection-status p {
-    margin: 6px 0;
-  }
-  .participant-name {
-    font-size: 20px;
-  }
-  .connection-status button,
-  .session-controls button {
-    min-height: 56px;
-    margin: 8px 4px;
-  }
-  .session-controls {
-    position: sticky;
-    bottom: 12px;
-    z-index: 2;
-    padding: 8px;
-    border: 1px solid #bdc8aa;
-    border-radius: 24px;
-    background: #fffdf7f5;
-    box-shadow: 0 5px 16px #684b3212;
-  }
-  .conversation-workspace > button {
-    min-height: 56px;
-    font-size: 20px;
+  @media (max-width: 800px) {
+    .scene-portrait {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .caption-anchor {
+      position: relative;
+      left: auto;
+      top: auto;
+      width: min(440px, calc(100vw - 40px));
+    }
+    .captioning .scene-art {
+      width: min(220px, 52vw, 24dvh);
+      height: min(220px, 52vw, 24dvh);
+    }
+    .captioning .conversation-panel :global(.activity-phrases h2),
+    .captioning .conversation-panel :global(.activity-phrases .helper) {
+      display: none;
+    }
   }
   @media (max-height: 700px) {
-    .live-avatar {
-      height: 180px;
+    .conversation-screen {
+      gap: 6px;
+      padding-top: 48px;
+      padding-bottom: 12px;
+    }
+    .scene-art {
+      width: min(240px, 60vw, 29dvh);
+      height: min(240px, 60vw, 29dvh);
+    }
+    .companion-scene h2 {
+      font-size: 21px;
+    }
+    .conversation-panel :global(.activity-phrases li) {
+      font-size: 18px;
+      margin: 4px 0;
+    }
+    .conversation-panel :global(.activity-phrases h2) {
+      font-size: 20px;
+    }
+    .reply {
+      font-size: 17px;
     }
   }
-  @media (max-width: 600px) {
-    .live-companion {
-      padding-inline: 16px;
-    }
-    .session-controls {
+  @media (max-height: 500px) {
+    .conversation-screen {
       gap: 4px;
+      padding-top: 40px;
     }
-    .session-controls button {
-      flex: 1 1 44%;
-      margin: 2px;
+    .companion-scene h2 {
+      display: none;
+    }
+    .scene-art {
+      width: 24dvh;
+      height: 24dvh;
+    }
+    .conversation-panel :global(.activity-phrases ul) {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 24px;
+      margin: 4px 0;
+    }
+    .conversation-panel :global(.activity-phrases .helper) {
+      display: none;
+    }
+    .capture-state {
+      min-height: 36px;
+      padding: 4px;
     }
   }
 </style>

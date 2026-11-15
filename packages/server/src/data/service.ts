@@ -1,6 +1,12 @@
 import type { SQL } from 'bun';
 import { createHash } from 'node:crypto';
-import { fail, ok, type Result } from '@lemmi/contracts';
+import {
+  fail,
+  ok,
+  ParticipantProfileSchema,
+  ProfileDetailSchema,
+  type Result,
+} from '@lemmi/contracts';
 import { DataRequestSchema, DemoSetupRequestSchema } from '../../../contracts/src/profile-assets';
 import { DataRepository, DataError, type DataPrincipal } from './repository';
 import { DatabaseDeviceAuthority } from './device-authority';
@@ -177,6 +183,24 @@ export class PersistentData {
         )!,
       );
     }
+    if (request.operation === 'profile.update') {
+      const profiles = await this.repository.listProfiles(this.subject, true);
+      if (!profiles.some((profile) => profile.id === request.input.profileId))
+        throw new DataError('FORBIDDEN', 'Fictional demo profile is not assigned');
+      // Reuse serialized revision checks and cancellation; never return caregiver fields.
+      const result = await this.handle(request, this.subject, undefined, true);
+      if (!result.ok) return result;
+      const profile = ProfileDetailSchema.parse(result.data);
+      return ok(
+        ParticipantProfileSchema.parse({
+          id: profile.id,
+          preferredName: profile.preferredName,
+          avatarId: profile.avatarId,
+          revision: profile.revision,
+          communicationSupport: profile.communicationSupport,
+        }),
+      );
+    }
     const profiles = await this.repository.listProfiles(this.subject, true);
     if (!profiles.some((profile) => profile.id === request.profileId))
       throw new DataError('FORBIDDEN', 'Demo profile is not assigned');
@@ -218,7 +242,7 @@ export class PersistentData {
     );
     return result;
   }
-  async handle(raw: unknown, actor: unknown, credential: unknown) {
+  async handle(raw: unknown, actor: unknown, credential: unknown, demoOnly = false) {
     const request = DataRequestSchema.safeParse(raw);
     if (!request.success) throw new DataError('VALIDATION_ERROR', 'Invalid resource request');
     let profileId =
@@ -263,11 +287,16 @@ export class PersistentData {
             (key) => key !== 'communicationSupport',
           );
           try {
-            const profile = await this.repository.update(principal, input, () => {
-              began = true;
-              release = coordinator.beginProfileUpdate(input.patch);
-              this.changed();
-            });
+            const profile = await this.repository.update(
+              principal,
+              input,
+              () => {
+                began = true;
+                release = coordinator.beginProfileUpdate(input.patch);
+                this.changed();
+              },
+              demoOnly,
+            );
             coordinator.acceptPersistentProfile(profile, contextChanged);
             return ok(profile);
           } catch (error) {

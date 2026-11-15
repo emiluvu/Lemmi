@@ -79,3 +79,39 @@ test('public demo routes do not open mock operations or bypass the trusted proxy
     }
   });
 });
+
+test('main UI review redirects only explicit local mock routes and cannot bypass the live gate', async () => {
+  const previous = process.env.LEMMI_UI_PREVIEW;
+  const mode = process.env.LEMMI_MODE;
+  process.env.LEMMI_UI_PREVIEW = '1';
+  try {
+    process.env.LEMMI_MODE = 'mock';
+    for (const [path, destination] of [
+      ['/caregiver', '/preview/application'],
+      ['/participant/conversation', '/preview/application?screen=conversation'],
+      ['/participant', '/preview/application?screen=conversation'],
+    ] as const) {
+      let resolved = false;
+      const request = new Request('http://127.0.0.1:5187' + path);
+      const response = await handle({
+        event: { url: new URL(request.url), request, getClientAddress: () => '127.0.0.1' },
+        resolve: async () => {
+          resolved = true;
+          return new Response();
+        },
+      } as any);
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe(destination);
+      expect(resolved).toBe(false);
+    }
+    await configured(async () => {
+      const locked = await page('/caregiver');
+      expect(locked.response.headers.get('location')).toBe('/access');
+    });
+  } finally {
+    if (previous === undefined) delete process.env.LEMMI_UI_PREVIEW;
+    else process.env.LEMMI_UI_PREVIEW = previous;
+    if (mode === undefined) delete process.env.LEMMI_MODE;
+    else process.env.LEMMI_MODE = mode;
+  }
+});

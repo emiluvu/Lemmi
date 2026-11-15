@@ -56,6 +56,11 @@
     for (const photo of previewPhotos) URL.revokeObjectURL(photo.url);
   });
   let { children, data } = $props();
+  const conversationScreen = $derived(
+    page.url.pathname.startsWith('/participant') ||
+      (page.url.pathname === '/preview/application' &&
+        page.url.searchParams.get('screen') === 'conversation'),
+  );
   let drawerOpen = $state(false);
   let menuButton = $state<HTMLButtonElement>();
   const workspaceLinks = [
@@ -121,12 +126,12 @@
     crossorigin="anonymous"
   /><meta name="description" content="Lemmi local mock development starter" /></svelte:head
 >
-{#if data.photoStoryRehearsal}<p class="notice">
+{#if data.photoStoryRehearsal && !conversationScreen}<p class="notice">
     LOCAL PHOTO STORY REHEARSAL · Explicit microphone capture · No saved speech or real
     notifications
   </p>{/if}
-<a class="skip-link" href="#main-content">Skip to content</a>
-{#if !data.live || page.url.pathname.startsWith('/caregiver')}
+{#if !conversationScreen}<a class="skip-link" href="#main-content">Skip to content</a>{/if}
+{#if !conversationScreen && (!data.live || page.url.pathname.startsWith('/caregiver'))}
   <header class="app-topbar">
     <button
       bind:this={menuButton}
@@ -221,4 +226,24 @@
     </p>
   </aside>
 {/if}
-<main id="main-content" tabindex="-1" class:drawer-open={drawerOpen}>{@render children()}</main>
+<main
+  id="main-content"
+  tabindex="-1"
+  class:drawer-open={drawerOpen}
+  class:conversation-layout={conversationScreen}
+>
+  {@render children()}
+</main>
+
+<style>
+  main.conversation-layout {
+    margin: 0;
+    padding: 0;
+    max-width: none;
+    width: 100%;
+    min-height: 0;
+  }
+  :global(body:has(.conversation-screen)) {
+    overflow: hidden;
+  }
+</style>

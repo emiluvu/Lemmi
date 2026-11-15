@@ -12,10 +12,35 @@ User supplied and explicitly requested these generic character images for Lemmi'
 
 `apps/web/src/lib/avatars.ts` maps the shared AvatarId values to these public app assets. Profile saves use the existing shared profile client and revisions; the conversation screen loads only the participant-safe profile projection. All animals share controls and voice. Six-state artwork and Emilia's hardware-format/memory validation remain pending.
 
-The five `*-strip.png` files reuse Emilia’s existing generated artwork studies
-from `firmware/stackchan/assets/avatars/v1` in the firmware-foundation checkout
-(November 14). Three horizontal cells: closed mouth, open mouth, pet acknowledgment.
-The browser uses only the first two, on square participant avatar surfaces.
-The original static profile artwork stays unchanged. These generated frames may
-have slight silhouette differences; visual review and real voice rehearsal remain
-necessary. No firmware export/hardware acceptance is implied.
+## Web expressions — supplied artwork update, November 14
+
+The five `*-strip.png` files now use the user's supplied base, open-mouth and
+thinking artwork. They replace the earlier generated study strips. Each strip
+has three transparent 724 × 724 cells, ordered **base, open mouth, thinking**.
+The original static profile images remain unchanged. Frames are trimmed to their
+visible alpha bounds (threshold 16, with 4 px edge padding), fitted within 676 × 676 and bottom-centered with 24 px padding.
+No new expression is generated; the thinking ellipsis is part of the supplied art.
+
+| Avatar  | Base        | Open mouth   | Thinking     |
+| ------- | ----------- | ------------ | ------------ |
+| dog     | dog.png     | IMG_3322.png | IMG_3315.png |
+| cat     | cat.png     | IMG_3320.png | IMG_3313.png |
+| bunny   | bunny.png   | IMG_3319.png | IMG_3314.png |
+| bird    | bird.png    | IMG_3321.png | IMG_3316.png |
+| lemming | lemming.png | IMG_3318.png | IMG_3317.png |
+
+New sources came from the user-selected `Downloads/Untitled_Message` folder.
+Creator and broader license remain unspecified; permission is the user's requested
+Lemmi project use. `expressions.json` records original hashes/dimensions and output
+sizes. Regenerate with Pillow using:
+
+```sh
+python3 scripts/build-avatar-strips.py /path/to/Untitled_Message
+```
+
+`AvatarArt` holds the open-mouth frame during audible playback and uses base otherwise. Thinking uses
+the static third cell while session phase is `processing`; playback takes visual
+priority. All other states use base. Thinking dots are revealed one by one using a mask over the supplied artwork;
+reduced-motion preference shows all three dots statically. Profile
+choosers use base artwork. No capture, speech timing, firmware or server protocol
+changes are introduced. Robot exports and hardware validation remain separate.

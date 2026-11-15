@@ -168,6 +168,7 @@ export class DataRepository {
     principal: DataPrincipal,
     raw: unknown,
     beforeCommit: () => void,
+    demoOnly = false,
   ): Promise<ProfileDetail> {
     const parsed = ProfileUpdateSchema.safeParse(raw);
     if (!parsed.success) throw new DataError('VALIDATION_ERROR', 'Invalid profile update');
@@ -175,6 +176,8 @@ export class DataRepository {
     return this.sql.begin(async (tx) => {
       const row = await this.scoped(tx, principal, input.profileId, true);
       if (principal.kind !== 'caregiver') throw new DataError('FORBIDDEN', 'Caregiver required');
+      if (demoOnly && !row.is_demo)
+        throw new DataError('FORBIDDEN', 'Fictional demo profile is not assigned');
       const hash = sha256(JSON.stringify(input));
       const receipts =
         await tx`SELECT fingerprint,result_revision FROM lemmi.mutation_receipts WHERE profile_id=${input.profileId} AND subject=${principal.subject} AND operation='profile.update' AND command_id=${input.commandId}`;

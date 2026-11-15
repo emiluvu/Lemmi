@@ -194,3 +194,22 @@ See [camera and robot implementation scope](docs/robot-capabilities-spec.md) for
 Photo Story voice rehearsal source is integrated from Lukas's checkpoint. Run `bun run photo-story` locally for the explicit reviewed-demo/text-only rehearsal, or follow [the handoff](docs/handoffs/lukas-photo-story-conversation.md) to use existing private speech configuration. It uses separate loopback ports 3011/5183, not the production gateway. That launcher remains a separate local rehearsal; the public reviewed-scene browser path is now available as described below.
 
 Public Photo Story: open [Photo Story](https://lemmi.chaoswarrior.dev/participant/photo-story) after unlocking, select a fictional profile, Start conversation, Start Photo Story, then Talk about this photo. Text and explicitly granted speech use the same live backend; scenes use reviewed captions only, with no image analysis or private-photo upload. Skip/Just look/Finish/Pause/Stop stay available. The teaching spoken-topic-switch continuity fix is deployed too; reconnect and explicitly Start after a backend restart. See [deployment acceptance](docs/backend-status.md#public-photo-story-deployed--november-14-2026).
+
+### Local review of the main UI
+
+For the actual caregiver/conversation components backed by the existing local
+mock profile authority, run the normal gateway and start the web dev server with
+`LEMMI_UI_PREVIEW=1` (local mock mode only). `/caregiver` and
+`/participant/conversation` then open `/preview/application` and its conversation
+view. Profile name/avatar edits save to the existing in-memory mock backend and
+are shared with the conversation preview until gateway restart. Profile creation,
+live voice and database persistence are not simulated as successful there.
+`/preview/avatars` lets you inspect all five animals and three face states.
+
+The conversation preview has a top-right exit number pad; the local demo code is
+**1234**. Exit is server-checked, and the same browser is redirected back from the
+caregiver area until unlocked. Live mode needs a separately configured four-digit
+`LEMMI_CAREGIVER_EXIT_PASSWORD` and the updated proxy allowlist; no live default is
+provided. This navigation gate is separate from caregiver sign-in and browser/OS
+kiosk restrictions. The conversation stays centered without app menus or a bottom
+bar; click microphone status for optional local browser controls.

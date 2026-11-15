@@ -90,7 +90,7 @@ try {
         }
       }
       if (
-        !/^\/(access(?:\/logout)?|participant|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|enroll|current|release|photo-assets\/(?:photo-story-garden|photo-story-park)))$/.test(
+        !/^\/(access(?:\/logout)?|participant|caregiver|_app\/.*|fonts\/nunito-latin-variable\.ttf|images\/(?:avatars\/(?:dog|cat|bunny|bird|lemming)\.png|surfaces\/(?:cream-paper-v1|conversation-meadow-v1)\.png)|v1\/demo\/(profiles|profile-update|conversation-lock|conversation-exit|enroll|current|release|photo-assets\/(?:photo-story-garden|photo-story-park)))$/.test(
           path,
         )
       )
@@ -147,6 +147,7 @@ try {
       ...process.env,
       LEMMI_MODE: 'live',
       LEMMI_DEMO_ENROLLMENT: '1',
+      LEMMI_CAREGIVER_EXIT_PASSWORD: '7631',
       HOST: '127.0.0.1',
       PORT: String(webPort),
       ORIGIN: origin,
@@ -192,10 +193,35 @@ try {
   const page = await request('/participant', 'GET', undefined, gateCookie);
   const html = await page.text();
   check(
-    page.status === 200 &&
-      html.includes('Choose a participant') &&
-      html.includes('Create fictional profile'),
+    page.status === 200 && html.includes('Choose a participant') && html.includes('caregiver exit'),
     'Production participant setup page failed',
+  );
+  const navigationCookie = page.headers.get('set-cookie')?.split(';')[0];
+  check(navigationCookie, 'Conversation navigation cookie missing');
+  const lockedCookie = `${gateCookie}; ${navigationCookie}`;
+  check(
+    (await request('/caregiver', 'GET', undefined, lockedCookie)).status === 303,
+    'Conversation exit navigation bypass',
+  );
+  check(
+    (await request('/v1/demo/profiles', 'POST', { preferredName: 'Blocked fixture' }, lockedCookie))
+      .status === 403,
+    'Locked browser changed profiles',
+  );
+  check(
+    (await request('/v1/demo/conversation-exit', 'POST', { password: '1111' }, lockedCookie))
+      .status === 401,
+    'Wrong exit code accepted',
+  );
+  const exited = await request(
+    '/v1/demo/conversation-exit',
+    'POST',
+    { password: '7631' },
+    lockedCookie,
+  );
+  check(
+    exited.status === 200 && exited.headers.get('set-cookie')?.includes('Max-Age=0'),
+    'Configured exit code did not clear navigation lock',
   );
   for (const [path, mime] of [
     ['/fonts/nunito-latin-variable.ttf', 'font/ttf'],
@@ -226,6 +252,44 @@ try {
   check(
     created.ok && created.data.preferredName === 'Casey' && created.data.id !== 'profile-alex',
     'Independent profile creation failed',
+  );
+  const edit = {
+    profileId: created.data.id,
+    expectedRevision: 0,
+    commandId: crypto.randomUUID(),
+    patch: { preferredName: 'Casey', avatarId: 'cat' },
+  };
+  const editedResponse = await request('/v1/demo/profile-update', 'POST', edit, gateCookie);
+  const edited = (await editedResponse.json()) as any;
+  check(
+    editedResponse.status === 200 &&
+      edited.ok &&
+      edited.data.avatarId === 'cat' &&
+      edited.data.revision === 1 &&
+      Object.keys(edited.data).length === 5,
+    'Durable safe demo identity edit failed',
+  );
+  check(
+    (
+      await request(
+        '/v1/demo/profile-update',
+        'POST',
+        { ...edit, commandId: crypto.randomUUID() },
+        gateCookie,
+      )
+    ).status === 409,
+    'Stale demo edit overwrote current data',
+  );
+  check(
+    (
+      await request(
+        '/v1/demo/profile-update',
+        'POST',
+        { ...edit, patch: { ...edit.patch, interests: [] } },
+        gateCookie,
+      )
+    ).status === 400,
+    'Demo edit accepted private fields',
   );
   const enrolled = await request(
     '/v1/demo/enroll',
@@ -310,6 +374,21 @@ try {
   browser.send('input.text', { text: 'Hello fictional garden', language: 'en' });
   await until(() => browser.events.some((event) => event.type === 'response.text'));
   check(!device.events.some((event) => event.type === 'response.text'), 'Cross-profile reply leak');
+  let boundary = browser.events.length;
+  browser.send('input.text', { text: 'Start Photo Story', language: 'en' });
+  await until(() => browser.events.slice(boundary).some((event) => event.type === 'response.text'));
+  check(
+    browser.events
+      .slice(boundary)
+      .some(
+        (event) =>
+          event.type === 'activity.changed' && event.payload.activity?.activityId === 'photo_album',
+      ),
+    'Reviewed spoken-phrase transport did not select Photo Story',
+  );
+  boundary = browser.events.length;
+  browser.send('input.text', { text: 'Back to conversation', language: 'en' });
+  await until(() => browser.events.slice(boundary).some((event) => event.type === 'response.text'));
   // Public Photo Story uses the existing browser identity and scoped current-scene read.
   browser.send('input.photo.start');
   await until(() =>

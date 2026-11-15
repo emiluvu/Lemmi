@@ -719,3 +719,184 @@ Public synthetic speech through actual STT/external LLM/TTS passed with simulate
 Decision evaluation failed its gate: Jev 17 matches/3 mismatches/1 unavailable of 21, Luna 21 unavailable. Decisions remain disabled; no weakened privacy/fallback. CUDA driver initialization failed with 999 even in a clean environment; no hardware reset/reboot. Actual CPU mixed four-job load passed 12/12, and real-engine A cancellation/B continuation/explicit reload passed for STT/TTS. [Detailed measured evidence and remaining handoffs](handoffs/backend-integration-2026-11-14.md). Rollback pointer `.data/backend-integration-rollback-path`; keep additive migration 005 when rolling code back.
 
 Human microphone/speaker, room noise, full keyboard/zoom/assistive technology, physical K151, semantic held-out calibration and assigned counterpart review remain pending. These checks do not establish full P0/F17 or unattended-care readiness.
+
+## Caregiver UI fixes — local candidate from main 01b6ffb, November 14
+
+User requested profile editing/creation, informational conversation activity
+choices with spoken selection, complete Games add menu and a persistent profile
+close control. Implemented name/avatar saving for fictional profiles through the
+existing guarded update pipeline; private caregiver fields remain protected.
+Creation reuses the existing live database endpoint, selects an avatar, clears the
+search and opens the new profile. Games now includes Teach Lemmi and Explore
+pictures as well as all four built-in activities, and shows already-added options.
+Conversation launch buttons are replaced by noninteractive activity suggestions;
+explicit spoken/typed requests select available photo/teaching through the one
+authority. Profile modal actions use a sticky top header.
+
+Observed locally: pre-change check passed; updated Svelte/TypeScript check passed
+with zero errors/warnings; production build passed. New HTTP/service tests cover
+private setup access, foreign/example rejection, private-field injection, safe
+projection and stale saves. New speech tests cover explicit versus incidental
+requests, switching activities, unavailable games, generation-bound output,
+receipts and Stop suppressing late TTS. Synthetic adapters only; no provider or
+human microphone acceptance. Local caregiver preview returned HTTP 200, but the
+browser-control host was unavailable: visual, keyboard, scroll and mobile QA
+remain unverified. No deployment, real profile mutation or hardware test occurred.
+
+Initial full tests inside the sandbox could not bind HTTP/WSS sockets. An
+unrestricted run passed 249 tests with 34 database skips, with one media-root
+failure caused by the symlinked macOS temp path; final canonical-temp run below.
+Anay must review the new fictional-setup mutation and speech cancellation;
+Kylie must inspect the actual UI before integrated merge/deployment. The new proxy
+operation must be allowed on deployment. PostgreSQL acceptance remains pending.
+
+Final observed result with pinned Bun 1.4.4 and `TMPDIR=/private/tmp` outside
+socket restrictions: **250 pass, 34 database skips, 0 fail / 4,417 expectations**.
+Final Svelte/TypeScript check again passed with zero errors/warnings. The private
+media-root check remains unchanged; the canonical temp directory resolves the
+macOS test-environment issue.
+
+### Supplied avatar expressions — local, November 14
+
+Replaced generated browser study strips with the user's supplied open-mouth and
+thinking art from `Downloads/Untitled_Message`, alongside the existing five base
+images. All five stable avatar IDs are preserved. `AvatarArt` uses static thinking
+while session phase is processing, base/open-mouth alternation during audible
+playback, and base otherwise; reduced motion disables alternation. Connected
+conversation and voice teaching pass these existing playback/session states.
+No speech, backend, capture, firmware or deployment changes in this increment.
+
+Observed: inspected all ten source images and all fifteen packed frames; verified
+RGBA transparency, three nonempty 724 px square cells per strip and source mapping.
+`bun run check` passed with zero errors/warnings; `bun run build` passed. Asset
+metadata and regeneration script record hashes, source names and requested
+project-use permission. Actual browser animation/reduced-motion and hardware QA
+remain unverified; browser-control infrastructure was unavailable earlier in this
+session. Kylie reviews animation/art; Emilia's robot exports remain separate.
+
+### Correct main-screen preview — local only
+
+Added `/preview/application` to render the actual caregiver page and live
+conversation component using explicit fictional UI fixtures. It is separate from
+the older default mock routes. Profile edit/create forms can be inspected, but
+preview handlers refuse persistence; conversation preview never opens a connection,
+capture or output. Live/default routes retain their existing mode and clients.
+The preview has persistent navigation to caregiver, conversation and avatar faces.
+Type/Svelte check passed with zero errors/warnings; both preview URLs returned
+HTTP 200. Browser interaction remains unverified due unavailable browser-control
+infrastructure. This is layout/form QA, not database or voice acceptance.
+
+### Preview correction after user review — November 14
+
+Supersedes the read-only preview note above: profile name/avatar saving now uses
+the existing mock profile clients/authority rather than rejecting Save. The
+caregiver and conversation previews both load that authority's participant-safe
+projection, so a saved avatar carries across navigation. No second profile or
+session store, localStorage persistence, or live database write is introduced.
+Create-profile preview remains non-persistent; the live creation path is separate.
+Mock saves last until gateway restart. Labels disclose that lifetime.
+
+Fixed avatar distortion by replacing percentage background sizing with a square
+SVG viewBox, preserved aspect ratio and a clipped 724 px frame; base/talking/thinking
+use the same source strips. Conversation game actions are text guidance rather
+than buttons; shared session/microphone/help controls remain. With explicit local
+`LEMMI_UI_PREVIEW=1`, normal caregiver/conversation URLs redirect to the actual UI
+preview after the existing loopback check. Live mode retains its separate gate.
+
+Observed: local HTTP mock profile save → participant-safe read confirmed the avatar
+change, then restored the original test avatar. Both normal URLs returned the
+expected preview redirects. Three route/access tests passed, including the live
+gate with local preview flag set. Type/Svelte check passed; production build passed.
+Browser visual/keyboard QA remains unverified; no deployment or hardware acceptance.
+
+### Avatar motion refinement — November 14
+
+Per user correction, talking now holds the supplied open-mouth frame for the
+entire audible playback state; base is shown when playback ends. Removed repeated
+mouth opening/closing. During thinking, SVG masks reveal the three original drawn
+dots one by one over a gentle 2.4-second loop, starting anew when thinking begins.
+Reduced motion shows all dots statically. Dot bounds were checked against connected
+alpha components in each of the five supplied thinking frames; no art was redrawn.
+The square viewBox/clipping and playback priority are retained. Avatar preview copy
+now describes this behavior. Production build passed; browser animation QA remains
+unverified. A strict tuple annotation also corrects the prior preview-route test's
+TypeScript check, without changing its assertions or application behavior.
+
+### Plain spoken-game phrase list — November 14, local branch
+
+User reiterated that game selection must be spoken, with a list of phrases rather
+than buttons. Added shared `ActivityVoicePhrases` to the actual live component,
+default mock conversation page and standalone voice panel; removed remaining
+entry buttons there and card-like styling from the phrase list. Photo action
+buttons were already removed. Shared VoiceTeachingChoices displays spoken topic/
+finish phrases. Connection/participant tools are collapsed; explicit microphone
+and Pause/Stop/help controls remain accessible. The local-review `/participant`
+route now opens the correct conversation component too.
+
+Backend routing uses the same shared session and speech authority, with normalized
+reviewed invitation aliases and explicit Finish/back-to-conversation transitions.
+Every switch invalidates prior generation/output. No-topic teaching and Just look
+photos allow an explicit capture to select another mode; normal content-policy
+checks still guard discussion. No new backend, reducer, model-chosen action or
+capture-on-unmute. Unimplemented music/guessing/matching hosting remains labeled
+unavailable. Standalone Connect no longer auto-selects Teach Lemmi.
+
+Observed final regression: **255 pass / 34 database skips / 0 failures**, 4,459
+expectations with pinned Bun and canonical temp directory outside socket limits.
+Type/Svelte check and production build passed. Ten direct coordinator/synthetic
+speech mode-selection tests passed; every listed entry phrase gets fresh output
+and receipts. Local preview returned 200. Browser visuals and actual human speech
+remain unverified. No deployment. Anay reviews routing/cancellation, Kylie reviews
+main/legacy/voice presentation and keyboard behavior before integrated merge.
+
+### Conversation exit/layout, including accepted corrections — local November 14
+
+User requested a password exit, no top app title/menu, no main-screen scrolling,
+then corrected the layout to keep Lemmi centered, remove the bottom button bar and
+restore the old four-digit number pad. Implemented those final choices in the
+shared LiveParticipant screen used by participant and local-preview routes; removed
+the duplicate legacy conversation page. Main scene centers square avatar/picture
+above plain voice phrases. Optional browser controls open from the microphone
+status; active listening status performs immediate local Stop. Typing/full replies
+use dialogs. CSS uses a fixed dynamic viewport with compact short-screen rules.
+No automatic capture was added. Header, drawer and preview links are not rendered
+on conversation routes.
+
+Restored numeric keys, four dots and automatic submit at four digits. Verification
+is server-side, with same-origin POST, HttpOnly/SameSite lock cookie, bounded guesses
+and no live default passcode. Dashboard/direct/Back navigation and fictional profile
+mutations are gated until unlock. Local demo is `1234`; live needs a separately
+configured four-digit code and two additional proxy paths. This is a navigation
+barrier, not managed caregiver auth or OS kiosk mode. Existing credentials remain
+separate. Live session exit requires owned-session pause confirmation; local audio
+is canceled immediately when requesting exit.
+
+Observed: **259 pass, 34 database skips, zero failures / 4,497 expectations**;
+final check zero Svelte/TypeScript errors/warnings; build passed. Four new exit-gate
+tests cover cookie/redirect/mutation guards, SPA lock establishment, methods/origin,
+wrong/right codes, bounded guesses and live failure without configuration. A local
+HTTP rehearsal independently verified wrong-code rejection and `1234` unlock.
+Native Chrome accessibility inspection observed the exit dialog and absent app
+menu before final number-pad/centering correction. Screenshot QA was automatically
+rejected due possible unrelated private-tab capture; no screenshot was taken.
+Final pixel/responsive/keyboard and human voice/hardware acceptance remain pending.
+Anay reviews new web gate/config/proxy and Kylie reviews actual UI before deployment.
+
+### Spoken-caption bubble — local UI, November 14
+
+Added shared SpeechBubble styling for the actual authorized reply text during
+browser playback, beside the centered avatar on wide viewports and below it on
+narrow viewports. Uses the existing audible-playback signal and safe reply checks;
+no synthetic speaking state, speech provider or persistence was added. After audio
+ends, the existing readable text fallback remains. Long captions offer the full
+text in the existing reply dialog; short-screen layout reduces avatar size while
+captions are active rather than allowing the main screen to scroll. Mic mute no
+longer discards the caption of unrelated approved playback already in progress.
+The standalone voice panel also uses the shared bubble. Avatar design preview's
+Talking selection shows explicitly labeled sample caption text, with no audio.
+
+Observed: type/Svelte check passed with zero errors/warnings; production build and
+`git diff --check` passed. Human voice, caption pixel layout and exact speech/text
+timing remain unverified; these are reply captions, not word-aligned STT subtitles.
+No backend or deployment changes in this increment. Kylie reviews responsive art/
+caption placement; Anay/Emilia retain session/playback authority.

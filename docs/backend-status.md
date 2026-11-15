@@ -293,3 +293,79 @@ Remote team test: [voice and participant handoff](handoffs/remote-voice-test.md)
 The post-install actual public voice recheck passed **138 input frames / 276 output chunks**, using local STT, the configured real OpenRouter model, local TTS and simulated consumed receipts, ending capture-off and stopped. Initial repeats closed with a persistence error because host-admin test cleanup had removed profiles while their coordinators were still resident; clearing those rehearsal coordinators by restarting the gateway resolved it. The final gateway restart after cleanup preserves keys and leaves sessions/capture/output stopped. All four user services are active with zero automatic restarts.
 
 Public post-restart acceptance: gate-protected conversation page, all five actual sprite images, temporary fictional profile creation/browser-cookie enrollment, owner Start, teaching topic selection and actual local TTS prompt output passed with paced simulated consumption. No microphone capture or audible-playback claim. Initial harness receipts ran too quickly and hit the existing control budget; the corrected run passed prompt speech. Its later typed topic-change assertion incorrectly expected a spoken response from the text-only input path; that harness assertion is not evidence of a voice failure. Actual spoken teaching-control continuity is covered by the automated STT/TTS/WSS regression. Cleanup releases/removes only the temporary rehearsal endpoint/profile.
+
+## Caregiver controls and spoken activity selection — local candidate, November 14
+
+Based on fetched main `01b6ffb`; **not deployed**. Fictional demo setup adds a
+strict name/avatar update through `/v1/demo/profile-update`, using the existing
+serialized profile update, revision checks and session cancellation. It accepts
+only assigned fictional demo profiles and returns the public participant shape.
+Private biography, approved facts, guidance, contacts and privacy settings retain
+independent caregiver authorization. No database migration or credential change.
+The production proxy allowlist must include `profile-update` when this is deployed.
+
+Explicit English requests for Teach Lemmi, Photo Story or Explore pictures now
+select through the existing session authority from typed or recognized input.
+Fresh speech output survives the authorized generation transition; Stop/Pause and
+profile changes still cancel it. Photo selection requires an enabled browser;
+other built-in games return a factual unavailable response. Explore pictures
+reuses reviewed Photo Story scenes. No new game engine or model-selected action.
+New profiles reuse existing PostgreSQL creation; the caregiver form now includes
+avatar selection and opens the newly created profile. New profiles still need
+separately authorized interests before eligible teaching topics are available.
+
+Verification and remaining review are recorded in the build plan. Browser UI
+inspection, human voice, PostgreSQL and deployed proxy acceptance remain pending.
+Anay reviews setup/auth/cancellation; Kylie reviews UI/keyboard/responsive behavior.
+
+Candidate verification: Bun 1.4.4 suite **250 pass, 34 database skips, zero fail**
+using canonical `/private/tmp`; type/Svelte checks and production build passed.
+HTTP preview returned 200. Browser visual QA and actual database writes were not
+verified; no deployed version or provider/hardware acceptance changed.
+
+### Local voice-only mode entry refinement
+
+Replaced card-like/game-launch controls on the conversation views with one shared
+plain-text phrase list. Existing explicit connection, microphone and safety
+controls remain; connection details are collapsed. Broadened reviewed English
+entry phrases and added return-to-conversation/finish-mode routing in the same
+coordinator. No-topic teaching and Just look photos still permit an explicit
+bounded capture for mode selection; grants, revisions, endpoint ownership,
+Stop/Pause/mute and cancellation remain authoritative. The standalone voice panel
+connects/starts a session without silently selecting a game. Main, default mock
+conversation and voice-panel entry screens share the phrase list.
+
+Observed: 255 Bun tests passed, 34 database tests skipped, zero failures; type/Svelte
+and production build passed. Ten mode-selection tests include every displayed
+entry phrase via synthetic STT/TTS and receipts, exit/switch behavior, no-topic and
+Just look recovery, and Stop suppressing late output. Local preview returned 200.
+Actual human microphone/venue/browser visual acceptance remains pending. Not
+deployed. Music/guessing/matching live hosting is still unavailable.
+
+### Restored exit number pad and single-screen conversation — local candidate
+
+Conversation exit now uses the original four-digit number-pad interaction with
+server verification. Local demo code is `1234`; live has no default and requires
+an independently configured four-digit `LEMMI_CAREGIVER_EXIT_PASSWORD`. Added
+same-origin lock/verify operations, bounded attempts, HttpOnly/SameSite cookie
+locking and dashboard/profile-mutation guards. Client navigation also opens the
+exit gate; active owned audio is canceled/paused before exit. Browser/profile
+credentials are not replaced by this navigation gate. Two new proxy paths and
+private live passcode configuration are needed before deployment.
+
+The participant and local-preview routes reuse one centered conversation screen.
+No app title/menu or preview navigation is rendered there. Removed the bottom
+button bar per user correction; browser controls open from microphone status.
+Tapping listening status stops local audio/capture immediately. The square avatar
+is centered above spoken phrases; the main viewport does not scroll, while typing,
+long replies and passcode entry use dialogs. Explicit capture remains required.
+
+Observed: 259 tests passed, 34 database tests skipped, zero failures / 4,497
+expectations; final type/Svelte check had zero errors/warnings and build passed.
+Actual localhost HTTP check verified lock, dashboard redirect, wrong-code rejection
+and successful four-digit demo unlock using a separate test cookie. Chrome's
+accessibility tree confirmed the exit prompt and absent app menus before the
+final keypad/centering adjustment. Full-window screenshot was automatically
+rejected because unrelated browser tabs/metadata could be captured; no screenshot
+was taken. Final mobile pixel layout and actual voice/hardware remain unverified.
+No deployment or live credential/configuration change occurred.

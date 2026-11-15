@@ -1,5 +1,6 @@
 import {
   ParticipantProfileSchema,
+  DemoProfileUpdateSchema,
   ParticipantProfilesSchema,
   ParticipantEnrollmentSchema,
   ParticipantEndpointSchema,
@@ -48,6 +49,7 @@ export async function handleDemoHttp(
       method: request.method === 'GET' ? 'GET' : 'POST',
       name: request.method === 'GET' ? 'profile.list' : 'profile.create',
     },
+    'profile-update': { method: 'POST', name: 'profile.update' },
     enroll: { method: 'POST', name: 'endpoint.enroll' },
     current: { method: 'GET', name: 'endpoint.current' },
     release: { method: 'POST', name: 'endpoint.release' },
@@ -58,11 +60,13 @@ export async function handleDemoHttp(
   let body: Record<string, unknown> = {};
   if (request.method === 'POST') {
     const schema =
-      operation === 'profiles'
-        ? ParticipantCreateSchema
-        : operation === 'enroll'
-          ? ParticipantEnrollRequestSchema
-          : ParticipantEmptySchema;
+      operation === 'profile-update'
+        ? DemoProfileUpdateSchema
+        : operation === 'profiles'
+          ? ParticipantCreateSchema
+          : operation === 'enroll'
+            ? ParticipantEnrollRequestSchema
+            : ParticipantEmptySchema;
     try {
       const parsed = schema.safeParse(await boundedJson(request, 4096));
       if (!parsed.success)
@@ -77,7 +81,9 @@ export async function handleDemoHttp(
     return controlResponse(fail('UNAUTHORIZED', 'Choose a participant for this browser'));
   const raw = {
     operation: route.name,
-    ...(operation === 'profiles' && request.method === 'POST' ? { input: body } : body),
+    ...((operation === 'profiles' && request.method === 'POST') || operation === 'profile-update'
+      ? { input: body }
+      : body),
     ...(operation === 'current' || operation === 'release'
       ? { credential, endpoint: 'browser' }
       : {}),
@@ -99,15 +105,17 @@ export async function handleDemoHttp(
     },
   );
   const schema =
-    operation === 'profiles'
-      ? request.method === 'GET'
-        ? ParticipantProfilesSchema
-        : ParticipantProfileSchema
-      : operation === 'enroll'
-        ? ParticipantEnrollmentSchema
-        : operation === 'current'
-          ? ParticipantEndpointSchema
-          : ParticipantReleaseSchema;
+    operation === 'profile-update'
+      ? ParticipantProfileSchema
+      : operation === 'profiles'
+        ? request.method === 'GET'
+          ? ParticipantProfilesSchema
+          : ParticipantProfileSchema
+        : operation === 'enroll'
+          ? ParticipantEnrollmentSchema
+          : operation === 'current'
+            ? ParticipantEndpointSchema
+            : ParticipantReleaseSchema;
   const result = ResultSchema(schema).safeParse(await boundedJson(response, 32768));
   if (!result.success) return controlResponse(fail('UNAVAILABLE', 'Invalid setup response'));
   if (!result.data.ok) {

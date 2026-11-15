@@ -208,7 +208,11 @@ export class SpeechTurns {
   }
   // A teaching control invalidates the old generation. Only the coordinator may
   // mint this fresh output turn after its validated transition; capture stays off.
-  replaceForTeachingReply(owner: object, transition: () => boolean): string | null {
+  replaceForTeachingReply(
+    owner: object,
+    transition: () => boolean,
+    mode: 'teach_lemmi' | 'open' = 'teach_lemmi',
+  ): string | null {
     const previous = this.#owner;
     if (
       !previous ||
@@ -225,7 +229,7 @@ export class SpeechTurns {
       !previous.controller.signal.aborted ||
       !token ||
       token.phase !== 'ready' ||
-      token.conversationMode !== 'teach_lemmi' ||
+      token.conversationMode !== mode ||
       token.id !== previous.token.id ||
       token.generation <= previous.token.generation
     )

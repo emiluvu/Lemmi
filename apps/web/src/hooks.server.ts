@@ -1,3 +1,4 @@
+import { conversationExitGuard, lockConversationResponse } from '#lib/server/conversation-exit.ts';
 import type { Handle } from '@sveltejs/kit/hooks';
 import {
   isLoopbackHost,
@@ -64,6 +65,8 @@ export const handle: Handle = async ({ event, resolve }) => {
           { status: 401, headers: { 'Cache-Control': 'no-store' } },
         );
       }
+      const blocked = conversationExitGuard(event.request);
+      if (blocked) return blocked;
       if (event.url.pathname === '/')
         return new Response(null, {
           status: 303,
@@ -71,14 +74,34 @@ export const handle: Handle = async ({ event, resolve }) => {
         });
       const response = await resolve(event);
       response.headers.set('Cache-Control', 'no-store');
-      return response;
+      return lockConversationResponse(event.request, response);
     } catch {
       return new Response('Authenticated device access is not configured', { status: 503 });
     }
   }
   if (!isLoopbackHost(event.url.hostname) || !peer || !isLoopbackHost(peer))
     return new Response('Local mock starter only', { status: 403 });
+  const blocked = conversationExitGuard(event.request);
+  if (blocked) return blocked;
+  // Opt-in local review uses the real UI components with the existing mock backend.
+  if (process.env.LEMMI_UI_PREVIEW === '1') {
+    const preview =
+      event.url.pathname === '/caregiver'
+        ? '/preview/application'
+        : event.url.pathname === '/participant/conversation' ||
+            event.url.pathname === '/participant'
+          ? '/preview/application?screen=conversation'
+          : null;
+    if (preview)
+      return lockConversationResponse(
+        event.request,
+        new Response(null, {
+          status: 303,
+          headers: { Location: preview, 'Cache-Control': 'no-store' },
+        }),
+      );
+  }
   const response = await resolve(event);
   response.headers.set('Cache-Control', 'no-store');
-  return response;
+  return lockConversationResponse(event.request, response);
 };

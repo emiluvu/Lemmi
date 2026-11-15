@@ -7,8 +7,10 @@
     deviceId,
   }: { live?: boolean; profile?: ParticipantProfile; deviceId?: string } = $props();
   import { VoiceClient, type VoiceState } from '#lib/voice-client.ts';
+  import ActivityVoicePhrases from './ActivityVoicePhrases.svelte';
   import TeachingChoices from './VoiceTeachingChoices.svelte';
   import AvatarArt from './AvatarArt.svelte';
+  import SpeechBubble from './SpeechBubble.svelte';
   let client: VoiceClient;
   let confirmStop: (() => void) | null = null;
   export async function stopForExit(): Promise<boolean> {
@@ -50,7 +52,7 @@
   const paused = $derived(voice.session?.phase === 'paused');
   const canSpeak = $derived(
     active &&
-      !!voice.session?.teaching?.entityId &&
+      !!voice.session &&
       !voice.session.micMuted &&
       ['ready', 'waiting'].includes(voice.session.phase) &&
       !voice.pending &&
@@ -105,11 +107,9 @@
         client.command('start');
       } else {
         startup = null;
-        client.startTeachingConversation();
       }
     } else if (startup === 'session' && active && voice.session?.phase === 'ready') {
       startup = null;
-      client.startTeachingConversation();
     }
   });
   async function start() {
@@ -119,7 +119,7 @@
     } else if (!active) {
       startup = 'session';
       client.command('start');
-    } else client.startTeachingConversation();
+    }
   }
   function control(type: string) {
     startup = null;
@@ -129,31 +129,41 @@
 
 <section class="voice-teaching" aria-label="Teach Lemmi conversation">
   <div class="avatar">
-    <AvatarArt avatarId={profile?.avatarId ?? 'lemming'} animated talking={voice.playing} />
+    <AvatarArt
+      avatarId={profile?.avatarId ?? 'lemming'}
+      animated
+      talking={voice.playing}
+      thinking={voice.session?.phase === 'processing'}
+    />
   </div>
+  {#if voice.playing && voice.reply}<SpeechBubble text={voice.reply} />{/if}
   <p class="disclosure">
     Fictional {profile?.preferredName ?? 'Alex'} · English voice demo · Camera off
   </p>
   {#if !voice.session?.teaching}
-    <h1>Teach Lemmi</h1>
+    <h1>Talk with Lemmi</h1>
     <p>Lemmi offers a topic. Tell Lemmi about it in your own words.</p>
     <p>
-      After Lemmi asks a question, the microphone opens for your reply. A short pause sends it.
-      Pause, Stop or mute ends automatic listening. Unmute alone keeps listening off.
+      Use Speak now to choose an activity or reply. A short pause sends your words. Unmute alone
+      keeps listening off. Pause, Stop and mute remain available.
     </p>
     <p class="disclosure">
       Audio goes to the team backend for speech recognition. Text goes to the external AI provider.
       This demo saves no conversation recording or journal excerpt.
     </p>
-    <button
-      onclick={start}
-      disabled={!configured ||
-        !!startup ||
-        (voice.connected && (!voice.ready || !voice.audio || !voice.teaching)) ||
-        paused}
-    >
-      {startup ? 'Starting Teach Lemmi…' : 'Start Teach Lemmi'}
-    </button>
+    <ActivityVoicePhrases
+      teaching={voice.teaching || !voice.connected}
+      photos={false}
+      voice={voice.connected && voice.audio}
+    />
+    {#if !active}<button onclick={start} disabled={!configured || !!startup || paused}>
+        {startup ? 'Connecting…' : 'Connect conversation'}
+      </button>{:else}
+      <div class="controls" aria-label="Microphone controls">
+        {#if voice.listening}<button onclick={() => client.done()}>Finish speaking</button>
+        {:else}<button disabled={!canSpeak} onclick={() => client.speak()}>Speak now</button>{/if}
+      </div>
+    {/if}
   {:else}
     <TeachingChoices
       session={voice.session}

@@ -51,7 +51,12 @@ import {
 } from '@lemmi/activities';
 import { createHash } from 'node:crypto';
 import { companionInput } from './adapters/companion-prompt';
-import { fixedInputReply, routeParticipantText } from './adapters/input-routing';
+import {
+  fixedInputReply,
+  routeParticipantText,
+  requestedActivity,
+  requestsOpenConversation,
+} from './adapters/input-routing';
 import { permittedModelReply } from './adapters/reply-policy';
 import { mentionsTopic, redirectInstructions } from './adapters/conversation-redirects';
 import { conversationRecap } from './adapters/conversation-recap';
@@ -258,11 +263,13 @@ export class SessionCoordinator {
   }
   requestCapture(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
     this.sweepTeaching();
-    if (this.session?.teaching && !this.session.teaching.entityId)
-      return fail('UNAVAILABLE', 'Choose another activity or finish; no eligible teaching topic');
     if (this.configurationChanges.size)
       return fail('REVISION_CONFLICT', 'Configuration save is pending');
-    if (this.activity && this.activity.phase !== 'ended' && !this.photoTalking())
+    if (
+      this.activity &&
+      this.activity.phase !== 'ended' &&
+      this.activity.activityId !== 'photo_album'
+    )
       return fail('REVISION_CONFLICT', 'Leave the activity before speaking');
     if (this.pendingChat) return fail('REVISION_CONFLICT', 'A text turn is pending');
     const result =
@@ -742,6 +749,123 @@ export class SessionCoordinator {
       if (speechOwner && replyTurnId !== input.commandId) this.onFixedReply();
       return structuredClone(result);
     }
+    const activityChoice =
+      !input.purpose && input.language === 'en' && route === 'ordinary'
+        ? (requestedActivity(input.text) ??
+          (requestsOpenConversation(input.text) ? ('conversation' as const) : null))
+        : null;
+    if (activityChoice) {
+      if (this.chatIds.size >= 256)
+        return fail('UNAVAILABLE', 'Text turn capacity reached; start a new session');
+      if (this.speech?.busy() && !this.speech.owns(speechOwner))
+        return fail('REVISION_CONFLICT', 'Finish the current speech turn first');
+      if (this.pendingChat || !['ready', 'waiting'].includes(session.phase))
+        return fail('REVISION_CONFLICT', 'Finish the current turn first');
+      if (activityChoice === 'unavailable') {
+        const result = ok<ConversationTextResult>({
+          kind: 'reply',
+          session: this.snapshot()!,
+          reply: {
+            turnId: input.commandId,
+            language: input.language,
+            source: 'fixed',
+            text: 'That activity is not available yet. You can ask for Teach Lemmi or Photo Story.',
+          },
+        });
+        this.chatIds.set(input.commandId, fingerprint);
+        this.lastChat = { commandId: input.commandId, result };
+        return result;
+      }
+      if (
+        activityChoice === 'photo' &&
+        (!this.publicPhotoEnabled() || session.endpoint !== 'browser')
+      )
+        return fail('UNAVAILABLE', 'Photo Story needs an enabled browser screen');
+      let changed: Result<unknown> = fail('REVISION_CONFLICT', 'Activity selection canceled');
+      const selectionCommandId = crypto.randomUUID();
+      const apply = () => {
+        if (this.session?.teaching) this.finishTeaching();
+        if (this.activity && this.activity.phase !== 'ended') {
+          this.cancelChat();
+          this.system({ type: 'system.end', reason: 'session_end' });
+        }
+        this.cancelChat();
+        this.session = {
+          ...this.session!,
+          generation: this.session!.generation + 1,
+          phase: 'ready',
+          captureGrant: null,
+        };
+        if (activityChoice === 'teaching') {
+          changed = this.handle('session.command', {
+            sessionId: this.session.id,
+            expectedGeneration: this.session.generation,
+            commandId: selectionCommandId,
+            action: { type: 'teaching.start' },
+          });
+        } else if (activityChoice === 'photo') {
+          changed = this.startPhoto(selectionCommandId);
+          if (
+            changed.ok &&
+            this.activity &&
+            this.context &&
+            this.photoView()?.phase !== 'unavailable'
+          ) {
+            const talk = reduceActivity(
+              this.activity,
+              { type: 'photo.talk' },
+              this.pack(),
+              this.context,
+            );
+            this.activity = talk.nextState;
+            talk.events.forEach((event) => this.event(event));
+          }
+        } else {
+          changed = ok(this.snapshot()!);
+        }
+        return changed.ok;
+      };
+      const turnId = speechOwner
+        ? this.speech?.replaceForTeachingReply(
+            speechOwner,
+            apply,
+            activityChoice === 'teaching' ? 'teach_lemmi' : 'open',
+          )
+        : apply()
+          ? input.commandId
+          : null;
+      if (!turnId)
+        return changed.ok ? fail('REVISION_CONFLICT', 'Activity speech canceled') : changed;
+      const view = this.photoView();
+      const opening =
+        activityChoice === 'conversation'
+          ? 'We can just talk. Take your time.'
+          : activityChoice === 'teaching'
+            ? (this.session?.teaching?.prompt ??
+              'No eligible teaching topics are available right now.')
+            : [
+                view?.activityId === 'photo_album' ? view.caption : '',
+                this.session?.communicationSupport.preset === 'quiet'
+                  ? ''
+                  : 'Would you like to talk about this picture?',
+              ]
+                .filter(Boolean)
+                .join(' ');
+      const result = ok<ConversationTextResult>({
+        kind: 'reply',
+        session: this.snapshot()!,
+        reply: {
+          turnId,
+          language: input.language,
+          source: 'fixed',
+          text: opening || 'We can simply look.',
+        },
+      });
+      this.chatIds.set(input.commandId, fingerprint);
+      this.lastChat = { commandId: input.commandId, result };
+      if (speechOwner) this.onFixedReply();
+      return result;
+    }
     const teachingIntent = session.teaching
       ? teachingTextIntent(input.text, session.teaching.entityId ?? undefined)
       : 'explanation';
@@ -1017,7 +1141,7 @@ export class SessionCoordinator {
                     prepared.data.system +=
                       '\nRequested activity ID: ' +
                       decision.data.activity +
-                      '. Voice activity launching is not connected. Explain that activity controls are needed; never claim it started.';
+                      '. This classification is advisory and has not started an activity. Only explicit reviewed phrases can select a mode: Start Teach Lemmi, Start Photo Story, Explore pictures, or Back to conversation. Other games remain unavailable. Never claim an activity started from this classification.';
                   if (!redirect) prepared.data.system += openConversationInstructions;
                 }
                 signal.throwIfAborted();
