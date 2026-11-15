@@ -272,3 +272,29 @@ experiment, jointly review feasibility/RAM and baseline first; this result
 alone does not establish the buffer size needed or justify a longer blocking
 write timeout. Keep the speaker window unchanged for an isolated comparison.
 No further flash, capture or buffer/protocol change followed this observation.
+
+## Correlation 85c3198 and isolated send-capacity feasibility
+
+Anay correlated the instrumented attempt: 29 accepted frames/580 ms,
+maximum accepted-frame gap 192.007 ms, max handler 0.888 ms, zero rejections;
+gateway heartbeat close at 07:20:26.847 followed the robot failure. Sampled
+origin queues were zero; no sustained origin backlog observed. The four-frame
+write/accept difference remains unlocalized. The local sampler has ended.
+
+Prepared `firmware/stackchan/experiments/tcp-send-capacity/` with the baseline
+SDK/config/archive hashes, a proposed single 5744-to-16384-byte send-capacity
+change, nominal per-socket payload delta 10640 bytes, observed connected heap
+75988–76188 bytes, and explicit isolation/acceptance gates. This is an **unbuilt
+feasibility candidate**, not a new working firmware target or a demonstrated
+fix. It changes no running robot/backend or playback settings.
+
+Provenance correction: installed SDK metadata/header report ESP-IDF v5.5.4,
+commit 735507283d, builder 43a8f6d. Earlier inspected local v5.5.1 sources are
+not the installed SDK's exact revision. Reviewed official v5.5.4 transport and
+lwIP Kconfig; writability polling before TLS and the configurable send-capacity
+setting are present there too. Actual diagnostic hook results remain valid.
+Matched SDK build requires an isolated environment; local GNU build prerequisites
+and matching IDF sources are not set up. No packages installed, SDK rebuild,
+new flash or further capture performed during this feasibility pass. Next work
+is a matched isolated build/provenance check and RAM review, not another user
+test of unchanged firmware or a promise that a larger capacity will fix it.

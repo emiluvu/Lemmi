@@ -1,0 +1,4 @@
+# UNBUILT SDK experiment; not an Arduino application build flag.
+# Apply only to an isolated, pinned ESP-IDF/Arduino library-builder checkout.
+# Baseline 5744 -> candidate 16384 bytes. Do not change other settings.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
