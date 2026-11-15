@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import AvatarArt from './AvatarArt.svelte';
+  import ProfileContextForm from './ProfileContextForm.svelte';
+  import type { ProfileContextView } from '@lemmi/contracts';
   import { clients } from '#lib/clients.ts';
   import { avatarChoices, avatarArtwork } from '#lib/avatars.ts';
   import { createParticipantSetup, type AvatarId, type ParticipantProfile } from '@lemmi/contracts';
@@ -21,6 +23,21 @@
   let avatar = $state<AvatarId>('lemming');
   let busy = $state(false);
   let message = $state('');
+  let contextEditing = $state(false);
+  let details = $state<ProfileContextView | null>(null);
+  let portrait = $state('');
+  async function loadDetails() {
+    if (preview) return;
+    const result = await setup.context(profile.id);
+    if (!result.ok) return;
+    details = result.data;
+    portrait = '';
+    const photo = result.data.context.photos.find((photo) => photo.portrait);
+    if (photo) {
+      const image = await setup.image(profile.id, photo.assetId);
+      if (image.ok) portrait = `data:image/png;base64,${image.data.dataBase64}`;
+    }
+  }
   function edit() {
     name = profile.preferredName;
     avatar = profile.avatarId;
@@ -78,7 +95,10 @@
         ' Your edits are still here. Reopen the profile to refresh if it changed elsewhere.';
   }
   let dialog = $state<HTMLDialogElement>(null!);
-  onMount(() => dialog.showModal());
+  onMount(() => {
+    dialog.showModal();
+    void loadDetails();
+  });
 </script>
 
 <dialog bind:this={dialog} class="profile-dialog" onclose={close} aria-labelledby="profile-title">
@@ -87,7 +107,11 @@
       ><span aria-hidden="true">←</span> Back to profiles</button
     >
     <div class="controls">
-      <button class="quiet" disabled={editing || busy} onclick={edit}>Edit profile</button>
+      <button
+        class="quiet"
+        disabled={editing || busy}
+        onclick={() => (preview ? edit() : (contextEditing = true))}>Edit profile</button
+      >
       <button class="quiet" aria-label="Close profile" onclick={() => dialog.close()}>✕</button>
     </div>
   </div>
@@ -98,7 +122,11 @@
   <div class="profile-summary" style:background-color="#9eab93">
     <div class="portrait-edit-wrap">
       <div class="photo-circle">
-        <span aria-hidden="true">{profile.preferredName.slice(0, 2).toUpperCase()}</span>
+        {#if portrait}<img
+            src={portrait}
+            alt={`${profile.preferredName}'s profile picture`}
+          />{:else}<span aria-hidden="true">{profile.preferredName.slice(0, 2).toUpperCase()}</span
+          >{/if}
       </div>
     </div>
     <h2>{profile.preferredName}</h2>
@@ -156,8 +184,8 @@
   </form>
   <p role="status" aria-live="polite">{message}</p>
   <p class="helper">
-    Name and avatar are saved for this fictional demo profile. Private biography and caregiver
-    guidance require caregiver sign-in.
+    Edit this fictional demo profile to add familiar details, pictures and optional conversation
+    memory. These controls are for fictional testing data only.
   </p>
   <section class="profile-details">
     <h2>Basic information</h2>
@@ -166,7 +194,19 @@
       <dd>{profile.preferredName}</dd>
     </dl>
     <h3>Biography &amp; interests</h3>
-    <p>Private caregiver information is unavailable in this demo view.</p>
+    {#if details}<p>
+        {details.context.biography || 'Add a little about their life with Edit profile.'}
+      </p>
+      {#if details.context.career}<p>Career: {details.context.career}</p>{/if}
+      {#if details.context.activities.length}<p>
+          Activities: {details.context.activities.join(', ')}
+        </p>{/if}
+      <p>
+        {details.summaryMemoryEnabled
+          ? 'Short conversation summary memory is enabled.'
+          : 'Conversation summary memory is off.'}
+      </p>
+    {:else}<p>Private caregiver information is unavailable in this demo view.</p>{/if}
     <h3>Conversation support</h3>
     <p>{profile.communicationSupport.preset}</p>
     <a
@@ -186,7 +226,10 @@
       </section>
       <section class="summary-section">
         <h3>Conversation Highlights</h3>
-        <p>Journal review is not connected yet.</p>
+        {#if details?.memories.length}{#each details.memories as memory}<p>
+              <strong>AI summary — not reviewed:</strong>
+              {memory.summary}
+            </p>{/each}{:else}<p>No saved conversation summaries.</p>{/if}
       </section>
     </div>
     <section class="interest-trends" aria-labelledby="live-trends-title">
@@ -216,3 +259,13 @@
     </div>
   </section>
 </dialog>
+{#if contextEditing}<ProfileContextForm
+    {profile}
+    close={() => (contextEditing = false)}
+    saved={(updated) => {
+      profile = updated;
+      saved(updated);
+      contextEditing = false;
+      void loadDetails();
+    }}
+  />{/if}

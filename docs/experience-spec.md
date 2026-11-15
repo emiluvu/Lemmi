@@ -1,5 +1,7 @@
 # Lemmi — Experience specification
 
+November 14 profile increment: create and Edit profile open the same scrollable modal; only the name is required. Pictures/descriptions and conversation-summary memory are optional. Memory starts off, has visible unreviewed summaries and Forget, and does not enable journal excerpts. Failed loads cannot save over existing details; failed saves keep the draft. Context changes pause active conversation and require explicit continuation. Participant conversation keeps its existing controls. See [profile/memory handoff](handoffs/profile-context-memory-2026-11-14.md).
+
 **Status:** Draft for team review  
 **Version:** 0.2  
 **Scope:** Hackathon prototype; fictional profiles, team rehearsal and optional supervised live demo

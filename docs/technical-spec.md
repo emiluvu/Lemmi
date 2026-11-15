@@ -1,5 +1,7 @@
 # Lemmi — Technical specification
 
+November 14 source increment: migration `006` stores bounded caregiver context and explicit summary permission on profiles, with ten profile/session-linked conversation summaries in PostgreSQL. Reuse private media for optional portraits/photos; only entered descriptions reach chat. Local word-overlap ranking selects profile facts and at most three relevant summaries with recent records winning ties. No vector database or agent framework. Existing session cancellation, checkpoint serialization and transaction-level authorization/revision fences apply. [Schema/API/rollout handoff](handoffs/profile-context-memory-2026-11-14.md).
+
 **Status:** Draft for team review  
 **Version:** 0.4  
 **Scope:** Hackathon prototype; fictional participant data and opted-in team notification recipients

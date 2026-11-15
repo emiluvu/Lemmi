@@ -283,7 +283,11 @@ export function startControlGateway(options: Options) {
         try {
           raw = await boundedJson(
             request,
-            url.pathname === '/internal/data' ? 29 * 1024 * 1024 : 4096,
+            url.pathname === '/internal/data'
+              ? 29 * 1024 * 1024
+              : url.pathname === '/internal/demo'
+                ? 1500000
+                : 4096,
           );
         } catch {
           return controlResponse(fail('VALIDATION_ERROR', 'Invalid JSON'));

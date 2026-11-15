@@ -10,6 +10,14 @@ import {
   ParticipantReleaseSchema,
   ResultSchema,
   fail,
+  ProfileContextViewSchema,
+  ProfileContextUpdateSchema,
+  ProfileImageUploadSchema,
+  ProfileImageReadSchema,
+  ProfileImageDataSchema,
+  AssetMetadataSchema,
+  ProfileContextReadSchema,
+  ProfileContextCommandSchema,
 } from '@lemmi/contracts';
 import type { Fetcher } from '@lemmi/contracts';
 import { boundedJson, controlConfig, controlResponse, hasPrivateAccess } from '@lemmi/server';
@@ -50,6 +58,12 @@ export async function handleDemoHttp(
       name: request.method === 'GET' ? 'profile.list' : 'profile.create',
     },
     'profile-update': { method: 'POST', name: 'profile.update' },
+    'profile-context': { method: 'POST', name: 'profile.context.read' },
+    'profile-context-update': { method: 'POST', name: 'profile.context.update' },
+    'profile-memory-forget': { method: 'POST', name: 'profile.context.forget' },
+    'profile-demo-fill': { method: 'POST', name: 'profile.context.fill' },
+    'profile-image-upload': { method: 'POST', name: 'profile.image.upload' },
+    'profile-image-read': { method: 'POST', name: 'profile.image.read' },
     enroll: { method: 'POST', name: 'endpoint.enroll' },
     current: { method: 'GET', name: 'endpoint.current' },
     release: { method: 'POST', name: 'endpoint.release' },
@@ -58,9 +72,19 @@ export async function handleDemoHttp(
   if (!route) return controlResponse(fail('NOT_FOUND', 'Unknown demo operation'));
   if (route.method !== request.method) return new Response(null, { status: 405 });
   let body: Record<string, unknown> = {};
+  const enriched = operation.startsWith('profile-') && operation !== 'profile-update';
   if (request.method === 'POST') {
-    const schema =
-      operation === 'profile-update'
+    const schema = enriched
+      ? operation === 'profile-context-update'
+        ? ProfileContextUpdateSchema
+        : operation === 'profile-image-upload'
+          ? ProfileImageUploadSchema
+          : operation === 'profile-image-read'
+            ? ProfileImageReadSchema
+            : operation === 'profile-context'
+              ? ProfileContextReadSchema
+              : ProfileContextCommandSchema
+      : operation === 'profile-update'
         ? DemoProfileUpdateSchema
         : operation === 'profiles'
           ? ParticipantCreateSchema
@@ -68,7 +92,16 @@ export async function handleDemoHttp(
             ? ParticipantEnrollRequestSchema
             : ParticipantEmptySchema;
     try {
-      const parsed = schema.safeParse(await boundedJson(request, 4096));
+      const parsed = schema.safeParse(
+        await boundedJson(
+          request,
+          operation === 'profile-image-upload'
+            ? 1500000
+            : enriched || operation === 'profiles'
+              ? 32768
+              : 4096,
+        ),
+      );
       if (!parsed.success)
         return controlResponse(fail('VALIDATION_ERROR', 'Invalid setup request'));
       body = parsed.data;
@@ -81,7 +114,9 @@ export async function handleDemoHttp(
     return controlResponse(fail('UNAUTHORIZED', 'Choose a participant for this browser'));
   const raw = {
     operation: route.name,
-    ...((operation === 'profiles' && request.method === 'POST') || operation === 'profile-update'
+    ...((operation === 'profiles' && request.method === 'POST') ||
+    operation === 'profile-update' ||
+    ['profile-context-update', 'profile-image-upload', 'profile-image-read'].includes(operation)
       ? { input: body }
       : body),
     ...(operation === 'current' || operation === 'release'
@@ -104,8 +139,13 @@ export async function handleDemoHttp(
       body: JSON.stringify(raw),
     },
   );
-  const schema =
-    operation === 'profile-update'
+  const schema = enriched
+    ? operation === 'profile-image-upload'
+      ? AssetMetadataSchema
+      : operation === 'profile-image-read'
+        ? ProfileImageDataSchema
+        : ProfileContextViewSchema
+    : operation === 'profile-update'
       ? ParticipantProfileSchema
       : operation === 'profiles'
         ? request.method === 'GET'
@@ -116,7 +156,9 @@ export async function handleDemoHttp(
           : operation === 'current'
             ? ParticipantEndpointSchema
             : ParticipantReleaseSchema;
-  const result = ResultSchema(schema).safeParse(await boundedJson(response, 32768));
+  const result = ResultSchema(schema).safeParse(
+    await boundedJson(response, operation === 'profile-image-read' ? 1500000 : 65536),
+  );
   if (!result.success) return controlResponse(fail('UNAVAILABLE', 'Invalid setup response'));
   if (!result.data.ok) {
     const outgoing = controlResponse(result.data);

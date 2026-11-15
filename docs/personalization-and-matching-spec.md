@@ -1,5 +1,7 @@
 # Lemmi — Growing preferences and object matching
 
+November 14 clarification: optional [short conversation memory](handoffs/profile-context-memory-2026-11-14.md) has a separate off-by-default permission. It permits bounded AI topic summaries only; it does not enable preference learning, modify canonical eligibility, change support presets or approve biography. The restrictions below continue to govern F15/F16 and their retained sources.
+
 **Status:** Committed planning requirements; no implementation or participant validation yet  
 **Updated:** November 13, 2026  
 **Owners:** Anay (memory/policy/contracts), Lukas (matching logic/content), Kylie (preferences/game UI), Emilia (device integration)

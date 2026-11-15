@@ -46,7 +46,8 @@ export function conversationExitGuard(request: Request): Response | null {
     });
   if (
     request.method !== 'GET' &&
-    ['/v1/demo/profiles', '/v1/demo/profile-update'].includes(url.pathname)
+    (['/v1/demo/profiles', '/v1/demo/profile-update'].includes(url.pathname) ||
+      url.pathname.startsWith('/v1/demo/profile-'))
   )
     return Response.json(
       {

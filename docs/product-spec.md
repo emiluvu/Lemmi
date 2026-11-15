@@ -1,5 +1,7 @@
 # Lemmi — Product specification
 
+November 14 source increment: caregiver profile creation/editing includes optional life details, familiar people, favourites, private pictures/descriptions and a portrait. Ordinary chat may use approved context and, only with separate explicit permission, short summaries of up to ten prior sessions. This is a fictional-profile demo increment, not a deployed or clinically validated feature. See [implementation and rollout](handoffs/profile-context-memory-2026-11-14.md).
+
 **Status:** Draft for team review  
 **Version:** 0.2  
 **Scope:** Hackathon prototype
