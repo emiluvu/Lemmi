@@ -7,6 +7,7 @@ export * from './device';
 export * from './services';
 export * from './device-access';
 export * from './conversation';
+export * from './conversation-decisions';
 export * from './speech';
 
 export * from './profile-assets';

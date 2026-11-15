@@ -1,5 +1,7 @@
 # Lemmi
 
+Local feature branch: [semantic conversation decisions](docs/handoffs/conversation-decisions.md) adds opt-in Jev/OpenAI decision detection for open-chat redirects and reminders. Disabled by default; fictional evaluation instructions and remaining live acceptance are in the handoff. The deployed status below does not include this local branch.
+
 Public fictional demo: unlock [Lemmi](https://lemmi.chaoswarrior.dev/access), then open the [caregiver workspace](https://lemmi.chaoswarrior.dev/caregiver). `/` opens that workspace; its profile Conversation links open the designed [live companion screen](https://lemmi.chaoswarrior.dev/participant/conversation). Profile listing/creation and conversation/Teach Lemmi use the live backend; Photo Story is available with reviewed illustrations; other games are labeled previews, and camera/journals/private profile editing remain unavailable in this browser. The shared key does not authorize private caregiver APIs. See [current deployment and checks](docs/backend-status.md).
 
 Local UI/browser integration preparation: [combined frontend/backend handoff](docs/handoffs/frontend-backend-integration.md) — includes the copied uncommitted UI, Teach Lemmi/Alex content, browser client wiring, observed checks and remaining deployment gates.

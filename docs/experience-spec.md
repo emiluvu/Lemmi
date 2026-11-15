@@ -156,6 +156,8 @@ Use the safety and privacy specification’s sensitive-topic examples and urgent
 
 ### Text fallback
 
+Optional local semantic-decision mode (`codex/conversation-decisions`) recognizes reminder/redirect intent through a bounded external decision call before an open-chat reply. Ordinary phrasing need not match a fixed phrase. The response still uses only transient available context; uncertainty does not imply confusion/diagnosis. Decision timeout/failure ends visibly with explicit retry, and Stop/help retain independent controls. This mode is disabled until configured and live-tested; activity recognition does not yet launch activities. See `handoffs/conversation-decisions.md`.
+
 General-chat branch addition (local, undeployed): a participant can say “What was I talking about?” or “I lost my train of thought.” Give a brief, explicitly attributed reminder from recent transient participant speech/text. Do not guess a missing memory or describe confusion/ability. If context was cleared, absent or caregiver-marked for redirection, offer time or a fresh subject without replaying it. English phrase fixtures are implemented; broader phrasing/languages need rehearsal. Caregiver-configured away/toward phrases may offer one optional subject transition in open conversation; respect continued participant interest and prioritize safety/help/refusal. Empty alternative lists permit a neutral model suggestion without invented personal context. Settings are caregiver-provided, not learned preferences.
 
 Offer **Type instead** when voice is unavailable or the participant chooses it. Display a labeled field and **Send** button. Touch controls remain usable without a keyboard. Do not require typing to pause, stop, choose an activity, or request help.

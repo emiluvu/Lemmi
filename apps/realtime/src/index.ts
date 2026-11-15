@@ -13,7 +13,13 @@ import {
   type ServerEvent,
   type Result,
 } from '@lemmi/contracts';
-import { controlConfig, openRouterConfig, createOpenRouterAdapter } from '@lemmi/server';
+import {
+  controlConfig,
+  openRouterConfig,
+  createOpenRouterAdapter,
+  conversationDecisionConfig,
+  createOpenRouterDecisionAdapter,
+} from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
 import { localSpeechConfig, createLocalSpeechAdapters } from '@lemmi/server';
@@ -274,6 +280,10 @@ function startMockGateway() {
 }
 if (process.env.LEMMI_MODE === 'live') {
   const llm = openRouterConfig();
+  const decisions = conversationDecisionConfig();
+  if (!decisions.ok) throw new Error(decisions.error.message);
+  if (decisions.data && !llm.ok)
+    throw new Error('Configure conversation before enabling decisions');
   let speech;
   if (process.env.LEMMI_SPEECH_ENABLED === '1') {
     const selected = localSpeechConfig();
@@ -296,6 +306,7 @@ if (process.env.LEMMI_MODE === 'live') {
     ...controlConfig(),
     port: Number(process.env.GATEWAY_PORT ?? 3001),
     ...(llm.ok ? { chatAdapter: createOpenRouterAdapter(llm.data) } : {}),
+    ...(decisions.data ? { decisionAdapter: createOpenRouterDecisionAdapter(decisions.data) } : {}),
   });
   try {
     await gateway.ready;
