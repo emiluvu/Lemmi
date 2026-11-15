@@ -1,5 +1,22 @@
 # Lemmi backend integration reference
 
+## Photo Story and conversation fixes prepared — November 15, 2026
+
+Undeployed candidate `fix/photo-story-conversation-stalls`: fixes missed Photo Story
+voice requests, covered false model-display claims, clipped image layout and obsolete
+async errors that can disable a newer listening attempt. Integrates current
+`backend-deploy` through `435b73a`; greetings, teaching choices/Finish, startup
+recovery, saved-photo scope and branding are retained. No new API/schema/migration,
+configuration, dependency or provider change. Deploy web/gateway together after boundary review. Existing runtime is unchanged by this work.
+
+[Completion status, evidence and server rollout handoff](handoffs/photo-story-conversation-stalls.md).
+Combined gate passed: **473 tests / 6,867 expectations, zero failures/skips** on
+five disposable PostgreSQL databases, a separate production HTTPS/WSS/private-photo
+smoke, type/Svelte/build/format/whitespace, 15 Python fixture checks, and desktop/mobile
+Chromium containment/failure/retry checks. A 30-turn gateway/controller fixture
+crossed spoken Photo Story entry/exit. Human speech,
+live-model and hardware acceptance remain pending.
+
 ## Lemmi branding deployed — November 15, 2026
 
 **Web runtime `f3f5199`**, gateway `5146030`, speech/tunnel retained.

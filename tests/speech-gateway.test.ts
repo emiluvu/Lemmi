@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { startControlGateway } from '../apps/realtime/src/control';
+import { BrowserConversation } from '../apps/web/src/lib/features/browser-conversation';
 import {
   DeviceEventSchema,
   ProfileDetailSchema,
@@ -382,6 +383,213 @@ test('explicit Start speaks first, Photo Story introduces its scene, Resume repe
     d.close();
   }
 });
+
+test('a failure from the current recognition turn remains visible and capture stays off', async () => {
+  const d = await device({
+    speech: {
+      stt: {
+        async transcribe() {
+          return fail('UNAVAILABLE', 'Fixture recognition unavailable');
+        },
+      },
+      tts: {
+        async synthesize() {
+          throw new Error('No reply synthesis expected');
+        },
+      },
+    },
+  });
+  try {
+    const input = await d.capture();
+    const id = input.finish();
+    await d.until(() =>
+      d.events.some((event) => event.type === 'error' && event.payload.commandId === id),
+    );
+    expect(
+      d.events.find((event) => event.type === 'error' && event.payload.commandId === id),
+    ).toMatchObject({ payload: { code: 'UNAVAILABLE' } });
+    expect(d.session().phase).toBe('waiting');
+    expect(d.session().captureGrant).toBeNull();
+    expect(d.events.some((event) => event.type === 'response.start')).toBe(false);
+  } finally {
+    d.close();
+  }
+});
+
+for (const stage of ['recognition', 'model', 'synthesis'] as const) {
+  test(`canceled ${stage} cannot send an old error into the resumed listening attempt`, async () => {
+    let entered = false;
+    let syntheses = 0;
+    let release!: () => void;
+    const blocked = () =>
+      new Promise<any>((resolve) => {
+        release = () => resolve(fail('UNAVAILABLE', 'Canceled fixture adapter'));
+      });
+    const d = await device({
+      chat: {
+        async complete() {
+          if (stage === 'model') {
+            entered = true;
+            return blocked();
+          }
+          return ok({ text: 'A fictional garden.', language: 'en' });
+        },
+      },
+      speech: {
+        stt: {
+          async transcribe() {
+            if (stage === 'recognition') {
+              entered = true;
+              return blocked();
+            }
+            return ok({ text: 'A fictional greeting', language: 'en' });
+          },
+        },
+        tts: {
+          async synthesize() {
+            if (stage === 'synthesis' && syntheses++ === 0) {
+              entered = true;
+              return blocked();
+            }
+            return ok({
+              pcm: new Uint8Array(882 * 4),
+              sampleRate: 22050,
+              encoding: 'pcm_s16le',
+              channels: 1,
+              language: 'en',
+            });
+          },
+        },
+      },
+    });
+    try {
+      const input = await d.capture();
+      const canceledCommand = input.finish();
+      await d.until(() => entered);
+      d.send('input.pause');
+      await d.until(() => d.session().phase === 'paused');
+      release();
+      d.send('input.resume');
+      await d.completeOutput();
+      await Bun.sleep(30);
+      expect(
+        d.events.filter((e) => e.type === 'error' && e.payload.commandId === canceledCommand),
+      ).toEqual([]);
+      const next = await d.capture();
+      expect(next.grant.turnId).not.toBe(input.grant.turnId);
+      expect(d.session().phase).toBe('listening');
+    } finally {
+      d.close();
+    }
+  });
+}
+
+test('one listening choice sustains 30 paced turns across Photo Story entry and exit', async () => {
+  let recognized = 0;
+  const d = await device({
+    photo: true,
+    speech: {
+      stt: {
+        async transcribe() {
+          recognized++;
+          return ok({
+            text:
+              recognized === 10
+                ? 'Can we play the Photo Story game?'
+                : recognized === 20
+                  ? 'Back to conversation'
+                  : 'A fictional garden greeting',
+            language: 'en',
+          });
+        },
+      },
+      tts: {
+        async synthesize() {
+          return ok({
+            pcm: new Uint8Array(882 * 4),
+            sampleRate: 22050,
+            encoding: 'pcm_s16le',
+            channels: 1,
+            language: 'en',
+          });
+        },
+      },
+    },
+  });
+  let completed = 0,
+    epoch = 0;
+  const errors: string[] = [];
+  const audio = {
+    hasOutput: false,
+    prepare: async () => true,
+    cancelInput: () => {
+      epoch++;
+    },
+    async speak() {
+      const captured = epoch;
+      await Bun.sleep(100);
+      if (captured !== epoch) return;
+      const input = await d.capture();
+      loop.submitted(d.session());
+      input.finish();
+    },
+  };
+  const loop = new BrowserConversation(
+    {
+      get session() {
+        return d.session();
+      },
+      send(type, payload) {
+        d.send(type, payload);
+        return true;
+      },
+    },
+    audio,
+    'stackchan-alex',
+    () => {},
+    (message) => errors.push(message),
+  );
+  const receive = d.ws.onmessage!;
+  d.ws.onmessage = (message) => {
+    receive.call(d.ws, message);
+    const event = ServerEventSchema.parse(JSON.parse(String(message.data)));
+    if (event.type === 'response.start') {
+      audio.hasOutput = true;
+      const token = d.session();
+      void (async () => {
+        await Bun.sleep(120);
+        await d.completeOutput();
+        audio.hasOutput = false;
+        completed++;
+        if (completed === 30) loop.stop();
+        else loop.playbackCompleted(token);
+      })().catch((error) => errors.push(error.message));
+    }
+    if (event.type === 'error') errors.push(event.payload.message);
+    loop.receive(event);
+  };
+  try {
+    await loop.start();
+    const deadline = Date.now() + 12_000;
+    while (completed < 30 && !errors.length && Date.now() < deadline) await Bun.sleep(10);
+    expect(errors).toEqual([]);
+    expect(completed).toBe(30);
+    expect(recognized).toBe(30);
+    expect(
+      d.events.some(
+        (event) =>
+          event.type === 'activity.changed' &&
+          event.payload.activity?.activityId === 'photo_album' &&
+          event.payload.activity.currentAssetId,
+      ),
+    ).toBe(true);
+    expect(d.session().phase).toBe('waiting');
+    expect(d.session().captureGrant).toBeNull();
+  } finally {
+    loop.stop();
+    d.close();
+  }
+}, 15_000);
 
 test('Stop during the automatic opening cancels pending TTS and suppresses all late output', async () => {
   let finish!: (value: any) => void;

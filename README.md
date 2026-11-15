@@ -71,6 +71,8 @@ An early hardware check will determine how much interaction can live on the avai
 
 ## Project status
 
+Undeployed Photo Story/conversation fixes: [branch completion and backend-server handoff](docs/handoffs/photo-story-conversation-stalls.md). The candidate preserves the latest greetings, teaching and branding releases; 473 tests plus production fixture smoke and browser checks passed; deployment steps are in the handoff.
+
 **Current deployment:** web `d6d2ff6`, gateway `95bdcef`; follow the microphone flow above. Enrollment, plain Unmute and mode selection alone do not grant capture. Browser Start is the explicit opt-in to conversation listening.
 
 

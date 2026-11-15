@@ -33,13 +33,16 @@ function fixture(
   let modelCalls = 0;
   const prompts: string[] = [];
   let recognizedText = voiceText;
+  let modelReply = 'A garden has flowers.';
+  const histories: unknown[] = [];
   const c = new SessionCoordinator(
     'live',
     {
       async complete(input) {
         modelCalls++;
         prompts.push(input.system);
-        return ok({ text: 'A garden has flowers.', language: 'en' });
+        histories.push(structuredClone(input.history));
+        return ok({ text: modelReply, language: 'en' });
       },
     },
     {
@@ -141,6 +144,10 @@ function fixture(
     capture,
     calls: () => modelCalls,
     prompts,
+    histories,
+    setModelReply: (text: string) => {
+      modelReply = text;
+    },
     setRecognizedText: (text: string) => {
       recognizedText = text;
     },
@@ -172,6 +179,60 @@ test('explicit mode commands have priority over optional decisions and remain id
   expect(f.c.snapshot()!.generation).toBe(generation);
   expect(classifications).toBe(0);
   expect(f.calls()).toBe(0);
+});
+
+test('an ungrounded model photo claim becomes an honest offer; only confirmation opens the actual scene', async () => {
+  for (const claim of [
+    "Here's a photo of your garden.",
+    'Here are some pictures of the beach.',
+    'I am showing you a photo of flowers.',
+    "I've opened your pictures.",
+  ]) {
+    const f = fixture();
+    f.setModelReply(claim);
+    const offer = value<any>(await f.say('Something nice to look at'));
+    expect(offer.reply).toMatchObject({
+      source: 'fixed',
+      text: 'Would you like to start Photo Story?',
+    });
+    expect(f.c.photoView()).toBeNull();
+    expect(f.prompts[0]).toContain('No photo is displayed');
+    value(await f.say('Yes please'));
+    expect(f.c.photoView()).toMatchObject({
+      activityId: 'photo_album',
+      currentAssetId: 'photo-story-garden',
+    });
+    expect(f.calls()).toBe(1);
+  }
+});
+
+test('photo guard preserves ordinary photo discussion and does not retain an invented display claim in history', async () => {
+  const f = fixture();
+  f.setModelReply("Here's a photo of an invented display.");
+  value(await f.say('Something nice to look at'));
+  f.setModelReply('We can talk about taking photos.');
+  const result = value<any>(await f.say('I prefer just talking'));
+  expect(result.reply.source).toBe('model');
+  expect(JSON.stringify(f.histories)).not.toContain('invented display');
+  expect(f.c.photoView()).toBeNull();
+  f.setModelReply('I cannot show you a photo here.');
+  expect(value<any>(await f.say('I like photography')).reply.source).toBe('model');
+});
+
+test('a photo display claim respects Quiet and unavailable-photo boundaries', async () => {
+  const quiet = fixture(undefined, undefined, undefined, 'quiet');
+  quiet.setModelReply("Here's a photo of flowers.");
+  expect(value<any>(await quiet.say('Something nice')).reply).toMatchObject({
+    source: 'fixed',
+    text: 'To start Photo Story, say yes.',
+  });
+  quiet.c.authorizePublicPhotoDemo(false);
+  expect(value<any>(await quiet.say('Something else')).reply).toMatchObject({
+    source: 'fixed',
+    text: 'Photo Story is not available here. We can keep talking.',
+  });
+  value(await quiet.say('Yes please'));
+  expect(quiet.c.photoView()).toBeNull();
 });
 
 test('semantic activity request asks for confirmation, then uses the existing mode transition', async () => {
@@ -517,6 +578,12 @@ test('activity selection recognizes explicit invitations and leaves incidental/n
     'Could we look at some pictures?',
     'I would like to look through photos',
     'Can you start Photo Story?',
+    'Can we play the Photo Story game?',
+    'Let us play a photo story game',
+    'Start the photo album game',
+    'Show me a photo',
+    'Can you show me my photos?',
+    'Please show us some pictures',
   ])
     expect(requestedActivity(phrase)).toBe('photo');
   for (const text of [
@@ -532,6 +599,10 @@ test('activity selection recognizes explicit invitations and leaves incidental/n
     'She said "teach Lemmi"',
     'If I wanted to teach Lemmi tomorrow',
     'Can we teach Lemmi? Actually, no',
+    'Do not show me a photo',
+    'Can you show me my photos tomorrow?',
+    'She said "show me a photo"',
+    'Can we play the Photo Story game? Actually, no',
   ])
     expect(requestedActivity(text)).toBeNull();
 });
@@ -586,6 +657,9 @@ for (const text of [
   'Can we teach Lemmi?',
   'Start Photo Story',
   'Explore pictures',
+  'Can we play the Photo Story game?',
+  'Show me a photo',
+  'Can you show me my photos?',
 ]) {
   test(`STT selection ${text} receives a fresh output turn with receipt-backed playback`, async () => {
     const f = fixture(text);

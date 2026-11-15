@@ -306,11 +306,19 @@ export function requestedActivity(
     ).test(value)
   )
     return 'photo';
+  if (
+    /^(?:please )?(?:(?:can|could|may) you )?show (?:me|us) (?:a |some |the |my |our )?(?:photo(?:s)?|picture(?:s)?)(?:,? please)?$/.test(
+      value,
+    )
+  )
+    return 'photo';
   const invitation =
-    /^(?:please )?(?:(?:start|play|open|do|try|begin|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|(?:can|could|may) (?:we|i|you)) (?:play|start|do|open|try|switch to)) (?:the )?/;
+    /^(?:please )?(?:(?:start|play|open|do|try|begin|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|(?:can|could|may) (?:we|i|you)) (?:play|start|do|open|try|switch to)) (?:(?:the|a) )?/;
   const name = value.replace(invitation, '').replace(/,? please$/, '');
   if (
-    /^(?:photo stor(?:y|ies)|photo album(?: talk)?|explore pictures|look at pictures)$/.test(name)
+    /^(?:photo stor(?:y|ies)|photo album(?: talk)?|explore pictures|look at pictures)(?: game)?$/.test(
+      name,
+    )
   )
     return 'photo';
   // Reviewed name spellings from local ASR, still anchored to the whole invitation.
