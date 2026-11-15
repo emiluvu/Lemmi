@@ -68,6 +68,15 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
     }
+    location ~ ^/v1/profiles/[^/]+/help-requests(/[0-9a-fA-F-]+(/(acknowledge|cancel|resolve))?)?$ {
+        client_max_body_size 8k;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host YOUR_DOMAIN;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 10s;
+    }
+
     location ~ ^/v1/profiles/[^/]+/communication-support(/apply)?$ {
         client_max_body_size 4k;
         proxy_pass http://127.0.0.1:3000;

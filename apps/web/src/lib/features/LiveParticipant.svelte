@@ -167,6 +167,24 @@
   });
 
   function received(event: ServerEvent) {
+    if (event.type === 'help.changed' && event.payload.help.profileId === assignment?.profileId) {
+      message = german
+        ? ({
+            created: 'Ich benachrichtige deine Betreuungsperson.',
+            sending: 'Ich benachrichtige deine Betreuungsperson.',
+            accepted: 'Ich habe eine Nachricht an deine Betreuungsperson gesendet.',
+            delivery_unknown: 'Der Nachrichtenstatus ist unklar. Eine Antwort ist nicht bestätigt.',
+            acknowledged: 'Deine Betreuungsperson hat deine Anfrage bestätigt.',
+            resolved: 'Eine Betreuungsperson hat die Anfrage als erledigt markiert.',
+            canceled: 'Weitere Kontaktversuche wurden beendet.',
+            delivered: 'Die Zustellung wurde gemeldet. Eine Antwort ist nicht bestätigt.',
+            failed:
+              'Ich konnte keinen Kontakt bestätigen. Bitte kontaktiere eine vertraute Person direkt.',
+            expired: 'Ich konnte keine Antwort bestätigen.',
+            no_response: 'Ich konnte keine Antwort bestätigen.',
+          }[event.payload.help.status] ?? 'Ich konnte keinen Kontakt bestätigen.')
+        : event.payload.help.message;
+    }
     if (event.type === 'device.ready') {
       connectionLanguage = event.payload.language ?? 'en';
       connected = true;

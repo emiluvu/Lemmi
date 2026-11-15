@@ -14,3 +14,5 @@ export * from './speech';
 export * from './profile-assets';
 
 export * from './participant-client';
+
+export { ConcernCategorySchema, HelpHttpRequestSchema, HelpCreateBodySchema } from './help';

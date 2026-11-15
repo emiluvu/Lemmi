@@ -884,7 +884,7 @@ test('Stop during the automatic opening cancels pending TTS and suppresses all l
     d.send('input.start');
     await d.until(() => !!finish);
     d.send('input.stop');
-    await d.until(() => d.session().phase === 'ended');
+    await d.until(() => d.session()?.phase === 'ended');
     expect(signal.aborted).toBe(true);
     finish(ok({ pcm, sampleRate: 22050, encoding: 'pcm_s16le', channels: 1, language: 'en' }));
     await Bun.sleep(30);

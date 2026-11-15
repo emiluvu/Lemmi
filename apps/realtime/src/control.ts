@@ -12,6 +12,7 @@ import {
   ClaimDeviceInputSchema,
   RevokeDeviceAuthorityInputSchema,
   fail,
+  HelpHttpRequestSchema,
   ok,
   type ServerEvent,
   type ErrorCode,
@@ -40,6 +41,10 @@ import {
   type DataRepository,
   type SpeechAdapters,
   type SpeechConcurrency,
+  TelegramContactService,
+  type TelegramConfig,
+  type TelegramSender,
+  type ConcernAdapter,
 } from '@lemmi/server';
 
 type SocketData = {
@@ -77,6 +82,7 @@ type Options = {
   // Trusted server configuration only; never accepted in HTTP/WSS payloads.
   languageForProfile?: (profileId: string) => 'en' | 'de';
   devices?: Array<{ profileId: string; deviceId: string; endpoint?: 'browser' | 'robot' }>;
+  contact?: { config: TelegramConfig; sender: TelegramSender; concerns?: ConcernAdapter };
 };
 
 // The same gateway owns pairing and the single existing session authority. A trusted local
@@ -84,6 +90,25 @@ type Options = {
 export function startControlGateway(options: Options) {
   const now = options.now ?? Date.now;
   const elapsedNow = options.now ?? (() => performance.now());
+  if (options.contact && !options.repository)
+    throw new Error('Real Telegram contact requires PostgreSQL');
+  const contact =
+    options.contact && options.repository
+      ? new TelegramContactService(
+          options.repository.sql,
+          options.contact.config,
+          options.contact.sender,
+          (help) => {
+            for (const socket of sockets)
+              if (
+                socket.data.hello &&
+                socket.data.identity.profileId === help.profileId &&
+                access.current(socket.data.identity)
+              )
+                emit(socket, 'help.changed', { help });
+          },
+        )
+      : undefined;
   const sessions = new SessionRegistry(
     options.chatAdapter,
     options.speech
@@ -94,6 +119,24 @@ export function startControlGateway(options: Options) {
     options.demoEnrollment === true,
     options.decisionAdapter,
     options.languageForProfile,
+    contact
+      ? {
+          async create(input) {
+            const result = await contact.create(input);
+            if (!result.ok) {
+              for (const socket of sockets)
+                if (
+                  socket.data.hello &&
+                  socket.data.identity.profileId === input.profileId &&
+                  access.current(socket.data.identity)
+                )
+                  error(socket, result.error.code, result.error.message);
+            }
+            return result;
+          },
+        }
+      : undefined,
+    options.contact?.concerns,
   );
   for (const profile of options.profiles ?? []) sessions.acceptPersistentProfile(profile);
   // In-memory fixtures explicitly enroll fictional profiles; PostgreSQL supplies its own is_demo check.
@@ -189,7 +232,12 @@ export function startControlGateway(options: Options) {
   for (const device of options.devices ?? [])
     if (access instanceof DeviceAccess)
       access.assign(device.profileId, device.deviceId, device.endpoint);
-  const ready = data ? data.start() : Promise.resolve();
+  const ready = (data ? data.start() : Promise.resolve()).then(async () => {
+    if (contact) {
+      await contact.initialize();
+      contact.start();
+    }
+  });
   void ready.catch(() => {});
   type Checkpoint = NonNullable<ReturnType<SessionCoordinator['persistenceSnapshot']>>;
   const checkpoints: Checkpoint[] = [];
@@ -335,6 +383,7 @@ export function startControlGateway(options: Options) {
       if (
         url.pathname === '/internal/demo' ||
         url.pathname === '/internal/data' ||
+        url.pathname === '/internal/help' ||
         url.pathname.startsWith('/internal/control/')
       ) {
         if (!localMockRequestAllowed(request, peer))
@@ -376,6 +425,38 @@ export function startControlGateway(options: Options) {
             return controlResponse(result);
           } catch (error) {
             return controlResponse(dataFailure(error));
+          }
+        }
+        if (url.pathname === '/internal/help') {
+          if (!contact || !data || !raw || typeof raw !== 'object')
+            return controlResponse(fail('UNAVAILABLE', 'Caregiver contact is not configured'));
+          try {
+            const parsed = HelpHttpRequestSchema.safeParse(raw);
+            if (!parsed.success)
+              return controlResponse(fail('VALIDATION_ERROR', 'Invalid help operation'));
+            const command = parsed.data;
+            const principal = await data.principal(command.actor, undefined, command.profileId);
+            if (principal.kind !== 'caregiver')
+              return controlResponse(fail('FORBIDDEN', 'Caregiver access required'));
+            const result =
+              command.action === 'create'
+                ? await sessions
+                    .forProfile(command.profileId)
+                    .requestHelp(command.profileId, command.commandId!)
+                : ok(
+                    command.action === 'status'
+                      ? await contact.read(command.profileId, command.requestId!, command.actor)
+                      : await contact.update(
+                          command.profileId,
+                          command.requestId!,
+                          command.action,
+                          command.actor,
+                        ),
+                  );
+            broadcast();
+            return controlResponse(result);
+          } catch (caught) {
+            return controlResponse(dataFailure(caught));
           }
         }
         if (url.pathname === '/internal/data') {
@@ -609,6 +690,14 @@ export function startControlGateway(options: Options) {
             return;
           }
           ws.data.hello = true;
+          if (contact)
+            void contact
+              .latest(ws.data.identity.profileId)
+              .then((help) => {
+                if (help && sockets.has(ws) && access.current(ws.data.identity))
+                  emit(ws, 'help.changed', { help });
+              })
+              .catch(() => {});
           ws.data.sequence = event.sequence;
           ws.data.playbackRates =
             coordinator.speechConfigured() &&
@@ -979,11 +1068,25 @@ export function startControlGateway(options: Options) {
           });
           if (result.ok) coordinator.bindEndpoint(ws.data.identity.deviceId);
         } else if (event.type === 'input.help') {
-          result = coordinator.handle('help.create', {
-            profileId: ws.data.identity.profileId,
-            commandId: event.event_id,
-            mode: 'real',
-          });
+          const pending = coordinator.requestHelp(ws.data.identity.profileId, event.event_id);
+          broadcast();
+          void pending
+            .then((help) => {
+              if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
+              emit(ws, 'command.ack', {
+                mode: 'live',
+                commandId: event.event_id,
+                applied: help.ok,
+              });
+              if (help.ok) emit(ws, 'help.changed', { help: help.data });
+              else error(ws, help.error.code, help.error.message, event.event_id);
+              broadcast();
+            })
+            .catch(() => {
+              if (sockets.has(ws) && access.current(ws.data.identity))
+                error(ws, 'UNAVAILABLE', 'Caregiver contact unavailable', event.event_id);
+            });
+          return;
         } else if (
           current &&
           (['input.stop', 'input.pause', 'input.resume', 'input.mute'].includes(event.type) ||
@@ -1159,8 +1262,10 @@ export function startControlGateway(options: Options) {
     ready,
     data,
     flush: () => persist(),
+    contact,
     stop() {
       clearInterval(watchdog);
+      void contact?.stop().catch(() => {});
       sessions.disconnect();
       server.stop(true);
       if (data)

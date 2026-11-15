@@ -53,6 +53,31 @@ competing speech is still speech to a single microphone: no target-speaker
 isolation or universal noisy-room/quiet-voice guarantee. Actual user/room and
 physical K151 checks remain separate. [Implementation, provenance and handoff](handoffs/browser-noise-endpointing.md).
 
+## Telegram follow-up categories — source increment, verification pending
+
+The internal `ConcernCategorySchema` adds `departure`, `contact_request` and
+`human_support`. Additive migration `008_contact_followup_triggers.sql` accepts
+those minimal request categories and the source `model_reply`; no transcript,
+model-response text, destination, new HTTP operation or device action is added.
+Use the existing help-request REST routes and `help.changed` event from
+[the contact handoff](handoffs/telegram-caregiver-contact.md).
+
+Departure/travel reports are labeled unverified, without a diagnosis or inferred
+wandering. An explicit call/contact request produces a caregiver notification
+only; no phone call is placed or promised to a named person. It is treated like
+manual help for routing eligibility, independent of automatic-concern enablement.
+Departure and Lemmi-recommended human support require automatic alerts enabled.
+The latter has `source=model_reply` and explicitly attributes the event to
+Lemmi's support recommendation, not a participant report. All use fixed templates
+and application-owned configured recipients. Safe-alternate safeguarding rules
+remain authoritative.
+
+Participant-safe `HelpSnapshot.reason` is `manual` for `help_request` and
+`contact_request`, `urgent_concern` for `urgent`, and `concern` otherwise. The
+existing authenticated acknowledgment/cancel/resolve semantics are unchanged.
+The initial contact slice's passing tests/live alerts do not verify these new
+triggers; follow-up acceptance is pending and no deployment is implied here.
+
 ## Conversation reliability deployed — November 15, 2026
 
 **Web/gateway/local speech `ea66280`**, integrating reliability source `48686bf`;
@@ -1113,3 +1138,10 @@ navigation barrier; private caregiver authorization remains separate.
 ## Participant greeting/topic-choice contract — deployed in `5146030`
 
 The shared device contract adds `input.teaching.select` with `{entityId}`. Teaching snapshots optionally include up to three server-filtered `choices` and `choosingTopic`; public teaching starts first offer a spoken/visible menu. Existing session generations, owner/profile scope, policy checks and cancellation apply. New voice sessions play an application-owned greeting before browser capture; pause/resume/reconnect do not replay it. No route or migration changes. `activity.leave` can close a paused Photo Story while preserving the pause. [Exact behavior, compatibility and validation](handoffs/participant-greetings-exit.md).
+
+## Telegram contact source increment — November 15, 2026
+
+The `feat/telegram-caregiver-contact` branch replaces the live unconfigured help seam with opt-in Telegram contact for assigned fictional profiles. See [setup, exact routes/events, privacy and rollout](handoffs/telegram-caregiver-contact.md). `SessionCoordinator.requestHelp` is asynchronous and independent of conversation/journal generation. `input.help`, reviewed help/urgent phrases and the independent Jev concern classifier create minimal durable requests. `help.changed` carries `HelpSnapshot`, with the new `concern` reason alongside manual/urgent. Provider acceptance is distinct from acknowledgment. Caregiver-only `/v1/profiles/:profileId/help-requests` create/status/acknowledge/cancel/resolve routes enforce managed identity and resource scope. No request-detail UI or Telegram reply reader is added. Earlier unconfigured-contact descriptions above remain historical baseline behavior; the new path requires migration 007, private enablement, verified recipients and a coordinated gateway/web/proxy rollout.
+
+
+Follow-up verification is now recorded in the [current contact handoff](handoffs/telegram-caregiver-contact.md): 513 tests passed, six actual Jev decisions passed, type/build/format checks passed. No production rollout is implied. Participant status stays positive: queued/sending says “I'm notifying your caregiver”; Telegram acceptance says “I've sent a notification to your caregiver.” It never claims a phone call, reading, arrival or resolution. The recommended-support gate only starts validation; an unverified/rejected/late generated response cannot send a notification.

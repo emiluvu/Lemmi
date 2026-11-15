@@ -19,6 +19,9 @@ import {
   createOpenRouterAdapter,
   conversationDecisionConfig,
   createOpenRouterDecisionAdapter,
+  telegramConfig,
+  createTelegramSender,
+  createOpenRouterConcernAdapter,
 } from '@lemmi/server';
 import { startControlGateway } from './control';
 import { dataConfig, openData } from '@lemmi/server';
@@ -314,6 +317,7 @@ if (process.env.LEMMI_MODE === 'live') {
   }
   const config = dataConfig();
   const repository = config ? await openData(config) : undefined;
+  const telegram = await telegramConfig();
   const gateway = startControlGateway({
     ...(process.env.LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE
       ? {
@@ -325,6 +329,15 @@ if (process.env.LEMMI_MODE === 'live') {
         }
       : {}),
     repository,
+    ...(telegram
+      ? {
+          contact: {
+            config: telegram,
+            sender: createTelegramSender(telegram.token),
+            ...(decisions.data ? { concerns: createOpenRouterConcernAdapter(decisions.data) } : {}),
+          },
+        }
+      : {}),
     demoEnrollment: process.env.LEMMI_DEMO_ENROLLMENT === '1',
     speech,
     speechConcurrency: speech ? speechConcurrencyConfig() : undefined,
@@ -345,6 +358,7 @@ if (process.env.LEMMI_MODE === 'live') {
   const shutdown = async () => {
     gateway.stop();
     if (gateway.data) {
+      await gateway.contact?.stop().catch(() => {});
       await gateway.flush().catch(() => {});
       await gateway.data.close().catch(() => {});
       await repository?.sql.close();
@@ -356,6 +370,6 @@ if (process.env.LEMMI_MODE === 'live') {
   if (process.env.LEMMI_TRANSPORT_DIAGNOSTICS_DEVICE)
     console.info('Lemmi transport diagnostics enabled (one selected endpoint; content-free)');
   console.info(
-    `Lemmi authenticated CONTROL gateway on loopback port ${gateway.server.port}; HTTPS/WSS proxy required; media/contact unavailable`,
+    `Lemmi authenticated CONTROL gateway on loopback port ${gateway.server.port}; HTTPS/WSS proxy required; Telegram contact ${telegram ? 'enabled' : 'disabled'}`,
   );
 } else startMockGateway();

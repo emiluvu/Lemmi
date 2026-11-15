@@ -322,3 +322,23 @@ post-speech policy remain unchanged. Stop/destroy clear owned PCM/state and reje
 late output; initialization/error/overload retains manual Finish speaking. The
 model/ONNX WASM load from same-origin versioned assets; no new public media/API or
 external speech service. [Actual acceptance and counterpart limits](backend-status.md#browser-noise-endpointing-deployed--november-15-2026).
+
+## Telegram contact integration — November 15, 2026
+
+See [the exact contact handoff](handoffs/telegram-caregiver-contact.md). The existing authority pauses before help; manual `input.help` works without an active session and bypasses all models. Spoken/typed recognized concern replies retain fresh paused speech authority. Optional independent Jev concern questions return bounded categories only; the application owns recipients and fixed messages. No transcript or paraphrase is retained in requests/outbox. `help.changed {help: HelpSnapshot}` is participant-safe and resource-scoped; browser status consumes it without interrupting already approved urgent guidance. `HelpSnapshot.reason` additionally accepts `concern`. Caregiver acknowledgment/resolve/cancel use authorized POST routes; GET/link previews never acknowledge. Kylie consumes these APIs for a future request-detail UI, Emilia can consume status events and must verify actual device controls, and Anay coordinates migration/configuration/review/deployment. No hardware or production-rollout claim follows from local checks.
+
+Follow-up source extends internal contact categories with `departure`,
+`contact_request`, and `human_support`, and source attribution with `model_reply`.
+Additive migration `008_contact_followup_triggers.sql` changes the bounded CHECK
+constraints only. Departure is a current unverified travel/leave report, without
+clinical or wandering inference. Explicit call/contact requests notify the
+configured caregiver only; no call, named-relative routing or arrival is claimed.
+They use manual-help eligibility. Departure and admitted Lemmi recommendations of
+trusted human support require automatic alerts enabled. The recommendation's
+`model_reply` source is labeled as Lemmi's own output, never a participant report.
+No utterance or recommendation text is retained or included in previews.
+`HelpSnapshot.reason` stays `manual` for help/contact requests, `urgent_concern`
+for urgent reports, and `concern` for all other categories. No new client action,
+HTTP route, device command or provider-selected destination is introduced.
+Safeguarding priority and safe-alternate-only routing remain intact. Follow-up
+acceptance is pending; earlier contact checks do not verify these new triggers.
