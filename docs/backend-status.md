@@ -1,5 +1,9 @@
 # Lemmi backend status
 
+## Profile context/memory and German — reviewed, rollout pending
+
+Merged source `cd68663` then German `2ca3fba`, preserving branches and deployed Jev/profile/microphone behavior. Rich context/private pictures, separate default-off summary permission and exact-ID German pilot are ready. Review fixed blocking summarization (now bounded background), stale-refusal/re-enable races, copied/contact-bearing summary retention, upload admission, prompt budgeting and German unused-Jev overhead. **407 tests /6,244 expectations**, zero failures/skips; type/Svelte zero errors/warnings, build/format, production participant TLS/WSS smoke, disposable Chromium profile/photo/permission checks and nine Python checks passed. Isolated actual German STT/TTS and external model→German voice passed with fixed synthetic input. Existing Tilda reused; no copied Alex context or bulk backfill. [Full review, actual staging evidence, migration/media backup and human test reminder](handoffs/profile-german-backend-integration.md).
+
 ## Jev activity routing deployed — November 14, 2026
 
 Merged source `fix/conversation-activity-routing/c1b619f` into the latest response/profile-entry baseline while preserving the source branch. Activity-only Jev gate rerun: **71/71 matched, zero mismatches/unavailable/false positives, p50 151 ms / p95 204 ms**, threshold 0.85 and strict deny/ZDR/no-fallback provider policy unchanged. Full conversation scope remains disabled: source handoff reports 49/51 and two misses. **Gateway runtime `07e66b7`**, `LEMMI_DECISIONS_ENABLED=1`, scope `activities`, model `typesafe/jev-1.14`, threshold `0.85`, deadline `1500 ms`. Phrase-based recap/redirects remain. Web runtime `3c5033e` and private speech were retained.
@@ -34,6 +38,16 @@ Observed: final **345 tests / 5,427 expectations, zero failures/skips** with iso
 Actual public Chromium with its **own fictional profile** passed one Start → real browser capture/resampling/automatic ending → actual local STT → configured external LLM → actual HFC TTS consumed through Web Audio → **second capture request without another click** → Mute (no restart) → Stop. One completed reply, two capture requests, zero runtime errors. Input was a fixed synthetic phrase in memory; no human microphone or audible physical speaker is claimed, no utterances/audio were logged or saved. Only that rehearsal's enrollment/profile was removed. All four services active. The frontend tester must refresh to load the new controls, then explicitly Start/Resume; their gateway was not restarted.
 
 Runtime speech readiness remains **CPU STT 2/2 and CPU TTS 2/2**, HFC female medium. Different assigned profiles/endpoints can run concurrently; one profile has one active audio owner. CUDA remains disabled after driver init 999; Jev remains disabled after the failed prior gate. Live activity selection still uses reviewed commands. The inspected firmware `emilia/firmware-foundation/e42a6de` advertises `audio.supported:false`: backend control/PCM integration is available, but full robot capture/playback/local watchdog/hardware proof remains Emilia's work. No physical K151, full human-room/accessibility or counterpart acceptance is implied.
+
+## German integration candidate — not deployed
+
+`codex/tilda-german-integration`, based on `79051d9`, adds exact-ID German profile
+configuration, participant language propagation, German browser controls/routing
+and opt-in pinned German voice provisioning. No shared host configuration,
+profile/enrollment, data or service was changed. Backend SSH hostname resolution
+failed from this development machine; real German model/speech, human browser and
+K151 acceptance remain unrun. See [release steps and limits](handoffs/tilda-german-release.md).
+The deployed revisions recorded below remain the last observed deployment.
 
 ## Conversation UI and spoken modes deployed — November 14, 2026
 

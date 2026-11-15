@@ -1,5 +1,7 @@
 # Lemmi
 
+Profile context/memory + German integration: [reviewed combined release, permission behavior, tests and rollout](docs/handoffs/profile-german-backend-integration.md). Deployment status is recorded at the opening of backend status.
+
 **Jev activity routing deployed — gateway `07e66b7`:** [natural activity requests and explicit semantic confirmation](docs/handoffs/conversation-routing-repair.md). Activity-only evaluation passed 71/71; actual public spoken request → confirmation → spoken yes → teaching UI passed. Full conversation scope stays off. Web/speech retained; refresh/reconnect and explicitly Start after the gateway restart. [Current runtime and limits](docs/backend-status.md).
 
 **Deployed response/profile-entry update — web/gateway `3c5033e`:** caregiver Conversation selects/enrolls its profile before opening the participant screen. Browser silence defaults to 1 second; reviewed speech-recognition variants such as “Teach Lemmy” select Teach Lemmi. Family replies offer warmer grounded support. [Measured latency, current rollout and limitations](docs/handoffs/voice-response-and-profile-entry.md).
@@ -7,6 +9,12 @@
 **Earlier browser microphone release:** web `d6d2ff6`. Refresh, select a fictional profile, and click **Start conversation**; allow microphone access. Listening starts without separate Unmute/Speak clicks and returns after each normal reply. **Mute microphone**, **Type instead**, Pause/Stop/Get help are visible. Quiet waits after its first turn; silence pauses after 15 seconds and Resume restarts listening. Reconnect never restores recording automatically. The gateway and speech service were retained during this web-only update. [Current acceptance and limits](docs/backend-status.md), [microphone/Stackchan handoff](docs/handoffs/browser-default-listening.md).
 
 Earlier UI/backend release **`95bdcef`**: [reviewed spoken mode selection, caregiver name/avatar edits, single conversation screen and exit keypad](docs/handoffs/ui-voice-backend-review-2026-11-14.md). Unlock `/access`, create/select a fictional profile in `/caregiver`, then open Conversation and explicitly Start. Tap microphone status for Speak now or Type instead; reviewed phrases include “Start Teach Lemmi”, “Start Photo Story”, “Explore pictures” and “Back to conversation”. Pause/Stop/Get help remain visible. The live exit keypad code is stored privately as `LEMMI_CAREGIVER_EXIT_PASSWORD` in the protected host `.env`; local mock `1234` is not the live code. [Actual runtime, acceptance and remaining limits](docs/backend-status.md).
+
+German browser/backend conversation is available as an **undeployed candidate**
+with server-resolved per-profile language and optional pinned German voice
+provisioning. Follow the [Tilda release handoff](docs/handoffs/tilda-german-release.md)
+for exact-ID enrollment/configuration, staging checks and remaining human audio
+acceptance. Existing profiles keep English unless explicitly configured.
 
 Source branch increment: [richer profile form, private pictures and optional conversation summaries](docs/handoffs/profile-context-memory-2026-11-14.md). Requires migration `006` and coordinated web/gateway/proxy rollout; not part of the deployment stated below. Summary memory starts off. The handoff includes the safe fictional-profile backfill command.
 

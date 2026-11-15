@@ -760,3 +760,33 @@ test('browser negotiated playback window stays bounded and Stop cancels every sc
     f.restore();
   }
 });
+
+test('browser capture recovers the authority language and resets legacy handshakes to English', async () => {
+  const f = fixture();
+  try {
+    f.audio.receive(event('device.ready', { language: 'de', audio: false }), 'browser');
+    await f.audio.speak();
+    expect(f.sent.at(-1)).toEqual(['input.speak', { language: 'de' }]);
+    f.audio.cancel();
+    f.audio.receive(event('device.ready', { audio: false }), 'browser');
+    await f.audio.speak();
+    expect(f.sent.at(-1)).toEqual(['input.speak', { language: 'en' }]);
+  } finally {
+    f.restore();
+  }
+});
+
+test('German microphone failures remain explicit and do not open capture', async () => {
+  const f = fixture();
+  try {
+    f.audio.receive(event('device.ready', { language: 'de', audio: false }), 'browser');
+    navigator.mediaDevices.getUserMedia = async () => {
+      throw new Error('denied');
+    };
+    await f.audio.speak();
+    expect(f.errors.at(-1)).toContain('Mikrofon ist nicht verfügbar');
+    expect(f.sent).toHaveLength(0);
+  } finally {
+    f.restore();
+  }
+});

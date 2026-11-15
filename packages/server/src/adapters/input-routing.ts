@@ -18,6 +18,95 @@ export type InputRoute =
   | 'recap'
   | 'ordinary';
 
+// Exact, reviewed utterances only: quoted, hypothetical and negated mentions do
+// not authorize a control or establish a current concern.
+const germanRoutes = new Map<string, InputRoute>([
+  ...[
+    'stopp',
+    'stop',
+    'bitte stopp',
+    'stopp bitte',
+    'hör auf',
+    'höre auf',
+    'bitte hör auf',
+    'hör bitte auf',
+    'hoer auf',
+    'ich möchte aufhören',
+    'ich will aufhören',
+    'ich möchte nicht mehr sprechen',
+    'ich will nicht spielen',
+  ].map((text) => [text, 'stop'] as const),
+  ...[
+    'pause',
+    'pause bitte',
+    'bitte pause',
+    'eine pause',
+    'ich möchte eine pause',
+    'machen wir eine pause',
+  ].map((text) => [text, 'pause'] as const),
+  ...[
+    'hilfe',
+    'ich brauche hilfe',
+    'bitte hilfe',
+    'bitte hilf mir',
+    'holen sie hilfe',
+    'hilfe holen',
+  ].map((text) => [text, 'help'] as const),
+  ...[
+    'darüber möchte ich nicht sprechen',
+    'darueber moechte ich nicht sprechen',
+    'ich möchte darüber nicht sprechen',
+    'darüber will ich nicht reden',
+    'bitte frag nicht danach',
+  ].map((text) => [text, 'topic_refusal'] as const),
+  ...[
+    'bitte nicht speichern',
+    'nicht speichern',
+    'speichere das nicht',
+    'bitte speichere das nicht',
+    'das bitte nicht speichern',
+    'ich möchte nicht, dass du das speicherst',
+    'schreib das nicht auf',
+    'bitte schreib das nicht auf',
+    'merk dir das nicht',
+    'bitte merk dir das nicht',
+    'nimm das nicht auf',
+    'bitte nimm das nicht auf',
+  ].map((text) => [text, 'privacy_refusal'] as const),
+  ['wer bist du', 'identity'],
+  ['wie heißt du', 'identity'],
+  ['wie heisst du', 'identity'],
+  ['ich habe das nicht verstanden', 'unclear'],
+  ['bitte wiederholen', 'unclear'],
+  ['kannst du das wiederholen', 'unclear'],
+  ['ich fühle mich nicht wohl', 'unwell'],
+  ['mir geht es nicht gut', 'unwell'],
+  ['ich bekomme keine luft', 'urgent'],
+  ['ich kann nicht atmen', 'urgent'],
+  ['ich habe zu viele tabletten genommen', 'urgent'],
+  ['soll ich noch eine tablette nehmen', 'medication'],
+  ['soll ich meine medikamente ändern', 'medication'],
+  ['soll ich meine medikamente absetzen', 'medication'],
+  ['habe ich demenz', 'clinical'],
+  ['wird meine demenz schlimmer', 'clinical'],
+  ['wird mein gedächtnis schlechter', 'clinical'],
+  ['ist mein mann tot', 'bereavement'],
+  ['ist meine frau tot', 'bereavement'],
+  ['wann kommt mein mann nach hause', 'bereavement'],
+  ['wann kommt meine frau nach hause', 'bereavement'],
+  ['jemand versteckt sich in meinem zimmer', 'frightening'],
+  ['jemand will mir wehtun', 'frightening'],
+  ['wo ist meine schwester', 'personal_location'],
+  ['wo ist mein mann', 'personal_location'],
+  ['wo ist meine frau', 'personal_location'],
+  ['ich gehe nach hause', 'navigation'],
+  ['bring mich nach hause', 'navigation'],
+  ['zeig mir den heimweg', 'navigation'],
+  ['worüber haben wir gesprochen', 'recap'],
+  ['was habe ich gerade gesagt', 'recap'],
+  ['ich habe den faden verloren', 'recap'],
+]);
+
 // Small reviewed phrase fixtures, not reliable emergency detection or universal language coverage.
 export function routeParticipantText(text: string): InputRoute {
   const value = text
@@ -27,6 +116,8 @@ export function routeParticipantText(text: string): InputRoute {
     .replace(/[’‘]/g, "'")
     .replace(/[.!?…]+$/u, '')
     .replace(/\s+/g, ' ');
+  const german = germanRoutes.get(value);
+  if (german) return german;
   if (/^(?:end (?:the )?(?:game|activity)|finish (?:the )?(?:game|activity))$/.test(value))
     return 'stop';
   if (
@@ -175,8 +266,31 @@ export function normalizeVoiceCommand(text: string): string {
     .replace(/[.!?…]+$/u, '')
     .replace(/\s+/g, ' ');
 }
-export function requestedActivity(text: string): 'photo' | 'teaching' | 'unavailable' | null {
+export function requestedActivity(
+  text: string,
+  language: 'en' | 'de' = 'en',
+): 'photo' | 'teaching' | 'unavailable' | null {
   const value = normalizeVoiceCommand(text);
+  if (language === 'de') {
+    const germanName = value
+      .replace(/^(?:bitte )?(?:starte|öffne|spiele|beginne) (?:das |die |den )?/, '')
+      .replace(/^(?:ich möchte|ich will|lass uns|können wir) (?:das |die |den )?/, '')
+      .replace(/ (?:spielen|starten|öffnen|beginnen)$/, '')
+      .replace(/ bitte$/, '');
+    if (
+      /^(?:fotos(?: anschauen| ansehen)?|bilder(?: anschauen| ansehen| erkunden)?|fotoalbum|fotogeschichte|photo story|explore pictures)$/.test(
+        germanName,
+      )
+    )
+      return 'photo';
+    if (/^(?:teach lemmi|lemmi etwas beibringen|lemmi unterrichten)$/.test(germanName))
+      return 'teaching';
+    if (
+      /^(?:musik|20 fragen|zwanzig fragen|bilder zuordnen|gegenstände zuordnen)$/.test(germanName)
+    )
+      return 'unavailable';
+  }
+
   // Match complete requests: never extract an activity from a negation, quotation or story.
   const request =
     "(?:(?:please )?(?:can|could|may) (?:we|i|you)|(?:i want to|i would like to|i'd like to|let's|let us))";

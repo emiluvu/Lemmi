@@ -8,6 +8,7 @@ import { PcmFramer, pcmBase64, decodePcm } from './voice-pcm';
 import { SpeechEndpoint } from './voice-endpoint';
 
 export type VoiceState = {
+  language: 'en' | 'de';
   connected: boolean;
   ready: boolean;
   audio: boolean;
@@ -33,6 +34,7 @@ type Output = {
 export class VoiceClient {
   private ws: WebSocket | null = null;
   private state: VoiceState = {
+    language: 'en',
     connected: false,
     ready: false,
     audio: false,
@@ -174,6 +176,9 @@ export class VoiceClient {
     void this.speak();
   }
   private update(patch: Partial<VoiceState>) {
+    const language = patch.language ?? this.state.language;
+    if (language === 'de' && patch.message)
+      patch = { ...patch, message: germanVoiceMessage(patch.message) };
     this.state = { ...this.state, ...patch };
     this.changed({ ...this.state });
   }
@@ -276,6 +281,7 @@ export class VoiceClient {
     this.serverSequence = e.sequence;
     this.lastSeen = performance.now();
     if (e.type === 'device.ready') {
+      this.update({ language: e.payload.language ?? 'en' });
       const audio = e.payload.audio !== false;
       this.outputWindow = e.payload.audio !== false ? e.payload.audio.outputWindowChunks : 4;
       this.update({
@@ -284,7 +290,7 @@ export class VoiceClient {
         teaching: e.payload.teaching === true,
         message: !audio
           ? 'Backend speech is disabled. Ask Anay to enable STT/TTS.'
-          : e.payload.teaching !== true
+          : e.payload.teaching !== true && this.state.language !== 'de'
             ? 'Teach Lemmi is not deployed on this backend yet.'
             : 'Connected. Start a session when ready.',
       });
@@ -556,7 +562,7 @@ export class VoiceClient {
       }
       if (permission !== this.capturePermission || !this.ws) return;
       this.awaitingGrant = true;
-      this.send('input.speak', { language: 'en' });
+      this.send('input.speak', { language: this.state.language });
       this.requestTimer = setTimeout(() => {
         if (this.awaitingGrant) {
           this.command('pause');
@@ -713,7 +719,7 @@ export class VoiceClient {
     if (!text.trim()) return;
     this.update({ pending: true });
     try {
-      this.send('input.text', { text, language: 'en' });
+      this.send('input.text', { text, language: this.state.language });
     } catch {
       this.fail('Text could not be sent.');
     }
@@ -751,4 +757,41 @@ export class VoiceClient {
     this.disposed = true;
     this.fail('Voice disconnected. Microphone and speaker off.');
   }
+}
+
+function germanVoiceMessage(message: string): string {
+  const messages: Record<string, string> = {
+    'Connected. Start a session when ready.':
+      'Verbunden. Starte das Gespräch, wenn du bereit bist.',
+    'Session ended. Microphone and speaker off.':
+      'Das Gespräch ist beendet. Mikrofon und Lautsprecher sind aus.',
+    'Paused. Resume returns to ready; speaking stays off.':
+      'Pausiert. Wähle „Weiter“, wenn du bereit bist. Das Mikrofon bleibt aus.',
+    'Preparing speaker playback…': 'Die Sprachausgabe wird vorbereitet. Das Mikrofon ist aus.',
+    'Lemmi is speaking. Microphone off.': 'Lemmi spricht. Das Mikrofon ist aus.',
+    'Preparing an explicit microphone turn…': 'Das Mikrofon wird vorbereitet.',
+    'Ready. Choose Speak now for one microphone turn.':
+      'Bereit. Wähle „Sprechen“, wenn du etwas sagen möchtest.',
+    'Backend listening permission received. Waiting for microphone permission…':
+      'Warte auf die Mikrofonberechtigung des Browsers.',
+    'Listening — microphone active. A short pause after speech sends your reply; Done speaking sends it immediately.':
+      'Ich höre zu. Das Mikrofon ist an. Eine kurze Pause sendet deine Worte. „Fertig gesprochen“ sendet sie sofort.',
+    'Microphone off. Preparing a reply…': 'Das Mikrofon ist aus. Lemmi überlegt…',
+    'No audio captured. Paused; no preference inferred.':
+      'Keine Sprache aufgenommen. Das Gespräch ist pausiert.',
+    'Voice disconnected. Microphone and speaker off.':
+      'Verbindung getrennt. Mikrofon und Lautsprecher sind aus.',
+    'Backend speech is disabled. Ask Anay to enable STT/TTS.':
+      'Die Sprachausgabe ist gerade nicht verfügbar. Das Mikrofon ist aus.',
+    'Microphone support unavailable. Use the text fallback.':
+      'Das Mikrofon ist nicht verfügbar. Du kannst stattdessen schreiben.',
+    'Listening permission timed out. Paused; retry explicitly.':
+      'Das Zuhören konnte nicht starten. Das Gespräch ist pausiert. Bitte versuche es erneut.',
+    'Microphone unavailable or permission denied. Paused; use the text fallback or retry explicitly.':
+      'Das Mikrofon ist nicht verfügbar. Das Gespräch ist pausiert. Du kannst schreiben oder es erneut versuchen.',
+  };
+  return (
+    messages[message] ??
+    'Das ist gerade nicht verfügbar. Das Mikrofon ist aus. Bitte versuche es erneut.'
+  );
 }

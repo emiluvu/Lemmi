@@ -1,3 +1,4 @@
+import { configuredProfileLanguage } from '../profile-language';
 import type { SQL, TransactionSQL } from 'bun';
 import { randomUUID } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
@@ -109,6 +110,7 @@ export class DataRepository {
           }))
         : [],
       id: row.id,
+      language: configuredProfileLanguage(row.id),
       preferredName: row.preferred_name,
       avatarId: row.avatar_id,
       revision: row.revision,
@@ -135,6 +137,7 @@ export class DataRepository {
       if (caregiver) return detail;
       return ParticipantProfileSchema.parse({
         id: detail.id,
+        language: detail.language,
         preferredName: detail.preferredName,
         avatarId: detail.avatarId,
         revision: detail.revision,
@@ -155,6 +158,7 @@ export class DataRepository {
     return rows.map((row: any) =>
       ParticipantProfileSchema.parse({
         id: row.id,
+        language: configuredProfileLanguage(row.id),
         preferredName: row.preferred_name,
         avatarId: row.avatar_id,
         revision: row.revision,
@@ -455,8 +459,13 @@ export class DataRepository {
         await tx`INSERT INTO lemmi.activity_events (id,profile_id,session_id,event) VALUES (${raw.id}::uuid,${snapshot.profileId},${snapshot.id},${tx.json(event)}) ON CONFLICT (id) DO NOTHING`;
       }
       if (forgetMemory) {
-        await tx`UPDATE lemmi.profiles SET summary_memory_enabled=false WHERE id=${snapshot.profileId}`;
-        await tx`DELETE FROM lemmi.conversation_memories WHERE profile_id=${snapshot.profileId}`;
+        // A queued refusal cannot override a later explicit permission change.
+        // Revocation also advances the profile revision when permission changes,
+        // fencing caregiver forms and summary jobs created before that refusal.
+        const revoked =
+          await tx`UPDATE lemmi.profiles SET summary_memory_enabled=false,revision=revision+CASE WHEN summary_memory_enabled THEN 1 ELSE 0 END,updated_at=now() WHERE id=${snapshot.profileId} AND revision=${snapshot.profileRevision} AND privacy_revision=${snapshot.privacyRevision} RETURNING id`;
+        if (revoked.length)
+          await tx`DELETE FROM lemmi.conversation_memories WHERE profile_id=${snapshot.profileId}`;
       }
       if (!forgetMemory && memory && memory.summary.trim() && memory.summary.length <= 300) {
         const permitted =

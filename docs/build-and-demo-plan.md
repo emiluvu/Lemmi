@@ -6,6 +6,37 @@ Candidate `fix/conversation-activity-routing` from main/backend-deploy `0f299c4`
 
 Observed on pinned Bun 1.4.4: frozen install; type/Svelte check zero errors/warnings; production build; **358 tests passed, zero failures/skips, 5,515 expectations**, using five fresh isolated PostgreSQL 14.24 databases (cluster stopped). Fixtures cover actual shared STT→confirmation→fresh output, receipts, duplicates, interruption/profile-change/late-decision races and failed question playback. Live provider calls used fictional committed text only. No runtime enablement, deployment, human microphone/speaker or physical K151 acceptance; counterpart review remains pending. [Findings, exact behavior, limitations and Anay/Lukas/Emilia/Kylie handoff](handoffs/conversation-routing-repair.md).
 
+## Tilda German candidate — November 14, 2026
+
+Undeployed `codex/tilda-german-integration`, based on `79051d9`: exact-ID
+server-resolved `en`/`de`, safe profile/ready language, browser text/capture and
+essential German controls/errors, deterministic German control/privacy/sensitive
+routes, unavailable German activities, and opt-in pinned German voice candidate
+provisioning. Existing profile permissions/data/keys and English defaults remain.
+Independent read-only backend authority/cancellation review found no blocker.
+
+Observed locally with pinned Bun **1.4.4**: frozen install, **318 passed / 40
+database cases skipped / zero failed**, **5,228 expectations**; Svelte/TypeScript
+check, production build, full source formatting and whitespace passed. All **15
+Python speech/provisioning tests** passed. Existing production SvelteKit → fixture
+managed identity → verified HTTPS/WSS → pairing/chat/Pause/Resume/revoke smoke
+passed. New tests cover concurrent language isolation, wire readiness, text and
+capture mismatch rejection, German missing-voice capture-off behavior, late work
+cancellation, fixed recap, quoted/negated routing and browser propagation/reset.
+Sandbox socket/build-worker restrictions required reruns with local permissions;
+the successful results above are those reruns. PostgreSQL/Docker are unavailable
+in this WSL environment, so database acceptance was not repeated.
+
+Host `mobrob-Precision-3680` could not resolve over batch SSH. No deployment,
+Tilda profile/enrollment, private config change, real German model/voice download,
+human microphone/speaker/room-noise, fluent-speaker review, browser visual/keyboard
+or K151 check was performed. The Thorsten voice remains a candidate pending
+listening review; missing German synthesis has no English fallback. Anay reviews
+server/data/deployment, Kylie human browser wording/flow, Lukas unavailable
+activity boundaries, and Emilia hardware/language handoff. Follow the
+[release handoff](handoffs/tilda-german-release.md) before staging on
+`backend-deploy`; do not reset/reseed the shared database.
+
 ## November 14 profile-context source acceptance
 
 `codex/profile-context-memory` adds rich create/edit forms, optional private pictures/portrait, approved-context grounding and separately permitted rolling conversation summaries. [Backend rollout and demo backfill](handoffs/profile-context-memory-2026-11-14.md). Focused regression run: 39 pass, four database skips; the five new memory tests passed. Browser preview interactions, type/Svelte checking (zero errors/warnings) and production build passed. Full run after frozen installation restored the missing pinned VAD dependency: 300 pass, 40 skipped database checks, three environment failures (two missing OpenSSL PATH checks and a Windows POSIX file-mode assertion). Database migration/upload/revocation checks, live provider continuity, human speech/mobile/assistive-technology and K151 acceptance remain pending; none are marked passed. No deployment or remote backfill performed. Separate journal/overview work appeared concurrently in the shared checkout and is preserved. Anay reviews server/data/permission fences; Kylie reviews the form and portrait layout.
@@ -940,3 +971,8 @@ Warmer fixed family replies and grounded model guidance do not invent relative/c
 ### Jev repair integration review — November 14, 2026
 
 Source c1b619f merged with deployed speech/profile fixes and source branch preserved. Three parallel user-requested technical reviews found/fixed Quiet question wording and added substantive cancellation/consent/isolation checks. Final 370 tests / 5,858 expectations passed, no skips/failures, plus zero-error/warning type/Svelte, build/format and production participant TLS/WSS/data smoke. Real Jev activity-only 71-case evaluation passed all cases, no unavailable/false positives, p50 151 ms / p95 204 ms. Full conversation scope remains off after source 49/51 gate. Isolated actual local speech + Jev production browser passed spoken natural teaching invitation → confirmation → spoken yes → teaching UI/empty-profile eligibility → another capture; one decision, zero chat generations, no overlap/runtime error. Mute/Pause/Resume/typing/Stop passed. Runtime gateway07e66b7 deployed with activities-only Jev1.14/.85/1500ms; web3c5033e and speech retained with matching PID/start timestamps. Protected backup pointer .data/jev-routing-rollback-path; no migration/reseed/credential changes. Actual public own-profile spoken request → semantic offer → spoken yes → teaching passed (two replies/three captures, no early switch, Mute/Stop, no runtime errors); separate ordinary actual speech/Jev/chat/TTS passed at an individual2723ms response-start observation (one reply/two captures/Mute/Stop). Only rehearsal-created records removed. Four services active; no physical microphone/speaker/K151/named counterpart acceptance implied.
+
+
+### Combined profile-context/memory and German backend review — November14,2026
+
+Source cd68663 and2ca3fba merged against ddecdc9 while preserving source branches, caregiver preselection, current Jevactivities and microphone controls. Fixed summary latency via bounded background work; fenced refusal/reenable and deletion races; added summary-echo/contact checks, prompt budget and upload admission. German skips irrelevant Jev calls and gains grounded contact-claim checks. Final407tests/6244expectations passed without skips/failures, zero-error/warning type/Svelte, build/format, production participant verifiedTLS/WSS and nine Python checks. Actual staging Chromium passed rich profile/images/default-off permission/Forget/off/deletion/scope/lock checks with fixture summaries, no provider/audio/screenshots. Isolated actual German voice↔STT and configured model→German voice probes passed synthetically; no human/physicalaudio acceptance. Back up DB+private media before migration006; existing Tilda reused; no bulk backfill or existing permission opt-in. Runtime rollout/public checks follow in backend status/API. [Detailed review and three-integration human test reminder](handoffs/profile-german-backend-integration.md).

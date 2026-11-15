@@ -73,5 +73,31 @@
         "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"
       }
     ]
+  },
+  "tts-de": {
+    "repository": "rhasspy/piper-voices",
+    "revision": "6b9cfaacb4fb2e02a9621227e3c1a48bec9710c3",
+    "directory": "de/de_DE/thorsten/medium",
+    "voice": "de_DE-thorsten-medium",
+    "sampleRate": 22050,
+    "status": "Provisionable candidate; listening and fluent-speaker review required before live selection.",
+    "permissionNote": "Pinned MODEL_CARD identifies Thorsten-Voice dataset (https://github.com/thorstenMueller/Thorsten-Voice), CC0, fine-tuned from the CC0 rdh base. Keep model card/source records. Piper engine is GPL-3.0; no weights/audio are committed here.",
+    "files": [
+      {
+        "name": "MODEL_CARD",
+        "size": 427,
+        "sha256": "c638118fb06eb07d59e60270097c250cf2de81a037320a8a6306fec652ad13b0"
+      },
+      {
+        "name": "de_DE-thorsten-medium.onnx.json",
+        "size": 5460,
+        "sha256": "cf245c91668e74cb6716f38647ae3d6d9bac42965872596f65f9ab2b7d7221ed"
+      },
+      {
+        "name": "de_DE-thorsten-medium.onnx",
+        "size": 63221984,
+        "sha256": "fd270eb3d1ebf91d763f8a0f949b1b1bebdfefaea18c3aaf8577dd34536e064f"
+      }
+    ]
   }
 }

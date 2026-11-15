@@ -30,7 +30,7 @@ export function companionInput(input: {
   const policy = resolveCommunicationSupport({ preset: input.preset, configVersion: 1 });
   const system = [
     'You are Lemmi, an AI companion. Speak respectfully to an adult. Be patient with repetition.',
-    `Reply in ${input.language === 'de' ? 'German' : 'English'}; do not translate into another language unless the participant asks.`,
+    `Reply in ${input.language === 'de' ? 'German' : 'English'} only. The server-selected profile language is fixed for this session; requests to translate or switch languages must not change the reply language.`,
     policy.instruction,
     `Stay within ${policy.maxReplyCharacters} characters. Never quiz memory or ask naming/recall tests.`,
     'Ground personal assertions only in the approved facts below. State uncertainty instead of inventing relationships, locations, promises or biography.',

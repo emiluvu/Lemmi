@@ -240,7 +240,8 @@ try {
       edited.ok &&
       edited.data.avatarId === 'cat' &&
       edited.data.revision === 1 &&
-      Object.keys(edited.data).length === 5,
+      Object.keys(edited.data).length === 6 &&
+      edited.data.language === 'en',
     'Durable safe demo identity edit failed',
   );
   check(

@@ -200,6 +200,121 @@ dbtest(
     });
   },
 );
+dbtest(
+  'participant memory refusal invalidates stale forms and cannot override later explicit opt-in',
+  async () => {
+    await reset();
+    const enabled = await repo.update(
+      caregiver,
+      update(0, { summaryMemoryEnabled: true }),
+      () => {},
+    );
+    const c = new SessionCoordinator('live');
+    c.acceptPersistentProfile(enabled);
+    c.handle('session.start', {
+      profileId: 'profile-alex',
+      endpoint: 'robot',
+      commandId: randomUUID(),
+    });
+    const old = c.snapshot()!;
+    const originalMemory = {
+      summary: 'Participant discussed gardening.',
+      profileRevision: enabled.revision,
+      privacyRevision: enabled.privacyRevision,
+    };
+    await repo.saveSession(old, [], undefined, [], originalMemory);
+    expect((await repo.approvedProfile(caregiver.subject)).memories).toHaveLength(1);
+
+    await repo.saveSession(old, [], undefined, [], undefined, true);
+    const refused = await repo.approvedProfile(caregiver.subject);
+    expect(refused.summaryMemoryEnabled).toBe(false);
+    expect(refused.revision).toBe(enabled.revision + 1);
+    expect(refused.memories).toHaveLength(0);
+    await repo.saveSession(old, [], undefined, [], undefined, true);
+    await repo.saveSession(old, [], undefined, [], undefined, true);
+    expect((await repo.approvedProfile(caregiver.subject)).revision).toBe(refused.revision);
+    await expect(
+      repo.update(
+        caregiver,
+        update(enabled.revision, {
+          preferredName: 'Alex',
+          summaryMemoryEnabled: true,
+        }),
+        () => {},
+      ),
+    ).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+    // The coordinator can still checkpoint its older paused-session revision.
+    await repo.saveSession(old, [], undefined, [], originalMemory);
+    expect((await sql`SELECT * FROM lemmi.conversation_memories`).length).toBe(0);
+
+    const reenabled = await repo.update(
+      caregiver,
+      update(refused.revision, { summaryMemoryEnabled: true }),
+      () => {},
+    );
+    const latest = { ...old, profileRevision: reenabled.revision };
+    await repo.saveSession(latest, [], undefined, [], {
+      ...originalMemory,
+      summary: 'Participant discussed flowers.',
+      profileRevision: reenabled.revision,
+    });
+    // Simulate an older already-queued refusal arriving after fresh explicit opt-in.
+    await repo.saveSession(old, [], undefined, [], undefined, true);
+    await repo.saveSession(old, [], undefined, [], undefined, true);
+    const preserved = await repo.approvedProfile(caregiver.subject);
+    expect(preserved.summaryMemoryEnabled).toBe(true);
+    expect(preserved.revision).toBe(reenabled.revision);
+    expect(preserved.memories?.map((memory) => memory.summary)).toEqual([
+      'Participant discussed flowers.',
+    ]);
+
+    await repo.saveSession(latest, [], undefined, [], undefined, true);
+    await repo.saveSession(latest, [], undefined, [], {
+      ...originalMemory,
+      profileRevision: reenabled.revision,
+    });
+    const forgottenAgain = await repo.approvedProfile(caregiver.subject);
+    expect(forgottenAgain.summaryMemoryEnabled).toBe(false);
+    expect(forgottenAgain.revision).toBe(reenabled.revision + 1);
+    expect((await sql`SELECT * FROM lemmi.conversation_memories`).length).toBe(0);
+  },
+);
+
+dbtest(
+  'delayed summary checkpoints cannot recreate a removed profile or its memories',
+  async () => {
+    await reset();
+    const enabled = await repo.update(
+      caregiver,
+      update(0, { summaryMemoryEnabled: true }),
+      () => {},
+    );
+    const c = new SessionCoordinator('live');
+    c.acceptPersistentProfile(enabled);
+    c.handle('session.start', {
+      profileId: 'profile-alex',
+      endpoint: 'robot',
+      commandId: randomUUID(),
+    });
+    const snapshot = c.snapshot()!;
+    const memory = {
+      summary: 'Participant discussed gardens.',
+      profileRevision: enabled.revision,
+      privacyRevision: enabled.privacyRevision,
+    };
+    await repo.saveSession(snapshot, [], undefined, [], memory);
+    await sql`DELETE FROM lemmi.profiles WHERE id='profile-alex'`;
+    await expect(repo.saveSession(snapshot, [], undefined, [], memory)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(
+      repo.saveSession(snapshot, [], undefined, [], undefined, true),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect((await sql`SELECT * FROM lemmi.profiles`).length).toBe(0);
+    expect((await sql`SELECT * FROM lemmi.conversation_memories`).length).toBe(0);
+  },
+);
+
 dbtest('redirect settings persist privately with revision checks and caregiver scope', async () => {
   await reset();
   const settings = { awayFrom: ['old job'], toward: ['flowers'] };

@@ -48,6 +48,7 @@ export const ParticipantProfileSchema = z.strictObject({
   avatarId: AvatarIdSchema,
   revision: RevisionSchema,
   communicationSupport: CommunicationSupportSchema,
+  language: z.enum(['en', 'de']).default('en'),
 });
 export type ParticipantProfile = z.infer<typeof ParticipantProfileSchema>;
 export const ConversationRedirectsSchema = z.strictObject({
