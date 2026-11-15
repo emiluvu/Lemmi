@@ -211,10 +211,11 @@ Then test display/touch/Wi-Fi/camera together and audio→camera→audio transit
 
 Sources: [M5Stack Arduino setup](https://docs.m5stack.com/en/arduino/stackchan/program), [display example/build requirements](https://docs.m5stack.com/en/arduino/stackchan/display), [StackChan BSP](https://github.com/m5stack/StackChan-BSP), [factory recovery](https://docs.m5stack.com/en/StackChan#restore-factory-firmware).
 
-### Uplink diagnostic variant (not yet installed)
+### Uplink diagnostic variant
 
 The separate [`voice_diag` target](lemmi_voice_diag/README.md) observes the exact
 SDK socket-poll/TLS-write return paths using verified linker wrappers. It keeps
 normal voice 0.9 and all audio limits intact. This is diagnostic preparation,
-not a fix or physical voice acceptance; coordinate counterpart review and one
-UTC-marked test before installation/capture.
+not a fix or physical voice acceptance. Diagnostic installation and capture-off
+boot were checked; provisioning and one UTC-marked capture test remain pending.
+Coordinate counterpart review before integrated merge.

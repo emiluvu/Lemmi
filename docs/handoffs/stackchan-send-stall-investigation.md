@@ -210,3 +210,24 @@ SHA-256 `d3ef9dfc3faf1dbcc61c3ac5eedc0805dd52dc036279df1061847832751c717b`.
 Final diagnostic compile: program 1,472,359 bytes; globals 152,012 bytes,
 48 bytes above the normal voice build. Both exact SDK edges and the diagnostic
 ELF stack-budget check passed. This is a build artifact identity, not flash evidence.
+
+## Subsequent isolated diagnostic installation
+
+Following the user's instruction to proceed, the tested diagnostic image was
+installed on the matching backed-up device. The USB port was present and free;
+no monitor process was terminated. The existing upload helper rechecked backup
+integrity, device identity/security and all four image hashes; upload passed
+and hard reset was requested. No backend code was merged/deployed. Counterpart
+review remains pending before integrated merge, but does not prevent this
+isolated firmware preparation/check.
+
+An eight-second filtered read-only monitor observed at 07:17:08 UTC:
+selftest_passed, firmware=lemmi-voice/0.9-diag1, display=320x240,
+capture=off, camera=off; reset=11, heap_free=178168, loop_min=1180.
+Opening the serial monitor caused a USB reset as observed in earlier sessions;
+RAM provisioning is cleared. No secrets, credentials, media or raw SDK logs
+were printed. No connection, capture, speaker test or conversation was started.
+The prior statements that voice 0.9 was still installed describe preparation
+before this explicit installation. Next required local step is private USB
+provisioning using the existing helper, then explicit local Connect. Coordinate
+one capture attempt and retain the new voice_transport_probe record on failure.

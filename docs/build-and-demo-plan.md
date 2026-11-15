@@ -818,3 +818,10 @@ linker-hook checks and backup/image upload dry run pass. No new flash/capture.
 Anay's counterpart review and a coordinated installation/one local hardware
 attempt remain pending; camera, petting and motion integration remain disabled
 in the voice target. Do not mark smooth conversation or local latency accepted.
+
+Subsequent isolated installation: all four diagnostic images were written and
+hash-verified on the matched backed-up device; boot at 07:17:08 UTC confirmed
+`lemmi-voice/0.9-diag1`, self-test passed, capture/camera off. RAM provisioning
+cleared after reset. No speech or network attempt performed. Counterpart review
+before merge, reprovisioning and measured capture remain pending. This updates
+the earlier preparation-only/no-flash status above.
