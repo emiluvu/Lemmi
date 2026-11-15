@@ -1,6 +1,6 @@
 # Lemmi
 
-Local routing repair candidate: [natural activity requests, semantic confirmation, measured Jev activity-only evaluation and enablement handoff](docs/handoffs/conversation-routing-repair.md). Integration review pending; live configuration unchanged.
+**Jev activity routing deployed — gateway `07e66b7`:** [natural activity requests and explicit semantic confirmation](docs/handoffs/conversation-routing-repair.md). Activity-only evaluation passed 71/71; actual public spoken request → confirmation → spoken yes → teaching UI passed. Full conversation scope stays off. Web/speech retained; refresh/reconnect and explicitly Start after the gateway restart. [Current runtime and limits](docs/backend-status.md).
 
 **Deployed response/profile-entry update — web/gateway `3c5033e`:** caregiver Conversation selects/enrolls its profile before opening the participant screen. Browser silence defaults to 1 second; reviewed speech-recognition variants such as “Teach Lemmy” select Teach Lemmi. Family replies offer warmer grounded support. [Measured latency, current rollout and limitations](docs/handoffs/voice-response-and-profile-entry.md).
 
