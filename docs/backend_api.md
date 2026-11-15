@@ -20,7 +20,8 @@ existing commands and reducers. Participant photo presentation omits detailed
 captions, which remain in approved context/existing activity metadata.
 
 Host gate: **497 tests / 12,767 expectations, no skips/failures**, 15 Python checks,
-production TLS/WSS/private-photo smoke and Chromium checks passed. Actual public
+production TLS/WSS/private-photo smoke and Chromium checks passed. Svelte reports
+zero errors and three generic-alt wording warnings, recorded for UI review. Actual public
 synthetic speech accepted 1,280 frames after a 22.1-second initial pause through
 real STT/model/TTS; teaching completed two substantive model replies. Silence,
 continuation, mute/Stop, photo navigation, keyboard/recovery and public denials

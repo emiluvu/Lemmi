@@ -34,6 +34,9 @@ containment, stable captions, keyboard teaching selection/Finish, natural garden
 selection/exit, photo next/previous, setup Retry, photo failure Pause/retry without
 Resume/capture and Stop. The prior scalar-photo regression still passes zero
 extra reads for 20 identical snapshots and fresh authorization on privacy change.
+Svelte check returned zero errors and three accessibility warnings because the
+new generic alt text contains “Photo”; those wording warnings remain for Kylie's
+accessibility review. They did not fail the build or browser checks.
 
 Actual public Chromium with synthetic in-memory speech passed a **22.1-second
 initial pause**, then **1,280 input frames** through real local STT → external
