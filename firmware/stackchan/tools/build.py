@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "petting", "control"], default="foundation")
+parser.add_argument("--target", choices=["foundation", "feasibility", "packetizer", "presentation", "petting", "control", "avatars", "display"], default="foundation")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 lock = json.loads((root / "toolchain.json").read_text())
@@ -14,7 +14,10 @@ cli = root / ".tools/arduino-cli"
 config = root / ".tools/arduino-cli.yaml"
 if not cli.is_file() or not config.is_file():
     raise SystemExit("Run python3 tools/setup.py from firmware/stackchan first.")
-sketch = root / "tests/arduino_packetizer" if args.target == "packetizer" else root / ("lemmi_" + args.target)
+sketch = root / ("tests/arduino_" + args.target) if args.target in ("packetizer", "presentation") else root / ("lemmi_" + args.target)
+if args.target in ("avatars", "display"):
+    import sys
+    subprocess.run([sys.executable, str(root / "tools/export-avatars.py"), "--target", args.target], check=True)
 subprocess.run([str(cli), "compile", "--fqbn", lock["fqbn"],
                 "--config-file", str(config), "--build-path", str(root / "build" / args.target),
                 str(sketch)], check=True)

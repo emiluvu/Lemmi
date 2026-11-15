@@ -55,9 +55,22 @@ inline cJSON* parse(const char* text, size_t size) {
   cJSON* root = cJSON_ParseWithLengthOpts(text, size + 1, &end, true);
   return root;
 }
-// Only consume safe control fields; unsupported media grants close the connection.
-// Additional participant state fields are bounded by the outer 4KiB limit.
-inline bool event(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bool& heartbeat) {
+inline bool credentialExpiryMatches(const cJSON* value, time_t expected) {
+  return expected==0 ? cJSON_IsNull(value) : expected>0 && expiry(value)==expected;
+}
+// Control-only client: metadata never grants microphone or speaker access.
+inline bool grantShape(const cJSON* grant, const cJSON* session) {
+  const char* allowed[]={"turnId","generation","leaseId","streamId","language","expiresAt"};
+  return keys(grant,allowed,6) && cJSON_GetArraySize(grant)==6 &&
+    string(field(grant,"turnId"),100) && string(field(grant,"streamId"),100) &&
+    number(field(grant,"generation")) && number(field(session,"generation")) &&
+    field(grant,"generation")->valuedouble==field(session,"generation")->valuedouble &&
+    string(field(session,"leaseId"),100) && equal(field(grant,"leaseId"),field(session,"leaseId")->valuestring) &&
+    (equal(field(grant,"language"),"en") || equal(field(grant,"language"),"de")) &&
+    expiry(field(grant,"expiresAt"))>0 && equal(field(session,"phase"),"listening") && cJSON_IsFalse(field(session,"micMuted"));
+}
+inline bool eventChecked(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bool& heartbeat, const char*& reason) {
+  reason="envelope";
   const char* names[] = {"protocol_version","event_id","session_id","turn_id","generation","sequence","type","payload"};
   if (!keys(root, names, 8) || cJSON_GetArraySize(root) != 8 || !number(field(root,"protocol_version")) || field(root,"protocol_version")->valuedouble != 1 || !string(field(root,"event_id"),100) || !number(field(root,"generation")) || !number(field(root,"sequence"))) return false;
   auto sid = field(root,"session_id");
@@ -65,30 +78,62 @@ inline bool event(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bo
   auto type = field(root,"type"), p = field(root,"payload");
   if (equal(type,"response.text")) { if (!string(field(root,"turn_id"),100)) return false; }
   else if (!cJSON_IsNull(field(root,"turn_id"))) return false;
+  reason="sequence";
   if (!unique(p) || !state.sequence(uint64_t(field(root,"sequence")->valuedouble))) return false;
   heartbeat = false;
   if (equal(type,"device.ready")) {
-    const char* allowed[] = {"mode","deviceId","profileId","credentialExpiresAt","audio","camera","textChat","controls"};
-    if (state.ready || !keys(p,allowed,8) || !equal(field(p,"mode"),"live") || !equal(field(p,"deviceId"),"stackchan-alex") || !equal(field(p,"profileId"),"profile-alex") || !cJSON_IsFalse(field(p,"audio")) || !cJSON_IsFalse(field(p,"camera")) || expiry(field(p,"credentialExpiresAt")) != credentialExpiry || !cJSON_IsArray(field(p,"controls")) || cJSON_GetArraySize(field(p,"controls")) > 7) return false;
+    reason="ready_fields";
+    const char* allowed[] = {"mode","deviceId","profileId","credentialExpiresAt","audio","camera","textChat","teaching","photoStory","controls"};
+    if (state.ready || !keys(p,allowed,10) || !equal(field(p,"mode"),"live")) return false;
+    reason="ready_binding";
+    if (!equal(field(p,"deviceId"),"stackchan-alex") || !equal(field(p,"profileId"),"profile-alex") || !credentialExpiryMatches(field(p,"credentialExpiresAt"),credentialExpiry)) return false;
+    reason="ready_media";
+    if (!cJSON_IsFalse(field(p,"audio")) || !cJSON_IsFalse(field(p,"camera"))) return false;
+    reason="ready_controls";
+    if (!cJSON_IsArray(field(p,"controls")) || cJSON_GetArraySize(field(p,"controls")) > 9) return false;
     for (cJSON* c = field(p,"controls")->child; c; c=c->next) {
-      if (!equal(c,"start") && !equal(c,"stop") && !equal(c,"pause") && !equal(c,"resume") && !equal(c,"mute") && !equal(c,"help") && !equal(c,"text")) return false;
+      if (!equal(c,"start") && !equal(c,"stop") && !equal(c,"pause") && !equal(c,"resume") && !equal(c,"mute") && !equal(c,"help") && !equal(c,"text") && !equal(c,"handoff") && !equal(c,"speak")) return false;
+      for (cJSON* other=c->next;other;other=other->next) if (equal(other,c->valuestring)) return false;
+      if (equal(c,"handoff")) state.handoffSupported=true;
     }
     const char* required[]={"start","stop","pause","resume","mute","help"};
     for (auto name : required) { bool found=false; for (cJSON* c=field(p,"controls")->child;c;c=c->next) if (equal(c,name)) found=true; if (!found) return false; }
     if (field(p,"textChat") && !cJSON_IsBool(field(p,"textChat"))) return false;
+    if (field(p,"teaching") && !cJSON_IsBool(field(p,"teaching"))) return false;
+    if (field(p,"photoStory") && !cJSON_IsBool(field(p,"photoStory"))) return false;
     state.ready = true; return true;
   }
+  reason="before_ready";
   if (!state.ready) return false;
+  reason="event_shape";
   if (equal(type,"heartbeat")) { if (!equal(field(p,"mode"),"live")) return false; heartbeat = true; return true; }
   if (equal(type,"state.changed")) {
+    reason="state_fields";
     if (!equal(field(p,"mode"),"live")) return false;
     auto s = field(p,"session");
-    if (cJSON_IsNull(s)) { state.session[0]=0; strcpy(state.phase,"none"); state.generation=0; state.snapshot=true; return true; }
-    if (!unique(s) || !string(field(s,"id"),100) || !equal(field(s,"profileId"),"profile-alex") || !equal(field(s,"mode"),"live") || !phase(field(s,"phase")) || !number(field(s,"generation")) || !number(field(s,"profileRevision")) || !number(field(s,"privacyRevision")) || !number(field(s,"policyRevision")) || !string(field(s,"leaseId"),100) || !cJSON_IsBool(field(s,"micMuted")) || !cJSON_IsNull(field(s,"captureGrant")) || (!equal(field(s,"endpoint"),"robot") && !equal(field(s,"endpoint"),"browser")) || !equal(sid,field(s,"id")->valuestring) || field(root,"generation")->valuedouble != field(s,"generation")->valuedouble) return false;
+    if (cJSON_IsNull(s)) {
+      if (!cJSON_IsNull(sid) || field(root,"generation")->valuedouble!=0) return false;
+      state.session[0]=state.owner[0]=state.lease[0]=0; state.ownsEndpoint=true;
+      strcpy(state.phase,"none"); state.generation=0; state.snapshot=true; return true;
+    }
+    if (!unique(s) || !string(field(s,"id"),100) || !equal(field(s,"mode"),"live") || !phase(field(s,"phase")) || !number(field(s,"generation")) || !number(field(s,"profileRevision")) || !number(field(s,"privacyRevision")) || !number(field(s,"policyRevision")) || !string(field(s,"leaseId"),100) || !cJSON_IsBool(field(s,"micMuted")) || (!equal(field(s,"endpoint"),"robot") && !equal(field(s,"endpoint"),"browser"))) return false;
+    reason="state_binding";
+    if (!equal(field(s,"profileId"),"profile-alex") || !equal(sid,field(s,"id")->valuestring) || field(root,"generation")->valuedouble != field(s,"generation")->valuedouble) return false;
+    reason="state_owner";
+    auto owner=field(s,"activeEndpointId");
+    if (owner && !string(owner,100)) return false;
+    // Legacy snapshots lack an ID. Browser snapshots are always observers here;
+    // on a handoff-capable gateway, a missing owner never grants control.
+    state.ownsEndpoint=owner ? equal(owner,"stackchan-alex") && equal(field(s,"endpoint"),"robot") : !state.handoffSupported && equal(field(s,"endpoint"),"robot");
+    strcpy(state.owner,owner?owner->valuestring:""); strcpy(state.lease,field(s,"leaseId")->valuestring);
+    reason="state_capture";
+    auto grant=field(s,"captureGrant");
+    // A valid grant to another owner is observable metadata, never our permission.
+    // This target never negotiated audio and must reject any grant to itself.
+    if (!cJSON_IsNull(grant) && (state.ownsEndpoint || !owner || !strcmp(owner->valuestring,"stackchan-alex") || !grantShape(grant,s))) return false;
     strcpy(state.session,field(s,"id")->valuestring); strcpy(state.phase,field(s,"phase")->valuestring);
     state.generation=uint64_t(field(s,"generation")->valuedouble); state.snapshot=true;
-    if (!strcmp(state.phase,"ended")) state.stop();
-    // A server snapshot never unmutes or clears a local Stop.
+    if (!strcmp(state.phase,"ended") || !state.ownsEndpoint) state.stop();
     return true;
   }
   if (equal(type,"command.ack")) return equal(field(p,"mode"),"live") && string(field(p,"commandId"),100) && cJSON_IsBool(field(p,"applied"));
@@ -96,9 +141,21 @@ inline bool event(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bo
     auto code=field(p,"code");
     return (equal(code,"UNAUTHORIZED") || equal(code,"FORBIDDEN") || equal(code,"REVISION_CONFLICT") || equal(code,"UNAVAILABLE") || equal(code,"NOT_FOUND") || equal(code,"VALIDATION_ERROR") || equal(code,"SAVE_FAILED")) && string(field(p,"message"),300,false);
   }
-  // Control-only UI deliberately does not request text or render model replies.
-  // Validate an unsolicited reply's bounded shape, then discard it in RAM.
-  if (equal(type,"response.text")) return string(field(p,"turnId"),100) && string(field(p,"text"),600) && equal(field(root,"turn_id"),field(p,"turnId")->valuestring) && (equal(field(p,"language"),"en") || equal(field(p,"language"),"de")) && (equal(field(p,"source"),"model") || equal(field(p,"source"),"fixed"));
-  return false;
+  if (equal(type,"response.text")) {
+    reason="reply_binding";
+    if (!state.ownsEndpoint || !state.session[0] || !equal(sid,state.session) || field(root,"generation")->valuedouble!=double(state.generation)) return false;
+    return string(field(p,"turnId"),100) && string(field(p,"text"),2400) && equal(field(root,"turn_id"),field(p,"turnId")->valuestring) && (equal(field(p,"language"),"en") || equal(field(p,"language"),"de")) && (equal(field(p,"source"),"model") || equal(field(p,"source"),"fixed"));
+  }
+  reason="unsupported_event"; return false;
+}
+// Commit a mirror/sequence only after the entire message validates. The worker
+// never reconciles Stop or replies using a partially rejected server message.
+inline bool event(cJSON* root, ControlPolicy& state, time_t credentialExpiry, bool& heartbeat, const char** rejection=nullptr) {
+  ControlPolicy next=state; bool nextHeartbeat=false; const char* reason="envelope";
+  bool valid=eventChecked(root,next,credentialExpiry,nextHeartbeat,reason);
+  if (valid) { state=next; heartbeat=nextHeartbeat; }
+  else heartbeat=false;
+  if (rejection) *rejection=valid?"ok":reason;
+  return valid;
 }
 } // namespace protocol

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lemmi avatar animation study</title>
+<style>
+body{font:17px system-ui;background:#eee7db;color:#37281e;margin:32px auto;max-width:760px;padding:0 16px}
+p{line-height:1.5}select,button{font:inherit;padding:10px;margin:4px;border:1px solid #76543a;border-radius:8px;background:#fff9ef;color:#37281e}
+button:focus-visible,select:focus-visible{outline:3px solid #296885}
+.screen{position:relative;width:320px;height:240px;background:#fff8ea;box-shadow:0 0 0 8px #332a24;border-radius:4px;margin:28px 8px;overflow:hidden}
+.privacy{position:absolute;inset:0 0 auto;background:#423426;color:white;font:14px/24px Arial;text-align:center}
+.face{position:absolute;top:30px;left:64px;width:192px;height:192px;background-size:300% 100%;background-repeat:no-repeat}
+.caption{position:absolute;bottom:2px;width:100%;text-align:center;font:14px/18px Arial;background:#fff8ea}
+</style>
+<h1>Lemmi avatar animation study</h1>
+<p>Offline preview only. Choose an avatar, then preview mouth movement or a petting reaction. No microphone, speech playback, touch sensor or backend is connected.</p>
+<label>Avatar <select id="avatar"><option>dog</option><option>cat</option><option>bunny</option><option>bird</option><option selected>lemming</option></select></label>
+<button id="talk" aria-pressed="false">Preview talking</button>
+<button id="pet">Preview petting</button>
+<label><input type="checkbox" id="reduced"> Reduced motion</label>
+<div class="screen"><div class="privacy">Microphone off · Camera off</div>
+<div class="face" role="img" aria-label="Selected avatar"></div>
+<div class="caption" role="status">Artwork preview · idle</div></div>
+<p>Three frames per avatar: mouth closed, mouth open, petting with hearts. Generated edits of Kylie's supplied artwork; review identity and alignment before device export. Firmware integration and app-selected avatar synchronization remain pending.</p>
+<script>
+const avatar=document.querySelector('#avatar'),face=document.querySelector('.face'),caption=document.querySelector('.caption');
+const talk=document.querySelector('#talk'),pet=document.querySelector('#pet'),reduced=document.querySelector('#reduced');
+let timer=null,expiry=null,talking=false,frame=0;
+reduced.checked=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function show(n){face.style.backgroundPosition=`${n*50}% 0`;}
+function stop(){clearInterval(timer);clearTimeout(expiry);talking=false;frame=0;show(0);talk.setAttribute('aria-pressed','false');talk.textContent='Preview talking';caption.textContent='Artwork preview · idle';}
+function choose(){stop();face.style.backgroundImage=`url(${avatar.value}-strip.png)`;face.setAttribute('aria-label',avatar.value+' avatar artwork');}
+avatar.addEventListener('change',choose);
+talk.addEventListener('click',()=>{if(talking){stop();return;}stop();talking=true;talk.setAttribute('aria-pressed','true');talk.textContent='Stop preview';caption.textContent='Artwork preview · talking';if(!reduced.checked)timer=setInterval(()=>{frame=1-frame;show(frame);},300);expiry=setTimeout(stop,6000);});
+pet.addEventListener('click',()=>{stop();show(2);caption.textContent='Artwork preview · petting';expiry=setTimeout(stop,1800);});
+reduced.addEventListener('change',stop);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+choose();
+</script>
+</html>

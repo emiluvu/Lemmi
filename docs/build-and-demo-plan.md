@@ -300,6 +300,88 @@ Add a fictional two-session demonstration: a preferred topic is retained with pe
 
 ## 15. Confirmed whiteboard work and handoffs
 
+November 14 23:41 UTC server reconnection: Emilia restored/hash-verified control
+0.7 and observed boot/self-check, then private RAM provisioning succeeded after
+USB reset/re-enumeration. WSS upgrade 101 reached protocol rejection ready_fields.
+Fetched `2b833ef` emits boolean ready.teaching, absent from 0.7 key list. Narrow
+control 0.8 compatibility fix accepts that optional boolean without teaching/
+audio/camera execution. Real-cJSON malformed/duplicate/unknown rejection tests,
+exact fetched schemas, 12 helper/privacy tests, pinned compile (1,346,007 program /
+53,060 globals), upload dry-run and whitespace check pass. Live 0.8 ready/controls
+remain pending; no raw ready packet captured, so field mismatch is source/fixture
+evidence consistent with the observed stage. Existing key/backup remain preserved.
+
+November 14 isolated physical-reaction preparation at Emilia's request: display
+0.2 adds dim steady pink lights and an explicitly armed release-delayed yaw sway
+around measured position. Motion defaults OFF; static/new touch/Stop cancel it.
+Preserved uploaded 0.1 build/source; original flash backup untouched. Local
+policy/packet sanitizer checks, pinned compile and backup/image/tool dry-run pass.
+No new LED/motor hardware acceptance; servo startup response, electrical cutoff,
+placement, physical bounds/latency and fault behavior remain unverified. First
+upload tests lights with motion off, then supervised secure-table motion checks.
+This isolated experiment does not pass F13/integrated F14 or authorize unattended
+motion. [Implementation/evidence](../firmware/stackchan/motion/README.md).
+
+November 14 screen-direction follow-up: Emilia requests largest centered avatar
+on black, with petting enabled in the active display. Separate offline
+`lemmi-display/0.1` implements this; tap anywhere Stops into a control view and
+explicit Resume restores petting. Pinned compile, exact exported RGB565 visual
+preview, existing gesture executable and private backup/image/tool dry-run pass.
+No upload or hardware acceptance for the new display target. Current 90% app
+partition use / 153,600-byte runtime canvas require budgeting before adding TLS/
+audio. Old menu/control targets preserved; live app/speech and integrated F13/F14
+remain pending. [Details](../firmware/stackchan/lemmi_display/README.md).
+
+Subsequent display hardware receipt: Emilia reports upload PASS and confirms
+large centered avatar on black and top-strip hearts without Enable. Those visual/
+default-petting checks are observed passes on installed `lemmi-display/0.1`.
+New target Stop/Resume, all-five layout and latency/load checks remain pending.
+
+Display follow-up: Emilia confirms tap-anywhere Stop suppresses reactions and
+reveals stopped controls; explicit Resume on release returns the avatar and
+petting without immediately re-stopping. Observed local Stop/Resume passes;
+all-five layout, physical timing, load and sensor-failure recovery remain pending.
+
+Firmware preparation after offline avatar acceptance: isolated selected-avatar/
+actual-playback presentation policy passes host ASan/UBSan cancellation/revision/
+ownership/static-mode checks and pinned ESP32 compile-only probe. It is not wired
+to live profile/audio adapters and no firmware upload occurred. Existing scoped
+participant profile GET supplies avatarId; WSS does not currently project it.
+See [firmware integration handoff](../firmware/stackchan/presentation/README.md)
+for exact existing API/speech seams and Anay/Kylie review items. Live app selection,
+PCM/receipts, hardware playback cancellation and F13/F14 acceptance remain pending.
+
+Subsequent November 14 avatar hardware receipt: Emilia reports upload PASS and
+confirms local STOP clears mouth/hearts and keeps top petting suppressed. This
+passes that isolated observed suppression check only; touch latency, individual
+animation timing, Ready/static mode and all-avatar rendering remain unverified.
+
+Further avatar hardware observations: Emilia confirms READY leaves petting off
+until explicit ENABLE PETTING, followed by top-strip stroke → brief hearts →
+hearts disappear. These isolated Ready/activation/reaction checks pass; exact
+timing, mouth duration, static mode and all-five rendering remain pending.
+
+Additional isolated avatar checks observed by Emilia: mouth test cycles and
+returns closed after approximately six seconds; static mode prevents mouth
+movement. No measured timing/latency, all-five rendering or sustained-load pass;
+no app-selected identity synchronization or live speech integration is claimed.
+
+All-five visual follow-up: Emilia confirms correct shapes/colors on Stackchan.
+Offline avatar rendering acceptance is observed for dog/cat/bunny/bird/lemming.
+App identity sync, real speech/playback cancellation, physical latency and sustained
+load remain pending; the offline preview does not satisfy integrated F13/F14.
+
+Firmware observation, November 14: Emilia requested an isolated offline avatar
+preview while shared-identity WSS testing is blocked by HTTP 409. Separate
+`lemmi-avatars/0.1` supports local five-avatar selection, silent bounded mouth
+cycling, explicitly enabled existing top-strip gesture/hearts, static mode and
+Stop. Pinned compile, existing gesture sanitizer tests and backup/image/tool
+upload dry-run passed. No hardware upload/acceptance yet; no app selection sync,
+real voice, network or camera integration. Installed control build preserved.
+See [target evidence](../firmware/stackchan/lemmi_avatars/README.md). Kylie/Emilia
+art/alignment review and hardware colors/readability/Stop/petting remain pending;
+this does not pass the integrated F13/F14 gate.
+
 The user clarified Teach Lemmi: **Lemmi supplies a simple object/topic and invites the participant to teach it.** Implement F17 through the existing conversation mode after the basic voice/eligibility path works; do not create a fifth activity engine. Approved town/place exploration reuses photo packs. Keep four required game/activity reducers, plus this conversation mode.
 
 | Owner | Additional work | Counterpart handoff |
@@ -332,3 +414,232 @@ Follow-up checks passed for explicit VoidAuth binding and the loopback setup hel
 Actual OpenRouter adapter check passed with the privately configured model/key: fixed fictional greeting, HTTP 200, ~3.6 seconds, validated complete response; no response text/credentials logged. The paired production session path still awaits real caregiver login and Alex database bootstrap.
 
 Final live-host follow-up: actual VoidAuth code/PKCE login/introspection passed; migrations and fictional Alex assignment bootstrapped; gateway/web restarted with PostgreSQL/OpenRouter enabled. A computer harness created pairing using the private authenticated server authority, claimed through the actual Cloudflare HTTPS route, read the scoped persistent participant profile, and passed verified public WSS Start → real OpenRouter greeting → Pause → Resume → Stop; rehearsal credential revoked. Provider token discarded; no public caregiver bearer pairing request or physical hardware acceptance claimed. The lab resolver still returns no record despite cache flush; public DoH DNS resolves, and live checks retained hostname/certificate validation using the published edge IP. Normal hostname-only clients on this host remain subject to that DNS limitation. Speech quality remains intermittent; no integrated microphone/camera/media completion or full P0 completion claimed.
+
+### Emilia control continuation — November 14, 23:56 UTC
+
+0.8 upload PASS reported and application hash matched; WSS 101 followed by
+ready_fields rejection, ready=0, capture/camera off. Latest fetched backend
+01b6ffb adds photoStory boolean metadata. Narrow 0.9 parser compatibility
+passes host sanitizer and fetched-schema checks; build/preflight and actual
+hardware acceptance recorded in firmware/stackchan/control-checks.md.
+Persistent live connection is not yet accepted; no media enabled.
+
+### Observed control 0.9 connection — November 15, 00:00:01 UTC
+
+Emilia reports upload PASS, then same-credential RAM provisioning and local
+Connect. Fixed statuses: control_ready, control_ack applied=1, and control_state
+phase=ended stopped=1; capture/camera off throughout. Ready compatibility is
+hardware-observed. This establishes connection and safe stopped synchronization,
+not sustained transport, Start/control acceptance on 0.9, voice or camera.
+Next: explicit local Start with the same bounded observer open.
+
+### Observed control 0.9 Start — November 15, 00:00:43 UTC
+
+Emilia's fixed-status receipt shows ack applied=1, state phase=ready stopped=0,
+and owner local=1 after explicit Start. Initial ended snapshot reported local=0;
+the new active session is owned by Stackchan. Capture/camera remained off.
+Connection remained present from ready at 00:00:01 through Start at 00:00:43.
+Pause/Resume/Stop on 0.9 and sustained transport remain pending; no voice/media
+acceptance. Next: local Pause while the same observer remains open.
+
+## Display 0.2 hardware receipt and 0.3 diagnostics — November 15
+
+Emilia reports top-strip hearts work. Lights appeared pink after explicit Resume;
+no petting is required for the current steady active-display pink behavior.
+Stopped menu displayed ARM SWAY (TABLE). Static mode initially prevented arming;
+after setting static mode off, SWAY ARMED was observed. After Resume and one
+stroke/release, Emilia observed no head movement and the menu showed MOTION FAULT.
+Servo/power/movement acceptance FAILED in that attempt; leave motion disarmed.
+The failed stage was unavailable in 0.2; do not infer torque, UART or pose cause.
+
+Prepared 0.3 adds fixed servo failure-stage and transport-status diagnostics to
+the stopped menu footer and allowlisted serial monitor. It retains explicit
+arming, bounded pose checks, no automatic retry and power-off request on failure.
+No broader travel, persistent writes, new dependencies or live integration.
+Host sway/packet ASan/UBSan checks passed. Pinned compile passed (2,872,415
+program bytes / 26,540 static globals); backup/image/esptool upload dry-run
+passed without serial access. Hardware
+upload and a separately supervised diagnostic attempt remain pending.
+
+### Display 0.3 observed failure — first yaw torque-off reply
+
+Emilia reports 0.3 upload PASS, then one armed supervised stroke produced no
+movement and menu diagnostic yaw_torque_off / timeout. The first yaw torque-off
+write did not receive a complete validated status reply within 12 ms. No goal
+or torque-enable command was reached by this path; failure requests VM off and
+latches motion fault. This does not prove physical rail cutoff or torque state.
+Official upstream M5StackChan.cpp and SCSerial.cpp rechecked November 15:
+UART1 at 1 Mbps, TX6/RX7 and yaw ID1 agree with the Arduino adapter's RX7/TX6.
+Write acknowledgments are expected by the official default Level=1 driver.
+Root cause remains unresolved (power/UART/reply configuration not measured).
+Next inspect USB power connection before changing protocol or bypassing replies.
+Official sources: https://github.com/m5stack/StackChan-BSP/blob/main/src/M5StackChan.cpp
+and https://github.com/m5stack/StackChan-BSP/blob/main/src/drivers/FTServo_Arduino/src/SCSerial.cpp
+
+## Display 0.4 candidate — VM pull-up and read-only servo probe
+
+Emilia confirms the USB cable is in the base. Upstream M5StackChan.cpp explicitly
+sets VM pin 0 pull-up; the local adapter omitted that configuration. 0.4 adds
+read-checked pull-down disable/pull-up enable while holding the output low.
+This is a source discrepancy, not a confirmed explanation of the timeout.
+An operator-armed attempt now reads yaw torque register 40 before the existing
+mandatory acknowledged torque-off writes. Probe timeout vs write timeout can
+therefore be distinguished without bypassing any failed acknowledgment. Timeout
+status distinguishes zero received bytes from an incomplete reply. No servo ID,
+baud, movement limits, power dwell, persistent registers or retry policy changed.
+
+Host BodyHardware simulation ASan/UBSan passes VM pull/unrelated-pin preservation,
+no boot servo traffic, failed pull setup, no-reply/partial/read-only reply failures,
+no goals after rejected prepare, successful simulated path and VM-off requests.
+These are simulated registers/UART only, not measured rail/servo behavior.
+Existing sway/packet ASan/UBSan passes. Pinned compile passes: 2,872,555 program
+bytes / 26,540 static globals. Backup/image/esptool dry-run passes, no agent serial
+access. Hardware upload/diagnostic retry pending; physical movement still FAILED.
+
+Reproduce new adapter check:
+```sh
+c++ -std=c++11 -Wall -Wextra -Werror -fsanitize=address,undefined -I firmware/stackchan/tests/body_hardware firmware/stackchan/tests/body_hardware.cpp -o /tmp/lemmi-body-hardware-test
+/tmp/lemmi-body-hardware-test
+```
+Sources reviewed November 15:
+https://github.com/m5stack/StackChan-BSP/blob/main/src/M5StackChan.cpp
+https://github.com/m5stack/StackChan-BSP/blob/main/src/drivers/PY32IOExpander/PY32IOExpander.cpp
+https://github.com/m5stack/StackChan-BSP/blob/main/src/drivers/FTServo_Arduino/src/SCSCL.h
+
+Pet-triggered color changes remain requested but unimplemented; current active
+lights are steady pink, off while stopped. Preserve that distinction in hardware
+reports. Backend testing remains paused at Emilia's request.
+
+### Display 0.4 hardware receipt — yaw probe receives zero bytes
+
+Emilia reports four-image hash-verified upload PASS. An armed stroke then showed
+yaw_probe / timeout_empty. The added read-only torque read received zero bytes
+within 12 ms, so no torque-off write, goal or torque-enable was reached in that
+attempt. VM-off was requested on failure; electrical cutoff remains unmeasured.
+VM pull-up setup did not resolve the observed communication failure. Motor
+movement still fails hardware acceptance. Leave motion unarmed; avatar/hearts
+and observed steady pink remain the offline fallback. Backend work stays paused.
+
+Official power-board schematic reviewed for supply/UART topology:
+https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/1205/SCH_Power.pdf
+No confirmed new firmware correction yet. Next establish whether these servos
+moved under original firmware; do not overwrite calibration or bypass probe/ACK
+checks to force motion.
+
+## Display 0.5 candidate — checked native UART transport
+
+Emilia confirms head movement worked with original factory firmware. That is
+prior hardware evidence, not proof of current supply/wiring/servo configuration.
+0.4 yaw_probe / timeout_empty remains the latest observed Lemmi result.
+
+Prepared 0.5 replaces Arduino HardwareSerial in the body adapter with native
+UART1 driver_install/param_config/set_pin/write/read calls matching upstream
+SCSerial.cpp's transport choice. Pins/format remain TX6/RX7, 1 Mbps, 8N1.
+Initialization now checks errors, rejects an occupied UART without deleting its
+owner, cleans up only its own failed installation, and enables VM only after
+successful UART setup. RX FIFO threshold is explicitly 1 byte, RX timeout 2
+symbols, to make short replies observable. TX completion is checked before the
+same 12 ms bounded reply window; wait is pdMS_TO_TICKS(2)+1 ticks, so actual
+latency depends on scheduler tick period. Physical Stop latency is unmeasured.
+No retry, baud/ID scan, EEPROM write, expanded motion or bypassed probe/ACK.
+This is a transport compatibility candidate, not a confirmed root-cause fix.
+
+Host adapter ASan/UBSan tests pass previous scenarios plus occupied UART,
+installation/configuration failures and TX-completion failure. Existing valid
+simulated servo path remains covered; no physical communication is simulated as
+hardware acceptance. Pinned compile passed: 2,871,363 program bytes / 26,476
+static globals; private-backup/four-image/esptool upload dry-run and whitespace
+check passed without serial access. Hardware upload/attempt pending. Motion remains off at
+boot and actual movement acceptance remains failed until observed.
+
+Primary source rechecked November 15:
+https://github.com/m5stack/StackChan-BSP/blob/main/src/drivers/FTServo_Arduino/src/SCSerial.cpp
+
+## Display 0.6 diagnostic-only preparation — after native UART failure
+
+Emilia reports 0.5 four-image hash-verified upload PASS; the supervised attempt
+again showed yaw_probe / timeout_empty. Native UART did not resolve communication.
+Movement remains FAILED and disabled in prepared 0.6; no new root cause claimed.
+
+Official power-board schematic was visually inspected via a locally rendered
+PDF: TX_EN is derived by board circuitry from Servo_TX, not a separately exposed
+software direction control. INA226 monitors BAT_IN near the battery path, not
+the switched VM output. A monitor voltage is not a VM voltage measurement.
+Source: https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/1205/SCH_Power.pdf
+
+0.6 replaces stopped ARM SWAY with ARM PROBE (TABLE). Motion is unarmed at boot.
+Explicit arm/Resume/stroke/release powers the rail for the existing settle time,
+reads INA226 register 2 (1.25 mV/LSB; existing pinned INA226_Class confirms scale),
+and sends read-only torque-register probes to IDs 1 and 2. No torque writes,
+servo goals, mode, ID, baud or calibration writes are in the diagnostic flow.
+Power-up itself may twitch due to servo defaults; use only supervised clear table.
+After both bounded reads it requests VM off and enters stopped PROBE COMPLETE,
+with battery millivolts and Y/P result codes in the footer. No automatic rerun;
+Stop still cancels pending power/probe. Off=1 logs only latch readback, not voltage.
+The helper allowlists the fixed diagnostic line; no raw payload logging added.
+
+Host adapter sanitizer tests pass diagnostic read-only packet inspection, both
+IDs, battery scaling/unavailable read, no/partial/valid replies and VM-off request,
+as well as prior initialization/failure checks. Final pinned compile passed:
+2,870,479 program bytes / 26,476 globals. Backup/four-image/esptool dry-run
+and whitespace checks passed; no serial access.
+No 0.6 hardware upload or probe observation yet. Pink-on-active and pet hearts
+remain the fallback; requested pet-triggered color changes remain unimplemented.
+
+## Final servo attempt — stopped at Emilia's requested limit
+
+November 15, 2026, 00:40:53 UTC allowlisted hardware receipt on display 0.6:
+servo_probe battery_mv=4155 yaw=timeout_empty pitch=timeout_empty off=1,
+followed by display_stop. Both servo read probes received zero bytes. Battery
+monitor reports 4.155 V; off=1 confirms only VM latch readback, not measured rail
+voltage or physical torque. Servo communication/movement acceptance FAILED.
+Root cause remains unresolved; native UART/pull-up changes did not resolve it.
+
+Emilia explicitly limited this to the final diagnostic attempt and requested
+pink lights as fallback. Stop servo investigation: no further probe, power-up,
+firmware upload, baud/ID scan or motion experiment is authorized by this task.
+Installed 0.6 has no servo writes/goals in the display flow and remains unarmed
+at boot; do not use its ARM PROBE control again. Explicit RESUME DISPLAY returns
+to the offline avatar with petting hearts and steady pink lights, leaving probe
+unarmed after completion. Tap-anywhere Stop suppresses effects. No new upload is
+needed to use that fallback. Live backend work remains paused; no media enabled.
+Future motion work requires a fresh user request. Pet-triggered color changes
+were not implemented; do not claim lights currently react to petting.
+
+## Display 0.7 — pink only on petting, servo controls removed
+
+Emilia clarified that pink must appear only when petted. This new lights-only
+request authorizes the behavior update/upload; the explicit stop on servo
+investigation remains in force. Prepared display 0.7 starts LED RAM off, keeps
+lights off on Resume, turns dim pink on with recognized petting hearts, and
+turns them off at the same 1,200 ms deadline. Tap-anywhere Stop/sensor failure
+also clears hearts/lights. All five avatars and reduced-motion setting remain.
+
+Removed diagnostic arming control and all power-up/probe/servo-action paths
+from the display sketch. Stopped menu now says MOTION DISABLED; there is no
+ARM PROBE button. Body startup retains only the VM-off request and LED setup;
+no UART initialization or servo traffic is used by the display flow.
+
+Host adapter ASan/UBSan checks pass initial LED RAM black, exact pink words,
+clear-to-black and no UART/servo traffic in that LED path. Existing gesture
+ASan/UBSan checks pass. Pinned compile passed: 2,860,847 program bytes /
+26,444 static globals. Backup/four-image/esptool dry-run and whitespace checks
+passed without serial access. Hardware verification
+of off at boot/Resume, one-stroke pink+hearts, automatic off and immediate Stop
+remains pending; no servo test is requested or authorized.
+
+## Display 0.7 user acceptance — pink lights only when petted
+
+Emilia confirms the requested pet-triggered pink-light behavior works after the
+0.7 update instructions, then requests push. Avatar/hearts plus 1.2-second pink
+lights are the accepted offline fallback. No servo/probe controls remain in
+the display sketch; servo communication/motion remain failed and work is stopped.
+No network, camera, microphone or app-avatar synchronization is enabled here.
+Formal measured Stop latency, sustained load, sensor-failure and all-five layout
+checks remain unrun unless separately recorded in prior receipts.
+
+Pre-push verification: host ASan/UBSan body/LED adapter, control policy and real
+cJSON parser checks pass; all 12 provisioning/privacy checks and fetched backend
+schema fixture/hello/handoff validation pass. Display 0.7 pinned compile and
+backup/image/esptool upload preflight passed during preparation. Whitespace check
+passes. No real speech/provider/camera or independent-use acceptance is implied.

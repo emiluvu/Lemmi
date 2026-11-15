@@ -2,6 +2,40 @@
 
 Switching accounts or resuming? Read [Emilia’s restart handoff](../../docs/handoffs/emilia-resume.md).
 
+**Latest control continuation (0.9):** 0.8 upload verified; 23:56 UTC ready_fields
+rejection persists. Latest fetched backend adds optional boolean photoStory;
+0.9 compatibility preparation and results are in [control checks](control-checks.md).
+Hardware pending; camera/mic remain off.
+
+**Previous control continuation:** control 0.7 restored on hardware, but November
+14 23:41 UTC Connect rejected ready_fields after WSS upgrade. Prepared control
+0.8 accepts the gateway's known optional boolean teaching capability; all parser/
+schema/helper checks, pinned compile and upload dry-run pass. Hardware pending.
+No teaching/media behavior enabled; see latest [control checks](control-checks.md).
+
+**Current installed lights-only fallback:** Emilia confirms display 0.7 works: pink only during the
+1.2-second petting hearts, off at boot/Resume/expiry/Stop. Servo/probe controls
+and power-up paths removed from display. Compile, host sanitizer checks and
+upload preflight pass; requested pet-light behavior is user-confirmed. Servo work remains stopped.
+See [current display instructions](lemmi_display/README.md).
+
+**Latest screen direction:** [separate `--target display`](lemmi_display/README.md)
+implements avatar-only black/centered presentation and petting enabled while
+active. Tap anywhere stops/reveals controls; Resume explicitly restores display
+and petting. Pinned compile/dry-run passed; upload/hardware acceptance pending.
+Existing `avatars` test-menu and `control` targets remain preserved.
+
+**Offline avatar preview (November 14):** new separate `--target avatars` compiles
+Kylie's five identities with silent mouth-animation and explicitly enabled local
+top-strip hearts. Compile/gesture tests/upload dry-run passed; hardware pending.
+See [avatar target instructions](lemmi_avatars/README.md). It does not connect to
+the app/backend or implement voice, and temporarily replaces the control app.
+
+[App-avatar/voice preparation](presentation/README.md) documents the existing
+scoped profile and speech seams. A tested firmware presentation helper and
+compile-only `--target presentation` now reject stale playback callbacks and
+gate mouth frames on actual playback; live adapters remain pending.
+
 The `emilia/firmware-foundation` branch contains an initial standalone display/touch test. It is not a connected Lemmi client. It has now been uploaded and hash-verified on the connected device after a complete verified private backup. Serial output confirms the foundation firmware boots and reports a 320×240 display, including after a separate controlled reboot. Emilia confirms the visible screen and Stop → Unmute → Ready behavior; readability at intended distance, controls under load and audio/camera/network failure checks remain pending; see `hardware-checks.md`. The pinned setup and compile scripts passed on the development Mac; the explicit target build reports 549,947 bytes of program storage and 26,036 bytes of static globals. These are compiler figures, not measured runtime memory or control latency.
 
 ## Offline feasibility milestone
@@ -42,13 +76,31 @@ This separate experiment does not establish the secure F13/integrated F14 gate.
 
 ## Authenticated control target
 
-`lemmi_control/` adds private RAM-only local provisioning and the documented
-certificate-verified HTTPS/WSS control path, with explicit on-device pairing/Start,
-local Stop latching and watchdog. Camera, mic, speaker, petting and motion remain
-disabled in this separate target. Compile, host policy/sanitizer and provisioning
-checks passed; actual live connection/hardware results remain pending. See
-[control setup and checks](control-checks.md) before using `--target control` or
-`tools/provision-control.py`. Never paste credentials into source, chat or commands.
+Latest checkpoint: **0.6 uploaded** and accepts the new backend ready descriptors,
+then exits the connection for an unknown reason. **0.7 diagnostic build awaits
+upload**, adding only safe transport-exit stage/numeric status before cleanup.
+See the final control-checks sections; no persistent connection or voice pass is
+claimed for this retry.
+
+
+`lemmi_control/` 0.5 has actual hardware evidence for authenticated WSS,
+Start/Pause/Resume/Stop, local Unmute remaining capture-off, explicit reconnect
+remaining stopped and a stable screen. 0.6 source/build updates compatibility
+with backend-deploy `7debf9a` (documented runtime `17a8522`): handoff capability
+recognition, active endpoint ownership, explicit local handoff then separate
+Resume, and fixed safe rejection diagnostics. **0.6 upload/hardware are pending.**
+
+Use private `tools/provision-control.py --credential-file data/stackchan-access.json`
+with the existing Alex device access file; no fresh pairing code needed. The
+file is owner-only/locally Git-excluded. Config/credential stay in device RAM,
+then Connect and Start are separate local taps. This target remains bound to
+Alex/stackchan-alex; other robot enrollment/profile IDs are not supported yet.
+Camera, mic, speaker, petting and motion remain disabled, including when another
+endpoint has a listening grant. It advertises audio unsupported; enabling the
+server's voice option does not authorize capture. Live speech/media integration
+is still pending. Read [control checks](control-checks.md) and the current restart
+handoff for exact source/test/hardware evidence and one-step procedures. Never
+paste credentials into source, chat or command arguments.
 
 ## First test
 
@@ -91,6 +143,6 @@ Then test display/touch/Wi-Fi/camera together and audio→camera→audio transit
 
 ## Backend handoff
 
-`packages/contracts/src/device.ts` and `scripts/fake-device.ts` are starting transport examples only. The shared gateway is still loopback mock-only; its development token and `ws://` URL are not production pairing/TLS or a usable K151 deployment. Anay supplies scoped reachable WSS and agrees audio/camera/control schemas with Emilia before real device transport is enabled. Kylie supplies art after measured display/export limits.
+`packages/contracts/src/device.ts` and `scripts/fake-device.ts` are starting transport examples only. The documented deployed gateway supports scoped certificate-verified WSS controls and optional voice; the original loopback mock token and `ws://` URL are development-only. Backend-deploy documentation/source and control-checks distinguish current device compatibility from unverified voice/camera integration. Kylie supplies art after measured display/export limits.
 
 Sources: [M5Stack Arduino setup](https://docs.m5stack.com/en/arduino/stackchan/program), [display example/build requirements](https://docs.m5stack.com/en/arduino/stackchan/display), [StackChan BSP](https://github.com/m5stack/StackChan-BSP), [factory recovery](https://docs.m5stack.com/en/StackChan#restore-factory-firmware).

@@ -5,14 +5,16 @@
 // Local restrictions plus a participant-safe mirror, never a second authority.
 struct ControlPolicy {
   bool stopped = true, muted = true, ready = false, snapshot = false;
+  bool ownsEndpoint = true, handoffSupported = false;
   char session[101] = {};
+  char owner[101] = {}, lease[101] = {};
   char phase[16] = "none";
   uint64_t generation = 0, serverSequence = 0;
   bool seenSequence = false;
   uint32_t heartbeatAt = 0;
   void disconnected() {
     stopped = true; ready = snapshot = seenSequence = false;
-    session[0] = 0; strcpy(phase, "none"); generation = 0;
+    session[0] = owner[0] = lease[0] = 0; ownsEndpoint=true; handoffSupported=false; strcpy(phase, "none"); generation = 0;
   }
   void stop() { stopped = true; }
   bool sequence(uint64_t next) {
@@ -23,7 +25,14 @@ struct ControlPolicy {
     if (!ready || !snapshot || (session[0] && strcmp(phase, "ended"))) return false;
     stopped = false; return true;
   }
-  bool ordinary() const { return ready && snapshot && session[0] && strcmp(phase, "ended") && !stopped; }
+  bool active() const { return ready && snapshot && session[0] && strcmp(phase,"ended"); }
+  bool ordinary() const { return active() && ownsEndpoint && !stopped; }
+  bool canResume() const { return active() && ownsEndpoint && !strcmp(phase,"paused"); }
+  bool canHandoff() const { return active() && handoffSupported && !ownsEndpoint; }
+  bool canPause() const { return active() && !stopped; }
+  // An ack/heartbeat still carries our old mirror between Start and its new
+  // snapshot. Only a received ended snapshot can impose a server-side Stop.
+  bool forceLocalStop(bool receivedStateSnapshot) const { return receivedStateSnapshot && snapshot && (!strcmp(phase,"ended") || !ownsEndpoint); }
   bool currentCommand(uint32_t queuedEpoch, uint32_t epoch, const char* id, uint64_t gen, bool unbound) const {
     return queuedEpoch == epoch && ready && snapshot && (unbound || (!strcmp(id,session) && gen == generation));
   }

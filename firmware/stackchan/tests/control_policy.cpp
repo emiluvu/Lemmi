@@ -21,6 +21,21 @@ int main() {
   assert(s.stopped && !s.ordinary());
   strcpy(s.phase,"paused"); assert(!s.start());
   strcpy(s.phase,"ended"); assert(s.start()); // explicit new session only
+  // Actual regression: Start from an old ended session, then ack/heartbeat
+  // arrives before the new ready snapshot. Neither may re-latch local Stop.
+  bool localStopped=false;
+  if (s.forceLocalStop(false)) localStopped=true; // Start ack, old mirror
+  if (s.forceLocalStop(false)) localStopped=true; // heartbeat, old mirror
+  assert(!localStopped);
+  strcpy(s.phase,"ready");
+  if (s.forceLocalStop(true)) localStopped=true;
+  assert(!localStopped);
+  s.stop(); localStopped=true;
+  if (s.forceLocalStop(false)) localStopped=true;
+  assert(localStopped); // real local Stop survives a later ack
+  localStopped=false; strcpy(s.phase,"ended");
+  if (s.forceLocalStop(true)) localStopped=true;
+  assert(localStopped); // a fresh ended snapshot still stops locally
   s.heartbeatAt=0xfffffff0u;
   assert(!s.watchdog(0x10u) && s.watchdog(0x1800u));
   s.disconnected();
@@ -46,5 +61,13 @@ int main() {
   pending.startInFlight=true; pending.rejected(true,false);
   assert(!pending.startInFlight);
   assert(pending.markSent() && pending.markSent() && pending.markSent() && !pending.markSent());
+  ControlPolicy observer;observer.ready=observer.snapshot=true;observer.handoffSupported=true;
+  strcpy(observer.session,"observed-session");strcpy(observer.phase,"paused");observer.ownsEndpoint=false;
+  assert(observer.canHandoff() && !observer.canResume() && !observer.ordinary());
+  assert(observer.forceLocalStop(true) && !observer.start());
+  observer.ownsEndpoint=true;
+  assert(!observer.canHandoff() && observer.canResume() && observer.stopped);
+  observer.stopped=false;assert(observer.ordinary());
+  observer.disconnected();assert(!observer.canResume() && !observer.canHandoff() && observer.stopped);
   std::puts("PASS: control Stop latch, stale commands, handshake, watchdog and reconnect");
 }
