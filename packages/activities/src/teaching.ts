@@ -78,7 +78,7 @@ export function requestedTeachingTopic(text: string): string | null {
   return (
     teachingTopics.find((topic) =>
       new RegExp(
-        `^(?:(?:please )?(?:let's talk about|i'd like to teach you about|i want to teach you about|teach you about|let's choose|choose) )?${topic.label.toLowerCase()}(?:,? please)?$`,
+        `^(?:(?:please )?(?:(?:let's|let us) (?:talk about|choose)|i(?: would like|'d like| want) to (?:talk|teach you) about|(?:can|could) (?:we talk|i teach you) about|teach you about|choose) )?${topic.label.toLowerCase()}(?:,? please)?$`,
       ).test(value),
     )?.entityId ?? null
   );

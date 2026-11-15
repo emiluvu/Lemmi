@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import {
   ok,
+  SPEECH_CAPTURE_MS,
+  SPEECH_CAPTURE_FRAMES,
   fail,
   SessionSnapshotSchema,
   DeviceEventSchema,
@@ -611,12 +613,51 @@ test('capture gaps, backlog, incomplete end, expiration and frame bounds invalid
       expect((await f.end(2)).ok).toBe(false);
     }
     if (invalid === 'timeout') {
-      f.advance(20_000);
+      f.advance(SPEECH_CAPTURE_MS);
       expect(f.coordinator.sweepSpeech()).toBe(true);
     }
     expect(f.coordinator.snapshot()?.captureGrant).toBeNull();
     expect(f.coordinator.snapshot()?.phase).toBe('waiting');
   }
+});
+
+test('a participant can begin speaking after a long initial pause under the same bounded grant', async () => {
+  const f = setup();
+  ready(f);
+  const grant = f.coordinator.snapshot()!.captureGrant!;
+  // Pace the input like the endpoint: a quiet wait followed by a short utterance.
+  for (let i = 0; i < 1600; i++) {
+    if (i) f.advance(20);
+    expect(f.chunk(i).ok).toBe(true);
+  }
+  expect(f.coordinator.snapshot()!.captureGrant).toEqual(grant);
+  expect(f.coordinator.sweepSpeech()).toBe(false);
+  const scope = f.scope();
+  const envelope = {
+    protocol_version: 1,
+    event_id: crypto.randomUUID(),
+    session_id: scope.sessionId,
+    turn_id: scope.turnId,
+    generation: scope.expectedGeneration,
+    sequence: 1601,
+    type: 'audio.end',
+    payload: { leaseId: scope.leaseId, streamId: scope.streamId, chunkCount: 1600 },
+  };
+  expect(DeviceEventSchema.safeParse(envelope).success).toBe(true);
+  expect(
+    DeviceEventSchema.safeParse({
+      ...envelope,
+      payload: { ...envelope.payload, chunkCount: SPEECH_CAPTURE_FRAMES + 1 },
+    }).success,
+  ).toBe(false);
+  const reply = await f.end(1600);
+  expect(reply.ok).toBe(true);
+  expect(f.seen.model).toBe('A fictional garden greeting');
+  expect(f.seen.input?.length).toBe(1600 * 640);
+  expect(f.seen.input?.every((byte) => byte === 0)).toBe(true);
+  f.control({ type: 'stop' });
+  expect(f.coordinator.snapshot()?.captureGrant).toBeNull();
+  expect(f.coordinator.speechOutputInfo()).toBeNull();
 });
 
 test('Stop, pause, mute, help, handoff, disconnect and revoke abort recognition and discard late work', async () => {
@@ -862,11 +903,11 @@ test('profile changes cancel a voice model request; explicit capture retires the
 test('maximum capture size and incompatible native TTS rate fail without retaining audio', async () => {
   const f = setup();
   ready(f);
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < SPEECH_CAPTURE_FRAMES; i++) {
     if (i) f.advance(20);
     expect(f.chunk(i).ok).toBe(true);
   }
-  expect(f.chunk(1000).ok).toBe(false);
+  expect(f.chunk(SPEECH_CAPTURE_FRAMES).ok).toBe(false);
   expect(f.coordinator.snapshot()?.captureGrant).toBeNull();
   const pcm = new Uint8Array(960).fill(7);
   const g = setup({

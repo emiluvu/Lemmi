@@ -18,6 +18,8 @@ import {
 import {
   confirmsActivityOffer,
   requestedActivity,
+  requestedPhotoAction,
+  requestsOpenConversation,
 } from '../packages/server/src/adapters/input-routing';
 
 function value<T>(result: Result<unknown>): T {
@@ -779,4 +781,180 @@ test('no eligible teaching topic cannot trap the participant away from voice mod
   expect(f.c.snapshot()?.teaching).toBeNull();
   expect(f.c.photoView()).toMatchObject({ activityId: 'photo_album', viewingMode: 'talk' });
   expect(f.calls()).toBe(0);
+});
+
+test('natural teaching choice selects the eligible topic and the following explanation reaches conversation', async () => {
+  for (const phrase of [
+    'I would like to talk about gardening',
+    "I'd like to talk about gardening, please.",
+    'Can we talk about gardening?',
+    'I want to teach you about gardening',
+  ]) {
+    const f = fixture();
+    value(await f.say('Start Teach Lemmi'));
+    const selected = value<any>(await f.say(phrase));
+    expect(selected.session.teaching.entityId).toBe('topic:gardening');
+    expect(selected.session.teaching.choosingTopic).toBe(false);
+    expect(selected.reply.text).not.toContain('What would you like to teach me about');
+    expect(f.calls()).toBe(0);
+    value(await f.say('I grow roses and water them in the morning.'));
+    expect(f.calls()).toBe(1);
+    expect(f.c.snapshot()?.teaching?.entityId).toBe('topic:gardening');
+  }
+});
+
+test('spoken natural teaching choice receives fresh current-generation output', async () => {
+  const f = fixture('I would like to talk about gardening');
+  value(await f.say('Start Teach Lemmi'));
+  const before = f.c.snapshot()!;
+  const selected = value<any>(await f.capture());
+  expect(selected.session.teaching.entityId).toBe('topic:gardening');
+  expect(selected.session.generation).toBeGreaterThan(before.generation);
+  expect(f.c.drainSpeechOutput()?.metadata.turnId).toBe(selected.reply.turnId);
+  expect(f.c.snapshot()?.captureGrant).toBeNull();
+  expect(f.calls()).toBe(0);
+});
+
+test('natural menu choices still reject hidden topics and ignore quoted, negated or past requests', async () => {
+  for (const phrase of [
+    'She said "I would like to talk about gardening"',
+    'I do not want to teach you about gardening',
+    'I used to want to talk about gardening',
+    'I would like to talk about gardening or beaches',
+  ]) {
+    const f = fixture();
+    value(await f.say('Start Teach Lemmi'));
+    value(await f.say(phrase));
+    expect(f.c.snapshot()?.teaching?.entityId).toBeNull();
+    expect(f.calls()).toBe(0);
+  }
+  const f = fixture();
+  value(await f.say('Start Teach Lemmi'));
+  value(await f.say("I don't want to talk about gardening"));
+  expect((await f.say('I would like to talk about gardening')).ok).toBe(false);
+  expect(f.c.snapshot()?.teaching?.entityId).not.toBe('topic:gardening');
+});
+
+test('polite photo navigation changes the authoritative photo forwards and backwards, including just looking', async () => {
+  const f = fixture('Could you show me the next picture, please?');
+  value(await f.say('Start Photo Story'));
+  const initial = f.c.photoView();
+  if (initial?.activityId !== 'photo_album') throw new Error('Missing initial photo');
+  const result = value<any>(await f.capture());
+  const advanced = f.c.photoView();
+  if (advanced?.activityId !== 'photo_album') throw new Error('Missing advanced photo');
+  expect(advanced.currentAssetId).not.toBe(initial.currentAssetId);
+  const output = f.c.drainSpeechOutput()!;
+  expect(output.metadata.turnId).toBe(result.reply.turnId);
+  const receipt = {
+    sessionId: result.session.id,
+    expectedGeneration: result.session.generation,
+    turnId: output.metadata.turnId,
+    leaseId: output.metadata.leaseId,
+    streamId: output.metadata.streamId,
+  };
+  value(f.c.playbackReceipt({ ...receipt, status: 'started', playedChunks: 0 }));
+  value(
+    f.c.playbackReceipt({
+      ...receipt,
+      status: 'completed',
+      playedChunks: output.metadata.chunkCount,
+    }),
+  );
+  const current = f.c.photoView()!;
+  value(
+    f.c.handle('activities.submit', {
+      sessionId: f.c.snapshot()!.id,
+      instanceId: current.instanceId,
+      expectedRevision: current.revision,
+      commandId: crypto.randomUUID(),
+      action: { type: 'photo.just_look' },
+    }),
+  );
+  value(await f.say('Can we go back to the previous photo?'));
+  const previous = f.c.photoView();
+  if (previous?.activityId !== 'photo_album') throw new Error('Missing previous photo');
+  expect(previous.currentAssetId).toBe(initial.currentAssetId);
+  expect(previous.viewingMode).toBe('talk');
+  expect(f.c.snapshot()?.captureGrant).toBeNull();
+});
+
+test('photo commands and easy activity exits remain whole deliberate requests', () => {
+  for (const phrase of [
+    'Next picture',
+    'Can you show me the next photo?',
+    'Would you change the photo?',
+    'Please show me another photo',
+    'Can we see the next photo?',
+    'Could you change photos?',
+    'Can we change the picture?',
+    'Could you show me the next image, please?',
+  ])
+    expect(requestedPhotoAction(phrase)).toBe('photo.next');
+  for (const phrase of ['Previous picture', 'Go back', 'Can we go back to the previous photo?'])
+    expect(requestedPhotoAction(phrase)).toBe('photo.previous');
+  expect(requestedPhotoAction('Skip this picture')).toBe('photo.skip');
+  for (const phrase of [
+    'Please leave the game',
+    "I'd rather just talk",
+    "I'm done with this game",
+    "I don't want to do this anymore",
+    'Can we play something else?',
+    'Can we exit this activity?',
+    'I would like to stop the game',
+    'Could we just talk?',
+    'Let us go back to chat',
+  ])
+    expect(requestsOpenConversation(phrase)).toBe(true);
+  for (const phrase of [
+    'Do not show me the next photo',
+    'She said "next picture"',
+    'I liked the previous picture',
+    'Can we leave the game tomorrow?',
+    'I do not want to leave the game',
+    'She said "leave the game"',
+  ]) {
+    expect(requestedPhotoAction(phrase)).toBeNull();
+    expect(requestsOpenConversation(phrase)).toBe(false);
+  }
+});
+
+for (const start of ['Start Teach Lemmi', 'Start Photo Story']) {
+  test(`a polite activity exit returns from ${start} to conversation without a model call`, async () => {
+    const f = fixture('Can we leave the game, please?');
+    value(await f.say(start));
+    const result = value<any>(await f.capture());
+    expect(result.session.conversationMode).toBe('open');
+    expect(result.session.teaching).toBeNull();
+    expect(f.c.photoView()?.phase ?? 'ended').toBe('ended');
+    expect(result.reply.text).toBe('We can just talk. Take your time.');
+    expect(f.c.drainSpeechOutput()?.metadata.turnId).toBe(result.reply.turnId);
+    expect(f.calls()).toBe(0);
+  });
+}
+
+test('typed photo navigation cannot change the picture while unrelated speech output is current', async () => {
+  const f = fixture('A garden is peaceful.');
+  value(await f.say('Start Photo Story'));
+  value(await f.capture());
+  const before = f.c.photoView();
+  expect((await f.say('Please show me the next picture')).ok).toBe(false);
+  expect(f.c.photoView()).toEqual(before);
+  expect(f.c.speechOutputInfo()).not.toBeNull();
+});
+
+test('fixed Photo Story opening gives room to describe the picture instead of reading its approved caption', async () => {
+  for (const preset of ['guided', 'quiet'] as const) {
+    const f = fixture(undefined, undefined, undefined, preset);
+    const opening = value<any>(await f.say('Start Photo Story'));
+    expect(opening.reply.text).toBe(
+      preset === 'quiet'
+        ? "Hi! We're playing Photo Story."
+        : "Hi! We're playing Photo Story. Would you like to talk about this picture?",
+    );
+    const view = f.c.photoView();
+    if (view?.activityId !== 'photo_album') throw new Error('Missing photo view');
+    expect(view.caption).toBeTruthy();
+    expect(opening.reply.text).not.toContain(view.caption!);
+  }
 });

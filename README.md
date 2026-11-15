@@ -1,5 +1,13 @@
 # Lemmi
 
+**Local conversation reliability candidate — not deployed:** branch
+`fix/lemmi-conversation-reliability` fixes premature silence pauses, stale
+cancellations after Resume, natural teaching-topic selection, spoken photo
+navigation and activity exits. Browser initial silence is 30 seconds; normal
+post-speech ending defaults to the requested 1.5 seconds. Deploy matching web, gateway and local speech
+wrapper together for the new bounded 40-second input contract.
+[Changes, local checks and host/robot retest](docs/handoffs/conversation-reliability.md).
+
 **Known issues remain:** user reports additional bugs after the latest rollout.
 Debugging will continue in a later session; the checks below are not complete
 user acceptance. [Current runtime and handoff](docs/backend-status.md).

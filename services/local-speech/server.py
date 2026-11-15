@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import UUID
 
-MAX_PCM = 16000 * 2 * 20
+MAX_PCM = 16000 * 2 * 40
 MAX_AUDIO = 48000 * 2 * 30
 LANGUAGES = {"en", "de"}
 

@@ -5,7 +5,7 @@ export class TurnEnd {
   private heard = false;
   private quietMs = 0;
   private elapsedMs = 0;
-  constructor(readonly silenceMs = 1000) {
+  constructor(readonly silenceMs = 1500) {
     if (!Number.isInteger(silenceMs) || silenceMs < 1000 || silenceMs > 8000)
       throw new Error('End silence must be 1000–8000 ms');
   }
@@ -20,7 +20,7 @@ export class TurnEnd {
     if (this.heard) {
       this.quietMs = voice ? 0 : this.quietMs + 20;
       if (this.quietMs >= this.silenceMs) return 'finished';
-    } else if (this.elapsedMs >= 15000) return 'no_speech';
+    } else if (this.elapsedMs >= 30000) return 'no_speech';
     return 'continue';
   }
 }

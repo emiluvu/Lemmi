@@ -451,14 +451,14 @@
       >{/if}
     {#if activity?.activityId === 'photo_album' && activity.currentAssetId}<img
         src={images[activity.currentAssetId]}
-        alt={activity.caption ?? 'Approved scene'}
+        alt="Photo for us to talk about"
         onerror={() => {
           stopLocal();
           void safe(() => action({ type: 'photo.just_look' }, false));
           notice = 'Photo unavailable. You can skip it.';
         }}
       />
-      <p>{activity.caption}</p>{/if}
+      <p>Let's look together.</p>{/if}
     <p aria-live="polite">{reply}</p>
     <p role="status">
       {listening

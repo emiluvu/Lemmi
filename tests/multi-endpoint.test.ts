@@ -726,9 +726,10 @@ test('public Photo Story uses scoped browser ownership, reviewed captions and cu
       (event) => event.type === 'response.text',
       startedAfter,
     );
-    expect(automaticOpening.type === 'response.text' && automaticOpening.payload.text).toContain(
-      'Roses',
-    );
+    expect(automaticOpening.type).toBe('response.text');
+    if (automaticOpening.type !== 'response.text') throw new Error('Missing photo invitation');
+    expect(automaticOpening.payload.text).toContain('talk about this picture');
+    expect(automaticOpening.payload.text).not.toContain('Roses');
     await browser.wait(
       (event) => event.type === 'state.changed' && event.payload.session?.phase === 'waiting',
       browser.events.indexOf(automaticOpening) + 1,

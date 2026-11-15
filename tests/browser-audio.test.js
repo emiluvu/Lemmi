@@ -239,7 +239,7 @@ test('initial silence and a brief noise burst pause locally without submitting r
     await f.audio.speak();
     f.grant();
     f.frames(true, 2);
-    f.frames(false, 748);
+    f.frames(false, 1498);
     expect(f.track.stopped).toBe(true);
     expect(f.sent.at(-1)[0]).toBe('input.pause');
     expect(f.sent.some(([type]) => type === 'audio.end')).toBe(false);
@@ -373,8 +373,8 @@ test('manual mode remains available and capture never exceeds the existing bound
   try {
     await f.audio.speak();
     f.grant();
-    f.frames(true, 975);
-    expect(f.sent.filter(([type]) => type === 'audio.chunk')).toHaveLength(975);
+    f.frames(true, 1975);
+    expect(f.sent.filter(([type]) => type === 'audio.chunk')).toHaveLength(1975);
     expect(f.sent.at(-1)[0]).toBe('audio.end');
     expect(f.timings.at(-1).reason).toBe('limit');
     expect(f.track.stopped).toBe(true);
@@ -811,6 +811,53 @@ test('German microphone failures remain explicit and do not open capture', async
     await f.audio.speak();
     expect(f.errors.at(-1)).toContain('Mikrofon ist nicht verfügbar');
     expect(f.sent).toHaveLength(0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('silence at fifteen seconds keeps the microphone open and a late answer uses normal endpointing', async () => {
+  const f = automatic();
+  try {
+    await f.audio.speak();
+    f.grant();
+    f.frames(false, 1400);
+    expect(f.track.stopped).toBe(false);
+    expect(f.sent.some(([type]) => ['input.pause', 'audio.end'].includes(type))).toBe(false);
+    f.frames(true, 10);
+    f.frames(false, 74);
+    expect(f.track.stopped).toBe(false);
+    expect(f.sent.some(([type]) => type === 'audio.end')).toBe(false);
+    f.frames(false, 1);
+    expect(f.sent.filter(([type]) => type === 'audio.end')).toHaveLength(1);
+    expect(f.sent.some(([type]) => type === 'input.pause')).toBe(false);
+    expect(f.track.stopped).toBe(true);
+  } finally {
+    f.restore();
+  }
+});
+
+test('a retired output cancellation cannot close fresh capture or unrelated resumed playback', async () => {
+  const f = automatic();
+  try {
+    await f.audio.speak();
+    f.grant();
+    const cancel = (streamId, turnId = 'turn') =>
+      event(
+        'response.cancel',
+        { leaseId: 'lease', streamId, reason: 'interrupted' },
+        { turn_id: turnId },
+      );
+    f.audio.receive(cancel('retired-output', 'retired-turn'), 'browser');
+    expect(f.track.stopped).toBe(false);
+    f.frames(true, 10);
+    f.audio.finish();
+    f.audio.receive(event('response.start', meta), 'browser');
+    expect(f.audio.hasOutput).toBe(true);
+    f.audio.receive(cancel('retired-output'), 'browser');
+    expect(f.audio.hasOutput).toBe(true);
+    f.audio.receive(cancel('output'), 'browser');
+    expect(f.audio.hasOutput).toBe(false);
   } finally {
     f.restore();
   }

@@ -7,6 +7,7 @@ import { handlePhotoScene } from '../../../packages/server/src/photo-scene';
 import {
   DeviceEventSchema,
   ServerEventSchema,
+  SPEECH_CAPTURE_MS,
   PairDeviceAuthorityInputSchema,
   ClaimDeviceInputSchema,
   RevokeDeviceAuthorityInputSchema,
@@ -47,6 +48,7 @@ type SocketData = {
   hello: boolean;
   sequence: number;
   outputSequence: number;
+  workRevision: number;
   lastHeartbeat: number;
   window: number;
   messages: number;
@@ -104,8 +106,8 @@ export function startControlGateway(options: Options) {
   const reservations = new Map<string, { id: string; at: number }>();
   const ownsEndpoint = (identity: DeviceIdentity) =>
     sessions.forProfile(identity.profileId).snapshot()?.activeEndpointId === identity.deviceId;
-  // Async failures belong to the authority that initiated their work. Emitting
-  // an obsolete failure with the *current* envelope cancels a newer browser turn.
+  // Late failures use the current wire envelope, so discard them when the
+  // authority that started their work has been replaced by Pause/Resume or Stop.
   function asyncScopeCurrent(ws: Bun.ServerWebSocket<SocketData>, token: SessionSnapshot | null) {
     if (
       !token ||
@@ -117,15 +119,17 @@ export function startControlGateway(options: Options) {
     const latest = sessions.forProfile(ws.data.identity.profileId).snapshot();
     return (
       !!latest &&
-      [
-        'id',
-        'generation',
-        'leaseId',
-        'profileRevision',
-        'privacyRevision',
-        'policyRevision',
-        'activeEndpointId',
-      ].every((key) => latest[key as keyof SessionSnapshot] === token[key as keyof SessionSnapshot])
+      (
+        [
+          'id',
+          'generation',
+          'leaseId',
+          'profileRevision',
+          'privacyRevision',
+          'policyRevision',
+          'activeEndpointId',
+        ] as const
+      ).every((key) => latest[key] === token[key])
     );
   }
   function disconnect(identity: DeviceIdentity) {
@@ -500,6 +504,7 @@ export function startControlGateway(options: Options) {
           hello: false,
           sequence: -1,
           outputSequence: 0,
+          workRevision: 0,
           lastHeartbeat: elapsedNow(),
           window: elapsedNow(),
           messages: 0,
@@ -627,7 +632,7 @@ export function startControlGateway(options: Options) {
                   sampleRate: 16000,
                   channels: 1,
                   frameMs: 20,
-                  maxCaptureMs: 20000,
+                  maxCaptureMs: SPEECH_CAPTURE_MS,
                   playback: event.payload.playback!,
                   outputWindowChunks: ws.data.outputWindow,
                 }
@@ -690,6 +695,11 @@ export function startControlGateway(options: Options) {
           error(ws, 'FORBIDDEN', 'Use an explicit handoff to control this session', event.event_id);
           return;
         }
+        // Microphone mute can cancel work without changing the session generation.
+        // Keep async result delivery tied to the latest explicit endpoint operation too.
+        if (event.type.startsWith('input.') || event.type === 'audio.end') ws.data.workRevision++;
+        const workRevision = ws.data.workRevision;
+        const sameWork = () => ws.data.workRevision === workRevision;
         if (
           event.type === 'input.photo.start' ||
           event.type === 'input.photo.action' ||
@@ -768,8 +778,8 @@ export function startControlGateway(options: Options) {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
               if (
                 !result.ok &&
-                result.error.code === 'REVISION_CONFLICT' &&
-                !asyncScopeCurrent(ws, selected)
+                (!sameWork() ||
+                  (result.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, selected)))
               )
                 return;
               const latest = coordinator.snapshot();
@@ -809,7 +819,7 @@ export function startControlGateway(options: Options) {
               broadcast();
             })
             .catch(() => {
-              if (asyncScopeCurrent(ws, selected))
+              if (sameWork() && asyncScopeCurrent(ws, selected))
                 error(ws, 'UNAVAILABLE', 'Photo Story conversation unavailable', event.event_id);
             });
           return;
@@ -896,8 +906,8 @@ export function startControlGateway(options: Options) {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
               if (
                 !result.ok &&
-                result.error.code === 'REVISION_CONFLICT' &&
-                !asyncScopeCurrent(ws, current)
+                (!sameWork() ||
+                  (result.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, current)))
               )
                 return;
               const latest = coordinator.snapshot();
@@ -935,7 +945,7 @@ export function startControlGateway(options: Options) {
               broadcast();
             })
             .catch(() => {
-              if (asyncScopeCurrent(ws, current))
+              if (sameWork() && asyncScopeCurrent(ws, current))
                 error(ws, 'UNAVAILABLE', 'Conversation service unavailable', event.event_id);
             });
           return;
@@ -1020,8 +1030,8 @@ export function startControlGateway(options: Options) {
               if (!sockets.has(ws) || !access.current(ws.data.identity)) return;
               if (
                 !spoken.ok &&
-                spoken.error.code === 'REVISION_CONFLICT' &&
-                !asyncScopeCurrent(ws, selected)
+                (!sameWork() ||
+                  (spoken.error.code === 'REVISION_CONFLICT' && !asyncScopeCurrent(ws, selected)))
               )
                 return;
               if (
@@ -1036,7 +1046,7 @@ export function startControlGateway(options: Options) {
               broadcast();
             })
             .catch(() => {
-              if (asyncScopeCurrent(ws, selected))
+              if (sameWork() && asyncScopeCurrent(ws, selected))
                 error(ws, 'UNAVAILABLE', 'Prompt playback unavailable', event.event_id);
               broadcast();
             });
@@ -1077,16 +1087,12 @@ export function startControlGateway(options: Options) {
                   coordinator.speechOutputInfo()?.turnId === spoken.data.reply.turnId
                 )
                   emit(ws, 'response.text', spoken.data.reply);
-                if (
-                  !spoken.ok &&
-                  spoken.error.code !== 'REVISION_CONFLICT' &&
-                  asyncScopeCurrent(ws, selected)
-                )
+                if (!spoken.ok && sameWork() && asyncScopeCurrent(ws, selected))
                   error(ws, spoken.error.code, spoken.error.message, event.event_id);
                 broadcast();
               })
               .catch(() => {
-                if (asyncScopeCurrent(ws, selected))
+                if (sameWork() && asyncScopeCurrent(ws, selected))
                   error(ws, 'UNAVAILABLE', 'Teaching prompt playback unavailable', event.event_id);
                 broadcast();
               });

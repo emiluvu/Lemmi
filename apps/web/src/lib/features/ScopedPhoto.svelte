@@ -6,12 +6,10 @@
   });
   let {
     assetId,
-    caption,
     loaded,
     failed,
   }: {
     assetId: string;
-    caption: string;
     loaded: () => void;
     failed: () => void;
   } = $props();
@@ -69,7 +67,7 @@
   {#if source && loadState !== 'error'}
     <img
       src={source}
-      alt={caption}
+      alt="Photo for us to talk about"
       onload={(event) => {
         if (disposed || event.currentTarget.getAttribute('src') !== source) return;
         loadState = 'ready';

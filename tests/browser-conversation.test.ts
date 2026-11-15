@@ -70,6 +70,7 @@ test('one Start waits for greeting playback, then unmute acknowledgment and a fr
   const output = f.state({ phase: 'speaking' });
   f.c.receive({
     type: 'response.start',
+    payload: { turnId: 'output-turn', streamId: 'output-stream' },
     session_id: output.id,
     generation: output.generation,
   } as ServerEvent);
@@ -97,6 +98,7 @@ test('a new-session greeting completes before the first fresh capture, and Stop 
     const output = f.state({ phase: 'speaking', micMuted: true });
     f.c.receive({
       type: 'response.start',
+      payload: { turnId: 'output-turn', streamId: 'output-stream' },
       session_id: output.id,
       generation: output.generation,
     } as ServerEvent);
@@ -223,6 +225,7 @@ test('an explicit resume waits for reorientation playback; unmute alone does not
   const output = f.state({ phase: 'speaking' });
   f.c.receive({
     type: 'response.start',
+    payload: { turnId: 'output-turn', streamId: 'output-stream' },
     session_id: output.id,
     generation: output.generation,
   } as ServerEvent);
@@ -283,6 +286,7 @@ for (const resume of [false, true]) {
       const output = f.state({ phase: 'speaking' });
       f.c.receive({
         type: 'response.start',
+        payload: { turnId: 'output-turn', streamId: 'output-stream' },
         session_id: output.id,
         generation: output.generation,
       } as ServerEvent);
@@ -294,3 +298,58 @@ for (const resume of [false, true]) {
     }
   });
 }
+
+test('Resume ignores a retired output cancellation and starts listening after its own reorientation', async () => {
+  const f = fixture();
+  f.connection.session = { ...f.session, phase: 'paused' };
+  await f.c.start();
+  f.state({ phase: 'processing', generation: f.session.generation + 1 });
+  const cancel = (turnId: string, streamId: string) =>
+    ({
+      type: 'response.cancel',
+      session_id: f.session.id,
+      generation: f.connection.session!.generation,
+      turn_id: turnId,
+      payload: { leaseId: f.session.leaseId, streamId, reason: 'interrupted' },
+    }) as ServerEvent;
+  f.c.receive(cancel('retired-turn', 'retired-stream'));
+  expect(f.enabled.at(-1)).toBe(true);
+  const output = f.state({ phase: 'speaking' });
+  f.c.receive({
+    type: 'response.start',
+    session_id: output.id,
+    generation: output.generation,
+    payload: { turnId: 'resume-turn', streamId: 'resume-stream' },
+  } as ServerEvent);
+  f.c.receive(cancel('retired-turn', 'retired-stream'));
+  expect(f.enabled.at(-1)).toBe(true);
+  f.c.playbackCompleted(output);
+  f.state({ phase: 'waiting' });
+  expect(f.requests()).toBe(1);
+  f.c.receive(cancel('resume-turn', 'resume-stream'));
+  expect(f.enabled.at(-1)).toBe(true);
+  f.c.stop();
+});
+
+test('cancellation of the current reorientation prevents capture even if playback later completes', async () => {
+  const f = fixture();
+  f.connection.session = { ...f.session, phase: 'paused' };
+  await f.c.start();
+  const output = f.state({ phase: 'speaking', generation: f.session.generation + 1 });
+  f.c.receive({
+    type: 'response.start',
+    session_id: output.id,
+    generation: output.generation,
+    payload: { turnId: 'resume-turn', streamId: 'resume-stream' },
+  } as ServerEvent);
+  f.c.receive({
+    type: 'response.cancel',
+    session_id: output.id,
+    turn_id: 'resume-turn',
+    payload: { leaseId: output.leaseId, streamId: 'resume-stream', reason: 'interrupted' },
+  } as ServerEvent);
+  f.c.playbackCompleted(output);
+  f.state({ phase: 'waiting' });
+  expect(f.requests()).toBe(0);
+  expect(f.enabled.at(-1)).toBe(false);
+});

@@ -1,5 +1,42 @@
 # Lemmi — Build and demo plan
 
+## Local conversation reliability candidate — November 15, 2026
+
+Branch `fix/lemmi-conversation-reliability`, integrating fetched backend release
+`8a08430`. Not deployed. Browser initial no-speech allowance is 30 seconds;
+post-speech silence defaults to the user's selected **1.5 seconds** (range 1–8).
+Shared capture/input bounds are 40 seconds / 2,000 frames / 1,280,000 bytes;
+matching web, gateway and local speech wrapper must ship together. Set existing
+`PUBLIC_LEMMI_END_SILENCE_MS` configuration to `1500` when rolling out, since an
+explicit older `1000` overrides the new default. No migration or provider change.
+
+Fixed retired output cancellation interrupting fresh listening/Resume; strengthened
+async error scoping for same-generation Mute/Unmute. Natural Teach Lemmi topic
+selection now accepts “I would like to talk about gardening” and continues with
+the model. Spoken photo next/back/skip, easier deliberate activity exits/switches
+and simple photo invitations reuse current authority, eligibility and reducers.
+Approved photo grounding remains server-side. Latest deployed image-load and
+unsupported picture-claim safeguards are retained.
+
+Observed locally with pinned Bun 1.4.4: frozen install, type/Svelte, production
+build, formatting and whitespace checks passed. **451 tests passed, 46 skipped,
+zero failures; 12,391 expectations across 58 files**. Skips require configured
+PostgreSQL test databases, unavailable here. Seven Python speech-wrapper boundary
+tests passed. Gateway fixture coverage includes 30-turn continuation, paused
+STT/model/TTS cancellation, same-generation Mute/Unmute, fresh capture, spoken
+photo next/back, gardening menu selection and substantive follow-up, current
+synthesis failures and the 40-second ready advertisement. Browser tests cover
+30-second no-speech, a late answer, the 1.5-second default and speech resetting
+its timer; a 32-second server input verifies both end schemas and buffer clearing.
+
+These are software/fictional-adapter observations; no live ASR/LLM, current
+Chromium/keyboard, actual microphone/speaker or K151 acceptance was run. The
+intermittent user-reported stall is not claimed universally resolved. Anay reviews
+contracts/cancellation, Kylie participant text/controls, Lukas topic/navigation,
+and Emilia actual endpoint controls/timing. The legacy local `/participant/voice`
+path retains its earlier 19.5-second cap; current designed modes use the updated
+LiveParticipant path. [Detailed handoff](handoffs/conversation-reliability.md).
+
 ## Lemmi branding deployed — November 15, 2026
 
 **Web runtime `f3f5199`**, gateway `5146030`, speech/tunnel retained.

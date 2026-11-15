@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { IdSchema, RevisionSchema } from './common';
 
-export const SPEECH_CAPTURE_MS = 20_000;
+// Allow a 30-second initial pause while keeping capture explicitly bounded.
+export const SPEECH_CAPTURE_MS = 40_000;
 export const SPEECH_FRAME_BYTES = 640;
+export const SPEECH_CAPTURE_FRAMES = SPEECH_CAPTURE_MS / 20;
+export const SPEECH_CAPTURE_BYTES = SPEECH_CAPTURE_FRAMES * SPEECH_FRAME_BYTES;
 export const SPEECH_OUTPUT_WINDOW = 4;
 export const SPEECH_EXTENDED_OUTPUT_WINDOW = 12;
 // Retained for existing browser consumers; robots may negotiate the same bound.
@@ -47,7 +50,7 @@ export const SpeechInputChunkSchema = z.strictObject({
 });
 export const SpeechInputEndSchema = z.strictObject({
   ...stream,
-  chunkCount: z.number().int().positive().max(1000),
+  chunkCount: z.number().int().positive().max(SPEECH_CAPTURE_FRAMES),
 });
 export const PlaybackReceiptPayloadSchema = z.strictObject({
   leaseId: IdSchema,
