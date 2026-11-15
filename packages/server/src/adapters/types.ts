@@ -1,8 +1,8 @@
-import type { Result, Fetcher } from '@lemmi/contracts';
+import { SPEECH_CAPTURE_BYTES, type Result, type Fetcher } from '@lemmi/contracts';
 
 export type SpeechLanguage = 'en' | 'de';
 export const PCM_SAMPLE_RATE = 16000;
-export const PCM_MAX_BYTES = PCM_SAMPLE_RATE * 2 * 20;
+export const PCM_MAX_BYTES = SPEECH_CAPTURE_BYTES;
 export const TTS_MAX_BYTES = 48000 * 2 * 30;
 export interface Transcript {
   text: string;

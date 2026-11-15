@@ -89,7 +89,7 @@ All endpoints require `Authorization: Bearer <private-speech-token>`. Browser `O
 | Endpoint | Input | Output |
 | --- | --- | --- |
 | `GET /health` | No body | Engine readiness and supported language sets; no secrets/paths |
-| `POST /v1/stt` | `application/octet-stream`, signed 16-bit **little-endian**, **16 kHz mono** PCM, positive even byte length ≤640,000 (20 seconds). `X-Lemmi-Language: en`, `de` or `auto`; `X-Lemmi-Request-Id: <UUID>` | `{ok:true,data:{text,language}}`, text ≤2,000 characters, detected language must be `en` or `de` |
+| `POST /v1/stt` | `application/octet-stream`, signed 16-bit **little-endian**, **16 kHz mono** PCM, positive even byte length ≤1,280,000 (40 seconds). `X-Lemmi-Language: en`, `de` or `auto`; `X-Lemmi-Request-Id: <UUID>` | `{ok:true,data:{text,language}}`, text ≤2,000 characters, detected language must be `en` or `de` |
 | `POST /v1/tts` | JSON `{text,language}`, text 1–600 characters, language `en` or `de`; UUID header | Mono int16 little-endian PCM, `X-Lemmi-Encoding: pcm_s16le`, `X-Lemmi-Sample-Rate`, `X-Lemmi-Language`. ≤30 seconds and ≤48 kHz |
 | `POST /v1/cancel` | JSON `{requestId:<UUID>}` | Whether that job was active; bounded 30-second early-cancel tombstones also prevent overtaken jobs from starting |
 

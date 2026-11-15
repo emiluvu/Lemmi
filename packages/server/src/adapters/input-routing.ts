@@ -307,7 +307,7 @@ export function requestedActivity(
   )
     return 'photo';
   const invitation =
-    /^(?:please )?(?:(?:start|play|open|do|try|begin|switch to)|(?:let's|let us|i want to|i would like to|i'd like to|(?:can|could|may) (?:we|i|you)) (?:play|start|do|open|try|switch to)) (?:the )?/;
+    /^(?:please )?(?:(?:start|play|open|do|try|begin|switch to|change to)|(?:let's|let us|i want to|i would like to|i'd like to|(?:can|could|may) (?:we|i|you)) (?:play|start|do|open|try|switch to|change to)) (?:the )?/;
   const name = value.replace(invitation, '').replace(/,? please$/, '');
   if (
     /^(?:photo stor(?:y|ies)|photo album(?: talk)?|explore pictures|look at pictures)$/.test(name)
@@ -326,7 +326,42 @@ export function confirmsActivityOffer(text: string): boolean {
   );
 }
 export function requestsOpenConversation(text: string): boolean {
-  return /^(?:back to (?:the )?conversation|(?:finish|end) (?:teach(?:ing)? (?:lemmi|lemmy|lemme|lemi)(?: game)?|teaching|photo story|explor(?:e|ing) pictures)|let's just talk|let us just talk)$/.test(
-    normalizeVoiceCommand(text),
-  );
+  const value = normalizeVoiceCommand(text);
+  if (
+    /^(?:i(?:'d| would) rather (?:just )?(?:talk|chat)|i(?:'m| am) (?:done|finished) with (?:this |the )?(?:game|activity)|i (?:don't|do not) want to (?:do this|play this game)(?: anymore| any more)?|(?:let's|let us|i want to|i would like to|i'd like to|can we|could we) (?:do|play|try) something else)(?:,? please)?$/.test(
+      value,
+    )
+  )
+    return true;
+  const request =
+    "(?:(?:please )?(?:can|could) (?:we|i|you)|i want to|i would like to|i'd like to|let's|let us)";
+  return new RegExp(
+    `^(?:please )?(?:${request} )?(?:go )?(?:back to (?:the )?(?:conversation|chat)|(?:finish|end|leave|exit|quit|stop) (?:this |the )?(?:game|activity|teach(?:ing)? (?:lemmi|lemmy|lemme|lemi)(?: game)?|teaching|photo story|explor(?:e|ing) pictures)|(?:just )?(?:talk|chat))(?:,? please)?$`,
+  ).test(value);
+}
+
+// Commands are anchored to a complete request, never extracted from a story or refusal.
+export function requestedPhotoAction(
+  text: string,
+): 'photo.next' | 'photo.previous' | 'photo.skip' | null {
+  const value = normalizeVoiceCommand(text);
+  const request =
+    "(?:(?:please )?(?:can|could|would) (?:we|i|you)|i want to|i would like to|i'd like to|let's|let us)";
+  const prefix = `(?:please )?(?:${request} )?`;
+  const picture = '(?:photo|picture|image)';
+  if (
+    new RegExp(
+      `^${prefix}(?:go back(?: to (?:the )?(?:previous|last) ${picture})?|(?:show (?:me |us )?|go to |look at )?(?:the )?(?:previous|last) ${picture})(?:,? please)?$`,
+    ).test(value)
+  )
+    return 'photo.previous';
+  if (new RegExp(`^${prefix}skip(?: (?:this |the )?${picture})?(?:,? please)?$`).test(value))
+    return 'photo.skip';
+  if (
+    new RegExp(
+      `^${prefix}(?:(?:show (?:me |us )?|go to |move to |look at |see )?(?:the )?(?:next|another|a different|different) ${picture}|change (?:this |the )?${picture}s?|(?:move|go) on)(?:,? please)?$`,
+    ).test(value)
+  )
+    return 'photo.next';
+  return null;
 }

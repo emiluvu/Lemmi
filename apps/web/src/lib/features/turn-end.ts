@@ -20,7 +20,7 @@ export class TurnEnd {
     if (this.heard) {
       this.quietMs = voice ? 0 : this.quietMs + 20;
       if (this.quietMs >= this.silenceMs) return 'finished';
-    } else if (this.elapsedMs >= 15000) return 'no_speech';
+    } else if (this.elapsedMs >= 30000) return 'no_speech';
     return 'continue';
   }
 }

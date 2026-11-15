@@ -43,7 +43,7 @@
   <figure class="story-picture">
     {#if photoSrc && view.currentAssetId && failedAsset !== view.currentAssetId}<img
         src={photoSrc}
-        alt={view.caption ?? 'Approved picture for photo story'}
+        alt="Photo for us to talk about"
         onerror={() => (failedAsset = view.currentAssetId)}
       />{:else}<div class="story-image-unavailable">
         <span aria-hidden="true">▧</span>
@@ -54,7 +54,7 @@
         </p>
       </div>{/if}
     <figcaption>
-      {view.caption ?? 'No caption provided.'}{#if preview}<small
+      Let's look together.{#if preview}<small
           >{approvedPreview
             ? 'Approved picture · browser-only preview.'
             : 'Illustrative preview artwork, not a personal photograph.'}</small

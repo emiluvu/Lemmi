@@ -246,7 +246,7 @@ export class BrowserAudio {
           this.noSpeech();
           return;
         }
-        if (decision === 'finished' || this.chunks >= 975) {
+        if (decision === 'finished' || this.chunks >= 1975) {
           this.finish(decision === 'finished' ? 'silence' : 'limit');
           return;
         }
@@ -260,11 +260,11 @@ export class BrowserAudio {
     if (this.turnEnd)
       this.initialSilence = setTimeout(() => {
         if (this.grant === grant && this.turnEnd && !this.turnEnd.heardSpeech) this.noSpeech();
-      }, 15000);
+      }, 30000);
     this.deadline = setTimeout(() => {
       if (this.turnEnd && !this.turnEnd.heardSpeech) this.noSpeech();
       else this.finish('limit');
-    }, 19500);
+    }, 39500);
   }
   private noSpeech() {
     this.cancelInput();
@@ -438,7 +438,15 @@ export class BrowserAudio {
       )
         this.cancel();
     }
-    if (event.type === 'response.cancel') this.cancel();
+    if (
+      event.type === 'response.cancel' &&
+      this.output &&
+      event.session_id === this.output.token.id &&
+      event.turn_id === this.output.meta.turnId &&
+      event.payload.leaseId === this.output.meta.leaseId &&
+      event.payload.streamId === this.output.meta.streamId
+    )
+      this.cancel();
     if (event.type === 'response.start') {
       const session = this.connection.session;
       if (

@@ -8,6 +8,7 @@ import {
   SpeechReceiptSchema,
   SpeechOutputStartSchema,
   SPEECH_CAPTURE_MS,
+  SPEECH_CAPTURE_BYTES,
   SPEECH_FRAME_BYTES,
   SPEECH_OUTPUT_WINDOW,
   SPEECH_EXTENDED_OUTPUT_WINDOW,
@@ -320,7 +321,7 @@ export class SpeechTurns {
       deadline: this.now() + SPEECH_CAPTURE_MS,
       phase: 'capture',
       controller: new AbortController(),
-      input: new Uint8Array(640_000),
+      input: new Uint8Array(SPEECH_CAPTURE_BYTES),
       inputBytes: 0,
       nextChunk: 0,
       sent: 0,
@@ -473,7 +474,7 @@ export class SpeechTurns {
     if (
       this.now() >= v.deadline ||
       input.chunkIndex !== v.nextChunk ||
-      v.inputBytes + SPEECH_FRAME_BYTES > 640_000 ||
+      v.inputBytes + SPEECH_FRAME_BYTES > SPEECH_CAPTURE_BYTES ||
       v.nextChunk >= Math.floor((this.now() - v.began) / 20) + 50
     ) {
       this.clear(true);

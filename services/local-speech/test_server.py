@@ -78,6 +78,9 @@ class Boundaries(unittest.TestCase):
         status, _, body = self.call("/v1/stt", b"\0" * 640, headers=headers)
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["data"]["language"], "en")
+        # A supported initial listening pause can exceed the former 20s body cap.
+        status, _, _ = self.call("/v1/stt", b"\0" * (16000 * 2 * 32), headers=headers)
+        self.assertEqual(status, 200)
 
     def test_tts_metadata_no_implicit_language_fallback(self):
         headers = {"Content-Type": "application/json"}

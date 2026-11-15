@@ -8,6 +8,8 @@ import {
   PlaybackReceiptPayloadSchema,
   SpeechOutputStartSchema,
   SpeechOutputChunkSchema,
+  SPEECH_CAPTURE_FRAMES,
+  SPEECH_CAPTURE_MS,
 } from './speech';
 export const CheckInStateSchema = z.enum([
   'off',
@@ -151,7 +153,7 @@ export const DeviceEventSchema = z.discriminatedUnion('type', [
     payload: z.strictObject({
       leaseId: IdSchema,
       streamId: IdSchema,
-      chunkCount: z.number().int().positive().max(1000),
+      chunkCount: z.number().int().positive().max(SPEECH_CAPTURE_FRAMES),
     }),
   }),
   z.strictObject({
@@ -212,7 +214,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
           sampleRate: z.literal(16000),
           channels: z.literal(1),
           frameMs: z.literal(20),
-          maxCaptureMs: z.literal(20000),
+          maxCaptureMs: z.union([z.literal(20000), z.literal(SPEECH_CAPTURE_MS)]),
           playback: PlaybackCapabilitySchema,
           outputWindowChunks: z.union([z.literal(4), z.literal(12)]),
         }),

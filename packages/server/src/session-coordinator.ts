@@ -62,6 +62,7 @@ import {
   routeParticipantText,
   requestedActivity,
   requestsOpenConversation,
+  requestedPhotoAction,
   confirmsActivityOffer,
 } from './adapters/input-routing';
 import { permittedModelReply } from './adapters/reply-policy';
@@ -345,7 +346,6 @@ export class SessionCoordinator {
       return fail('UNAVAILABLE', 'No current approved picture');
     const text = [
       "Hi! We're playing Photo Story.",
-      view.caption,
       this.session?.communicationSupport.preset === 'quiet'
         ? ''
         : 'Would you like to talk about this picture?',
@@ -380,7 +380,11 @@ export class SessionCoordinator {
         const reminder = this.photoReminder;
         const same =
           reminder?.instanceId === view.instanceId && reminder.assetId === view.currentAssetId;
-        const prompt = same ? reminder.text : (view.caption ?? 'We can simply look.');
+        const prompt = same
+          ? reminder.text
+          : quiet
+            ? 'We can simply look.'
+            : 'What would you like to tell me about this picture?';
         const prefix = "We're looking at the same picture. ";
         text = prefix.length + prompt.length <= 600 ? prefix + prompt : prompt;
       } else if (this.conversationReminder) {
@@ -956,20 +960,24 @@ export class SessionCoordinator {
         commandId: input.commandId,
         mode: 'real',
       }) as Result<ConversationTextResult>;
-    const photoRoute = this.photoTalking()
-      ? input.text
-          .normalize('NFKC')
-          .trim()
-          .toLowerCase()
-          .replace(/[.!?]+$/, '')
-          .replace(/[’]/g, "'")
-      : '';
-    if (/^(?:skip(?: (?:this )?photo)?|next photo|another photo)$/.test(photoRoute)) {
+    const photoAction =
+      !input.purpose &&
+      route === 'ordinary' &&
+      this.photoStoryEnabled() &&
+      this.activity?.activityId === 'photo_album' &&
+      !['ended', 'unavailable'].includes(this.activity.phase)
+        ? requestedPhotoAction(input.text)
+        : null;
+    if (photoAction) {
+      if (this.chatIds.size >= 256)
+        return fail('UNAVAILABLE', 'Text turn capacity reached; start a new session');
+      if (this.pendingChat || (this.speech?.busy() && !this.speech.owns(speechOwner)))
+        return fail('REVISION_CONFLICT', 'Finish or interrupt the current speech turn first');
       this.cancelChat(false, speechOwner);
       if (!this.activity || !this.context) return fail('REVISION_CONFLICT', 'Photo unavailable');
       const transition = reduceActivity(
         this.activity,
-        { type: 'photo.skip' },
+        { type: photoAction },
         this.pack(),
         this.context,
       );
@@ -1151,7 +1159,6 @@ export class SessionCoordinator {
           : null;
       if (!turnId)
         return changed.ok ? fail('REVISION_CONFLICT', 'Activity speech canceled') : changed;
-      const view = this.photoView();
       const opening =
         activityChoice === 'conversation'
           ? 'We can just talk. Take your time.'
@@ -1160,7 +1167,6 @@ export class SessionCoordinator {
               'No eligible teaching topics are available right now.')
             : [
                 "Hi! We're playing Photo Story.",
-                view?.activityId === 'photo_album' ? view.caption : '',
                 this.session?.communicationSupport.preset === 'quiet'
                   ? ''
                   : 'Would you like to talk about this picture?',

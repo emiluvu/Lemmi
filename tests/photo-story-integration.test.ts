@@ -282,7 +282,8 @@ test('voice next and end-game route without asking a model to choose an action',
   await f.c.submitText(f.command('next photo'));
   expect(calls).toBe(1);
   const journal = value<Journal>(f.c.handle('journal.load', { profileId: 'profile-alex' }));
-  expect(photoEventRecap(journal, f.s.id).skippedPhotoIds).toEqual(['garden-demo']);
+  expect(photoEventRecap(journal, f.s.id).skippedPhotoIds).toEqual([]);
+  expect(photoEventRecap(journal, f.s.id).viewedPhotoIds).toEqual(['garden-demo', 'park-demo']);
   const result = value<any>(await f.c.submitText(f.command('end game')));
   expect(result.kind).toBe('control');
   expect(f.c.snapshot()?.phase).toBe('ended');
@@ -626,7 +627,8 @@ for (const preset of ['guided', 'quiet'] as const)
       );
       const rates = mode === 'no-playback' ? [] : [16000];
       const opening = value<any>(await f.c.speakPhotoOpening(f.command('Photo Story'), rates));
-      expect(opening.reply.text).toContain('Roses and other flowers in a garden.');
+      expect(opening.reply.text).toContain("Hi! We're playing Photo Story.");
+      expect(opening.reply.text).not.toContain('Roses and other flowers in a garden.');
       expect(opening.reply.text.includes('?')).toBe(preset !== 'quiet');
       const openingView = f.c.photoView();
       if (openingView?.activityId !== 'photo_album') throw new Error('Missing photo view');

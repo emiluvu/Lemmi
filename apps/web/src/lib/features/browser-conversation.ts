@@ -26,6 +26,7 @@ export class BrowserConversation {
     | 'reply'
     | 'completed' = 'idle';
   private openingText = false;
+  private output: { sessionId: string; turnId: string; streamId: string } | null = null;
   private anchor: SessionSnapshot | null = null;
   private completed: SessionSnapshot | null = null;
   private captureGeneration: number | null = null;
@@ -48,6 +49,7 @@ export class BrowserConversation {
     this.enabled = false;
     this.stage = 'idle';
     this.openingText = false;
+    this.output = null;
     this.anchor = this.completed = null;
     this.captureGeneration = null;
     if (this.timer) clearTimeout(this.timer);
@@ -97,16 +99,33 @@ export class BrowserConversation {
   }
   receive(event: ServerEvent) {
     if (!this.enabled) return;
-    if (event.type === 'error' || event.type === 'response.cancel') {
+    if (event.type === 'error') {
       this.stop();
       return;
     }
-    if (event.type === 'response.start' && this.stage === 'opening') {
+    if (event.type === 'response.cancel') {
+      // A completed or superseded output can be canceled after a new listening
+      // turn starts. Only the output this intent is awaiting may retire it.
+      if (
+        this.output &&
+        event.session_id === this.output.sessionId &&
+        event.turn_id === this.output.turnId &&
+        event.payload.streamId === this.output.streamId
+      )
+        this.stop();
+      return;
+    }
+    if (event.type === 'response.start' && ['opening', 'reply'].includes(this.stage)) {
       const current = this.connection.session;
       if (!current || event.session_id !== current.id || event.generation !== current.generation)
         return;
       this.anchor ??= { ...current };
-      this.stage = 'opening_playback';
+      this.output = {
+        sessionId: current.id,
+        turnId: event.payload.turnId,
+        streamId: event.payload.streamId,
+      };
+      if (this.stage === 'opening') this.stage = 'opening_playback';
       if (this.timer) clearTimeout(this.timer);
       this.timer = null;
       return;
@@ -167,6 +186,7 @@ export class BrowserConversation {
     )
       return;
     this.completed = token;
+    this.output = null;
     this.stage = this.stage === 'opening_playback' ? 'opening_completed' : 'completed';
     this.advance();
   }

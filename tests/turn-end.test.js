@@ -43,3 +43,14 @@ test('the pinned WebRTC WASM classifies silence and releases its scratch buffer'
   detector.destroy();
   expect(() => detector.process(silence)).toThrow();
 });
+
+test('initial silence waits thirty seconds while normal post-speech ending stays short', () => {
+  const turn = new TurnEnd();
+  for (let i = 0; i < 1499; i++) expect(turn.push(false)).toBe('continue');
+  expect(turn.push(false)).toBe('no_speech');
+  const lateReply = new TurnEnd();
+  for (let i = 0; i < 1400; i++) expect(lateReply.push(false)).toBe('continue');
+  for (let i = 0; i < 5; i++) expect(lateReply.push(true)).toBe('continue');
+  for (let i = 0; i < 49; i++) expect(lateReply.push(false)).toBe('continue');
+  expect(lateReply.push(false)).toBe('finished');
+});

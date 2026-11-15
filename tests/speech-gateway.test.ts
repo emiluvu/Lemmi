@@ -23,6 +23,7 @@ async function device(
 
     manualStart?: boolean;
     photo?: boolean;
+    secondPhoto?: boolean;
     language?: 'en' | 'de';
     disableSpeech?: boolean;
   } = {},
@@ -75,6 +76,15 @@ async function device(
                     description: 'Alex tending roses in a garden.',
                     portrait: false,
                   },
+                  ...(options.secondPhoto
+                    ? [
+                        {
+                          assetId: 'f1000000-0000-4000-8000-000000000002',
+                          description: 'A table with a blue vase.',
+                          portrait: false,
+                        },
+                      ]
+                    : []),
                 ],
               },
             }),
@@ -340,7 +350,9 @@ test('explicit Start speaks first, Photo Story introduces its scene, Resume repe
     if (scene?.type !== 'activity.changed' || scene.payload.activity?.activityId !== 'photo_album')
       throw new Error('Missing photo');
     const assetId = scene.payload.activity.currentAssetId;
-    expect(prompts[1]).toContain('Alex tending roses');
+    expect(prompts[1]).toContain("We're playing Photo Story.");
+    expect(prompts[1]).toContain('Would you like to talk about this picture?');
+    expect(prompts[1]).not.toContain('Alex tending roses');
     expect(prompts[1]).toContain('?');
     d.send('input.pause');
     await d.until(() => d.session().phase === 'paused');
@@ -378,6 +390,261 @@ test('explicit Start speaks first, Photo Story introduces its scene, Resume repe
     ).toBe(false);
     expect(latePcm.every((n) => n === 0)).toBe(true);
     expect(d.session().phase).toBe('ended');
+  } finally {
+    d.close();
+  }
+});
+
+test('spoken next/previous photo requests use the current approved picture context over WSS', async () => {
+  const phrases = ['Could you show me the next photo?', 'Previous picture, please.'];
+  const contexts: string[] = [];
+  const d = await device({
+    photo: true,
+    secondPhoto: true,
+    chat: {
+      async complete(input) {
+        contexts.push(input.system);
+        return ok({ text: 'We can take our time with this picture.', language: 'en' });
+      },
+    },
+    speech: {
+      stt: {
+        async transcribe() {
+          return ok({ text: phrases.shift()!, language: 'en' });
+        },
+      },
+      tts: {
+        async synthesize() {
+          return ok({
+            pcm: new Uint8Array(882 * 4),
+            sampleRate: 22050,
+            encoding: 'pcm_s16le',
+            channels: 1,
+            language: 'en',
+          });
+        },
+      },
+    },
+  });
+  try {
+    expect(d.events.find((event) => event.type === 'device.ready')).toMatchObject({
+      payload: { audio: { maxCaptureMs: 40000 } },
+    });
+    d.send('input.photo.start');
+    await d.completeOutput();
+    for (const [assetId, caption, previousCaption] of [
+      ['f1000000-0000-4000-8000-000000000002', 'A table with a blue vase.', 'Alex tending roses'],
+      ['f1000000-0000-4000-8000-000000000001', 'Alex tending roses', 'A table with a blue vase.'],
+    ]) {
+      d.events.length = 0;
+      const input = await d.capture();
+      input.finish();
+      await d.completeOutput();
+      const scene = [...d.events].reverse().find((event) => event.type === 'activity.changed');
+      expect(scene).toMatchObject({
+        payload: { activity: { activityId: 'photo_album', currentAssetId: assetId } },
+      });
+      expect(contexts.at(-1)).toContain(caption!);
+      expect(contexts.at(-1)).not.toContain(previousCaption!);
+      expect(d.events.some((event) => event.type === 'error')).toBe(false);
+      expect(d.session().phase).toBe('waiting');
+      expect(d.session().captureGrant).toBeNull();
+    }
+    expect(phrases).toEqual([]);
+    expect(contexts).toHaveLength(2);
+  } finally {
+    d.close();
+  }
+});
+
+test('spoken Teach Lemmi menu selection continues into a substantive topic reply over WSS', async () => {
+  const phrases = [
+    'I would like to talk about gardening',
+    'I plant roses in spring and water them in the evening.',
+  ];
+  const contexts: string[] = [];
+  const d = await device({
+    chat: {
+      async complete(input) {
+        contexts.push(input.system);
+        return ok({ text: 'Thank you for sharing that about gardening.', language: 'en' });
+      },
+    },
+    speech: {
+      stt: {
+        async transcribe() {
+          return ok({ text: phrases.shift()!, language: 'en' });
+        },
+      },
+      tts: {
+        async synthesize() {
+          return ok({
+            pcm: new Uint8Array(882 * 4),
+            sampleRate: 22050,
+            encoding: 'pcm_s16le',
+            channels: 1,
+            language: 'en',
+          });
+        },
+      },
+    },
+  });
+  try {
+    d.send('input.teaching.start');
+    await d.completeOutput();
+    expect(d.session().teaching?.choosingTopic).toBe(true);
+    d.events.length = 0;
+    const selection = await d.capture();
+    selection.finish();
+    await d.completeOutput();
+    expect(d.session().teaching?.entityId).toBe('topic:gardening');
+    expect(d.session().teaching?.choosingTopic).toBe(false);
+    expect(contexts).toEqual([]);
+    d.events.length = 0;
+    const explanation = await d.capture();
+    explanation.finish();
+    await d.completeOutput();
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]).toContain('Teach Lemmi conversation mode');
+    expect(contexts[0]).toContain('topic:gardening');
+    expect(contexts[0]).not.toContain('topic:beaches');
+    expect(d.events.find((event) => event.type === 'response.text')).toMatchObject({
+      payload: { source: 'model', text: 'Thank you for sharing that about gardening.' },
+    });
+    expect(d.session().teaching?.entityId).toBe('topic:gardening');
+    expect(d.session().teaching?.choosingTopic).toBe(false);
+    expect(d.events.some((event) => event.type === 'error')).toBe(false);
+    expect(phrases).toEqual([]);
+  } finally {
+    d.close();
+  }
+});
+
+for (const interruption of ['Pause', 'Mute'] as const) {
+  for (const stage of interruption === 'Pause'
+    ? (['recognition', 'model', 'synthesis'] as const)
+    : (['recognition', 'model'] as const)) {
+    test(`${interruption} cancels pending ${stage} without sending its failure into a fresh listening turn`, async () => {
+      let entered = false;
+      let blockedSignal!: AbortSignal;
+      let release!: () => void;
+      const block = (signal: AbortSignal) => {
+        entered = true;
+        blockedSignal = signal;
+        return new Promise<any>((resolve) => {
+          release = () => resolve(fail('UNAVAILABLE', 'Canceled fixture adapter'));
+        });
+      };
+      const d = await device({
+        chat: {
+          async complete(_input, signal) {
+            if (stage === 'model' && !entered) return block(signal);
+            return ok({ text: 'We can enjoy the garden.', language: 'en' });
+          },
+        },
+        speech: {
+          stt: {
+            async transcribe(_input, signal) {
+              if (stage === 'recognition' && !entered) return block(signal);
+              return ok({ text: 'A fictional garden greeting', language: 'en' });
+            },
+          },
+          tts: {
+            async synthesize(_input, signal) {
+              if (stage === 'synthesis' && !entered) return block(signal);
+              return ok({
+                pcm: new Uint8Array(882 * 4),
+                sampleRate: 22050,
+                encoding: 'pcm_s16le',
+                channels: 1,
+                language: 'en',
+              });
+            },
+          },
+        },
+      });
+      try {
+        const original = await d.capture();
+        const generation = d.session().generation;
+        const canceledCommand = original.finish();
+        await d.until(() => entered);
+        if (interruption === 'Pause') {
+          d.send('input.pause');
+          await d.until(() => d.session().phase === 'paused');
+        } else {
+          d.send('input.mute', { muted: true });
+          await d.until(() => d.session().micMuted);
+          expect(d.session().generation).toBe(generation);
+        }
+        expect(blockedSignal.aborted).toBe(true);
+        // A signal-ignoring synthesizer still owns its bounded worker slot.
+        // Release it before asking that same worker to speak the Resume prompt.
+        if (stage === 'synthesis') release();
+        if (interruption === 'Pause') {
+          d.send('input.resume');
+          await d.completeOutput();
+        } else {
+          d.send('input.mute', { muted: false });
+          await d.until(() => !d.session().micMuted);
+        }
+        const next = await d.capture();
+        expect(next.grant.turnId).not.toBe(original.grant.turnId);
+        if (interruption === 'Mute') expect(d.session().generation).toBe(generation);
+        // Recognition/model fixtures ignore cancellation until the new listening
+        // turn is active. Their late failures must not retire that turn.
+        if (stage !== 'synthesis') release();
+        await Bun.sleep(30);
+        expect(
+          d.events.filter(
+            (event) => event.type === 'error' && event.payload.commandId === canceledCommand,
+          ),
+        ).toEqual([]);
+        expect(d.session().phase).toBe('listening');
+        expect(d.session().captureGrant?.turnId).toBe(next.grant.turnId);
+        d.events.length = 0;
+        next.finish();
+        await d.completeOutput();
+        expect(d.events.some((event) => event.type === 'error')).toBe(false);
+        expect(d.session().phase).toBe('waiting');
+        expect(d.session().captureGrant).toBeNull();
+      } finally {
+        release?.();
+        d.close();
+      }
+    });
+  }
+}
+
+test('a current spoken mode-start synthesis failure stays explicit after its generation changes', async () => {
+  const d = await device({
+    speech: {
+      stt: {
+        async transcribe() {
+          return ok({ text: "Let's play Teach Lemmi", language: 'en' });
+        },
+      },
+      tts: {
+        async synthesize() {
+          return fail('UNAVAILABLE', 'Fixture synthesis unavailable');
+        },
+      },
+    },
+  });
+  try {
+    const input = await d.capture();
+    const generation = d.session().generation;
+    const commandId = input.finish();
+    await d.until(() =>
+      d.events.some((event) => event.type === 'error' && event.payload.commandId === commandId),
+    );
+    expect(d.session().generation).toBeGreaterThan(generation);
+    expect(d.session().teaching?.choosingTopic).toBe(true);
+    expect(
+      d.events.find((event) => event.type === 'error' && event.payload.commandId === commandId),
+    ).toMatchObject({ payload: { code: 'UNAVAILABLE' } });
+    expect(d.events.some((event) => event.type === 'response.start')).toBe(false);
+    expect(d.session().phase).toBe('waiting');
+    expect(d.session().captureGrant).toBeNull();
   } finally {
     d.close();
   }

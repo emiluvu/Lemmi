@@ -614,7 +614,6 @@
         {#key [assignment?.deviceId, session?.id, session?.leaseId, session?.profileRevision, session?.privacyRevision, session?.policyRevision, photo.instanceId, photo.currentAssetId].join(':')}
           <ScopedPhoto
             assetId={photo.currentAssetId}
-            caption={photo.caption ?? 'Reviewed picture'}
             loaded={() => {
               photoLoadError = false;
             }}
