@@ -1,5 +1,16 @@
 # Lemmi backend integration reference
 
+## German browser conversation candidate — not deployed
+
+Authorized participant profile responses and `device.ready.payload` add
+`language: 'en' | 'de'` (English compatibility default). The protected server
+configuration `LEMMI_GERMAN_PROFILE_IDS` selects exact created IDs, never display
+names or client mappings. `input.text` and `input.speak` must use that resolved
+language. German activity/teaching capability is unavailable and requests are
+rejected with German wording. No new route/migration or public language setter.
+Existing profile scope, ownership, revisions and cancellation apply. Deployment
+and acceptance steps: [German release candidate](handoffs/tilda-german-release.md).
+
 **Current deployment: web/gateway `95bdcef`.** UI branch `integration/frontend-backend/a664e7e` is merged and preserved. Private speech remains on its existing CPU 2+2/HFC setup; decisions remain off. All seven migrations are unchanged. [Observed review and public acceptance](backend-status.md#conversation-ui-and-spoken-modes-deployed--november-14-2026).
 
 New exact live demo HTTP operations (existing private gate, explicit demo enablement and same-origin checks; no generic live RPC):

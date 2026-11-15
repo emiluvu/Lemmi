@@ -105,7 +105,7 @@ Audio/text move through bounded request buffers, a private process pipe, NumPy a
 
 ## Sources and permission notes
 
-`assets.json` identifies exact pinned repositories/revisions, weight hashes and the English voice's source/model card. The pinned [HFC female model card](https://huggingface.co/rhasspy/piper-voices/blob/6b9cfaacb4fb2e02a9621227e3c1a48bec9710c3/en/en_US/hfc_female/medium/MODEL_CARD) links the Hi-Fi-Captain dataset under **CC BY-NC-SA 4.0** and names its hifi_tts_92 fine-tuning provenance. This is the selected noncommercial demo voice; preserve attribution/share-alike/source records and review permissions before any commercial deployment or redistribution. It is not the previous public-domain LJ Speech dataset. Piper reads the voice config’s recommended inference values (`noise_scale=0.5`, `noise_w=0.333`, `length_scale=1.0`); no custom speed/noise override is added. Piper is GPL-3.0; faster-whisper/Whisper have their own model/engine terms. Retain the source/license records and review packaging before redistribution. Downloaded weights are ignored, not committed. German voice source/license/quality review is a separate follow-up.
+`assets.json` identifies exact pinned repositories/revisions, weight hashes and the English voice's source/model card. The pinned [HFC female model card](https://huggingface.co/rhasspy/piper-voices/blob/6b9cfaacb4fb2e02a9621227e3c1a48bec9710c3/en/en_US/hfc_female/medium/MODEL_CARD) links the Hi-Fi-Captain dataset under **CC BY-NC-SA 4.0** and names its hifi_tts_92 fine-tuning provenance. This is the selected noncommercial demo voice; preserve attribution/share-alike/source records and review permissions before any commercial deployment or redistribution. It is not the previous public-domain LJ Speech dataset. Piper reads the voice config’s recommended inference values (`noise_scale=0.5`, `noise_w=0.333`, `length_scale=1.0`); no custom speed/noise override is added. Piper is GPL-3.0; faster-whisper/Whisper have their own model/engine terms. Retain the source/license records and review packaging before redistribution. Downloaded weights are ignored, not committed. German voice quality review remains a separate acceptance gate.
 
 Primary engine references: [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [Piper Python API](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md). The service uses NumPy input to STT and Piper's in-memory `synthesize` chunks rather than file-oriented recording examples. It does not implement camera/vision, voice cloning, online speech or a second conversation backend.
 
@@ -123,3 +123,35 @@ The wrapper tries a one-second graceful idle-worker shutdown before terminate/ki
 ## GPU and concurrent-user testing
 
 See the [server-agent handoff](../../docs/handoffs/speech-gpu-concurrency.md) for the unrun NVIDIA/CUDA setup, proposed two-STT/two-TTS configuration, cancellation gates and repeatable load commands. CUDA STT selection already existed; this increment adds independent configurable processes and CUDA TTS provider checks. The CPU Python lock is preserved; no GPU libraries, driver or target-host settings have been installed here. Keep all service URLs private and existing secrets unchanged. The new `bun --env-file=services/local-speech/.env scripts/speech-load.ts` probe emits only synthetic success/failure counts and timings for STT, TTS and mixed loads. It calls the private adapters directly, so overload deliberately fails at the engine capacity; it does not measure gateway queueing or maximum supported user count.
+
+
+## German pilot provisioning
+
+The German candidate is **de_DE-thorsten-medium**, 22,050 Hz, pinned to
+`6b9cfaacb4fb2e02a9621227e3c1a48bec9710c3`. The pinned
+[model card](https://huggingface.co/rhasspy/piper-voices/blob/6b9cfaacb4fb2e02a9621227e3c1a48bec9710c3/de/de_DE/thorsten/medium/MODEL_CARD)
+identifies the Thorsten-Voice dataset and rdh base as CC0. Its model card,
+configuration and ONNX model sizes/SHA-256 hashes are recorded in `assets.json`.
+Piper's engine license remains separate. This is a provisionable candidate;
+listening samples and fluent-speaker review have **not** been performed here.
+
+```sh
+python3 services/local-speech/prepare_models.py --german
+```
+
+This explicitly provisions the candidate alongside the existing English voice
+and multilingual Whisper base. It never changes an existing private environment;
+even `--configure` leaves German disabled. After listening review, the deployment
+owner sets `LEMMI_SPEECH_VOICE_DE` to the absolute
+`.models/tts-de/de_DE-thorsten-medium.onnx` path in private configuration and
+restarts the wrapper between sessions. Keep the adjacent `.onnx.json` and model
+card. Check authenticated private `/health`: every ready TTS worker must advertise
+both `en` and `de`; keep gateway/wrapper worker counts aligned. Do not use an
+English-only Whisper `.en` model. No request downloads assets and absent German
+voice returns unavailable without English synthesis.
+
+A source checkout/provisioned model does not establish human German STT/TTS,
+fluent wording, room-noise, latency, browser speaker or K151 acceptance. Run those
+checks separately without storing microphone audio or transcripts, including
+`Gärten`, `schön`, `Frühstück` and `Straße`. Preserve the English voice and existing
+profile enrollment/configuration for rollback.

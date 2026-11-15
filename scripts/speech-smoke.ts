@@ -4,6 +4,10 @@ import {
   createLocalSpeechAdapters,
 } from '../packages/server/src/adapters/local-speech';
 import { PCM_MAX_BYTES } from '../packages/server/src/adapters/types';
+const arguments_ = process.argv.slice(2);
+if (arguments_.some((argument) => argument !== '--german'))
+  throw new Error('Usage: bun scripts/speech-smoke.ts [--german]');
+const language = arguments_.includes('--german') ? 'de' : 'en';
 const configResult = localSpeechConfig();
 if (!configResult.ok) throw new Error(configResult.error.message);
 const config = configResult.data;
@@ -17,12 +21,21 @@ const health = await fetch(new URL('/health', config.sttUrl), {
 });
 if (!health.ok) throw new Error('Local speech is not ready');
 const capabilities = (await health.json()) as any;
-if (!capabilities.data?.tts?.languages?.includes('en'))
-  throw new Error('English voice is not ready');
+if (
+  !capabilities.data?.tts?.languages?.includes(language) ||
+  !capabilities.data?.stt?.languages?.includes(language)
+)
+  throw new Error('Selected speech language is not ready');
 const { stt, tts } = createLocalSpeechAdapters(config);
 const started = performance.now();
 const spoken = await tts.synthesize(
-  { text: 'Hello. The garden is quiet today.', language: 'en' },
+  {
+    text:
+      language === 'de'
+        ? 'Guten Morgen. Die Gärten sind schön. Nach dem Frühstück gehen wir auf die Straße.'
+        : 'Hello. The garden is quiet today.',
+    language,
+  },
   signal,
 );
 if (!spoken.ok) throw new Error(spoken.error.message);
@@ -43,15 +56,17 @@ for (let i = 0; i < count; i++) {
   destination.setInt16(i * 2, Math.round(sample), true);
 }
 try {
-  const transcript = await stt.transcribe({ pcm, language: 'en' }, signal);
+  const transcript = await stt.transcribe({ pcm, language }, signal);
   if (!transcript.ok) throw new Error(transcript.error.message);
-  if (transcript.data.language !== 'en' || !/\bgarden\b/i.test(transcript.data.text))
-    throw new Error('English synthetic fixture was not recognized; inspect quality privately');
+  const expected = language === 'de' ? /\bgärten\b/iu : /\bgarden\b/i;
+  if (transcript.data.language !== language || !expected.test(transcript.data.text))
+    throw new Error('Selected synthetic fixture was not recognized; inspect quality privately');
   const finished = performance.now();
   console.info(
     JSON.stringify({
       result: 'PASS',
-      test: 'local CPU English TTS → in-memory resampling → local STT',
+      test: 'local TTS → in-memory resampling → local STT',
+      language,
       ttsMs: Math.round(synthesized - started),
       sttMs: Math.round(finished - synthesized),
       sourceSampleRate: input.sampleRate,

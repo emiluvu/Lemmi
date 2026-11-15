@@ -1,5 +1,15 @@
 # Lemmi backend status
 
+## German integration candidate — not deployed
+
+`codex/tilda-german-integration`, based on `79051d9`, adds exact-ID German profile
+configuration, participant language propagation, German browser controls/routing
+and opt-in pinned German voice provisioning. No shared host configuration,
+profile/enrollment, data or service was changed. Backend SSH hostname resolution
+failed from this development machine; real German model/speech, human browser and
+K151 acceptance remain unrun. See [release steps and limits](handoffs/tilda-german-release.md).
+The deployed revisions recorded below remain the last observed deployment.
+
 ## Conversation UI and spoken modes deployed — November 14, 2026
 
 **Web/gateway runtime `95bdcef`** merges `integration/frontend-backend` **`a664e7e`**, leaving that source branch unchanged. The checkout remains on `backend-deploy`. The private speech service was not restarted: CPU 2-STT/2-TTS/HFC configuration, provider/auth/device keys, current seven migration files and existing data were preserved. No migration, reset or reseed. Rollback database/source/build/config/proxy backup pointer: `.data/ui-voice-rollback-path`.

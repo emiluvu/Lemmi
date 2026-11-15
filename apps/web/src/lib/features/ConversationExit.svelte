@@ -1,16 +1,19 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte';
   let {
+    language = 'en',
     prepare = () => {},
     beforeExit,
     exited,
     controls,
   }: {
+    language?: 'en' | 'de';
     prepare?: () => void;
     beforeExit: () => Promise<boolean>;
     exited: () => void;
     controls?: Snippet;
   } = $props();
+  const wording = (en: string, de: string) => (language === 'de' ? de : en);
   let dialog = $state<HTMLDialogElement>(null!);
   let input = $state<HTMLInputElement>(null!);
   let password = $state('');
@@ -56,11 +59,17 @@
     message = '';
     try {
       if (!(await locked)) {
-        message = 'Exit verification is unavailable. Please reload and try again.';
+        message = wording(
+          'Exit verification is unavailable. Please reload and try again.',
+          'Das Verlassen kann gerade nicht bestätigt werden. Bitte lade die Seite neu.',
+        );
         return;
       }
       if (!(await beforeExit())) {
-        message = 'Pause could not be confirmed. Use Stop, then try exiting again.';
+        message = wording(
+          'Pause could not be confirmed. Use Stop, then try exiting again.',
+          'Die Pause konnte nicht bestätigt werden. Wähle „Stopp“ und versuche es erneut.',
+        );
         return;
       }
       const response = await fetch('/v1/demo/conversation-exit', {
@@ -73,7 +82,10 @@
       password = '';
       const result = await response.json();
       if (!response.ok || result.ok !== true) {
-        message = result.error ?? 'Exit could not be verified. Please try again.';
+        message =
+          language === 'de'
+            ? 'Der Code konnte nicht bestätigt werden. Bitte versuche es erneut.'
+            : (result.error ?? 'Exit could not be verified. Please try again.');
         input?.focus();
         return;
       }
@@ -81,7 +93,10 @@
       exited();
     } catch {
       password = '';
-      message = 'Exit verification is unavailable. You are still with Lemmi.';
+      message = wording(
+        'Exit verification is unavailable. You are still with Lemmi.',
+        'Das Verlassen ist gerade nicht verfügbar. Du bist weiterhin bei Lemmi.',
+      );
     } finally {
       busy = false;
     }
@@ -91,10 +106,15 @@
 <button
   class="exit"
   onclick={requestExit}
-  aria-label="Exit conversation"
-  title="Caregiver password required">✕</button
+  aria-label={wording('Exit conversation', 'Gespräch verlassen')}
+  title={wording('Caregiver password required', 'Code der Betreuungsperson erforderlich')}>✕</button
 >
-<dialog bind:this={dialog} aria-labelledby="exit-title" onclose={() => (password = '')}>
+<dialog
+  lang={language}
+  bind:this={dialog}
+  aria-labelledby="exit-title"
+  onclose={() => (password = '')}
+>
   <div class="passcode-lock" aria-hidden="true">
     <svg
       width="28"
@@ -106,12 +126,22 @@
       ><rect x="4" y="13" width="20" height="16" rx="4" /><path d="M8 13V9a6 6 0 0 1 12 0v4" /></svg
     >
   </div>
-  <h2 id="exit-title">Enter Passcode</h2>
-  <p>To return to the caregiver dashboard</p>
+  <h2 id="exit-title">{wording('Enter Passcode', 'Code eingeben')}</h2>
+  <p>
+    {wording(
+      'To return to the caregiver dashboard',
+      'Zur Übersicht der Betreuungsperson zurückkehren',
+    )}
+  </p>
   {#if controls}{@render controls()}{/if}
   <form onsubmit={unlock}>
     <div class="passcode-entry">
-      <label class="sr-only" for="caregiver-exit-password">Four-digit caregiver passcode</label>
+      <label class="sr-only" for="caregiver-exit-password"
+        >{wording(
+          'Four-digit caregiver passcode',
+          'Vierstelliger Code der Betreuungsperson',
+        )}</label
+      >
       <input
         bind:this={input}
         id="caregiver-exit-password"
@@ -149,13 +179,15 @@
         type="button"
         class="passcode-key delete"
         disabled={busy || !password.length}
-        aria-label="Delete last digit"
+        aria-label={wording('Delete last digit', 'Letzte Ziffer löschen')}
         onclick={() => updatePasscode(password.slice(0, -1))}>⌫</button
       >
     </div>
-    <p class="error" role="status" aria-live="polite">{busy ? 'Checking…' : message}</p>
+    <p class="error" role="status" aria-live="polite">
+      {busy ? wording('Checking…', 'Wird geprüft…') : message}
+    </p>
     <button type="button" class="secondary cancel" onclick={() => dialog.close()} disabled={busy}
-      >Cancel</button
+      >{wording('Cancel', 'Abbrechen')}</button
     >
   </form>
 </dialog>

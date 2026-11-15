@@ -17,6 +17,15 @@ export function permittedModelReply(text: string, support: CommunicationSupport)
     ) &&
     !/\bi(?: will|'ll) (?:call|contact|notify|alert|message) (?:your|the) (?:caregiver|family|doctor|emergency services)\b/iu.test(
       normal,
+    ) &&
+    !/\bich habe (?:gerade |bereits |schon )?(?:(?:ihre|deine|die|den|einen|eine) (?:betreuungsperson|pflegeperson|familie|arzt|ärztin|rettungsdienst|notruf) (?:angerufen|kontaktiert|benachrichtigt|alarmiert)|(?:ihr|dein|das) zimmer (?:überprüft|kontrolliert))\b/iu.test(
+      normal,
+    ) &&
+    !/\bich (?:werde|rufe|kontaktiere|benachrichtige|alarmiere) (?:jetzt |gleich )?(?:ihre|deine|die|den|einen|eine) (?:betreuungsperson|pflegeperson|familie|arzt|ärztin|rettungsdienst|notruf)\b/iu.test(
+      normal,
+    ) &&
+    !/\b(?:hilfe|(?:ihre|deine|die) (?:betreuungsperson|pflegeperson|familie)) ist (?:schon |bereits )?(?:unterwegs|auf dem weg)\b/iu.test(
+      normal,
     )
   );
 }

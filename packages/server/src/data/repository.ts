@@ -1,3 +1,4 @@
+import { configuredProfileLanguage } from '../profile-language';
 import type { SQL, TransactionSQL } from 'bun';
 import { randomUUID } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
@@ -109,6 +110,7 @@ export class DataRepository {
           }))
         : [],
       id: row.id,
+      language: configuredProfileLanguage(row.id),
       preferredName: row.preferred_name,
       avatarId: row.avatar_id,
       revision: row.revision,
@@ -135,6 +137,7 @@ export class DataRepository {
       if (caregiver) return detail;
       return ParticipantProfileSchema.parse({
         id: detail.id,
+        language: detail.language,
         preferredName: detail.preferredName,
         avatarId: detail.avatarId,
         revision: detail.revision,
@@ -155,6 +158,7 @@ export class DataRepository {
     return rows.map((row: any) =>
       ParticipantProfileSchema.parse({
         id: row.id,
+        language: configuredProfileLanguage(row.id),
         preferredName: row.preferred_name,
         avatarId: row.avatar_id,
         revision: row.revision,

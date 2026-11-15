@@ -36,6 +36,7 @@
   let checked = $state(false);
   let startup = $state<'connecting' | 'session' | null>(null);
   let voice = $state<VoiceState>({
+    language: 'en',
     connected: false,
     ready: false,
     audio: false,
@@ -48,6 +49,9 @@
     reply: '',
     message: '',
   });
+  const language = $derived(voice.ready ? voice.language : (profile?.language ?? 'en'));
+  const german = $derived(language === 'de');
+  const wording = (en: string, de: string) => (german ? de : en);
   const active = $derived(!!voice.session && voice.session.phase !== 'ended');
   const paused = $derived(voice.session?.phase === 'paused');
   const canSpeak = $derived(
@@ -98,7 +102,7 @@
   });
   $effect(() => {
     if (startup === 'connecting' && voice.ready) {
-      if (!voice.audio || !voice.teaching) {
+      if (!voice.audio) {
         startup = null;
         return;
       }
@@ -127,7 +131,11 @@
   }
 </script>
 
-<section class="voice-teaching" aria-label="Teach Lemmi conversation">
+<section
+  class="voice-teaching"
+  lang={language}
+  aria-label={wording('Talk with Lemmi', 'Mit Lemmi sprechen')}
+>
   <div class="avatar">
     <AvatarArt
       avatarId={profile?.avatarId ?? 'lemming'}
@@ -138,30 +146,49 @@
   </div>
   {#if voice.playing && voice.reply}<SpeechBubble text={voice.reply} />{/if}
   <p class="disclosure">
-    Fictional {profile?.preferredName ?? 'Alex'} · English voice demo · Camera off
+    {wording('Fictional', 'Fiktives Profil')}
+    {profile?.preferredName ?? 'Alex'} · {wording('English voice demo', 'Deutsches Gespräch')} · {wording(
+      'Camera off',
+      'Kamera aus',
+    )}
   </p>
   {#if !voice.session?.teaching}
-    <h1>Talk with Lemmi</h1>
-    <p>Lemmi offers a topic. Tell Lemmi about it in your own words.</p>
-    <p>
-      Use Speak now to choose an activity or reply. A short pause sends your words. Unmute alone
-      keeps listening off. Pause, Stop and mute remain available.
-    </p>
-    <p class="disclosure">
-      Audio goes to the team backend for speech recognition. Text goes to the external AI provider.
-      This demo saves no conversation recording or journal excerpt.
-    </p>
-    <ActivityVoicePhrases
-      teaching={voice.teaching || !voice.connected}
-      photos={false}
-      voice={voice.connected && voice.audio}
-    />
+    <h1>{wording('Talk with Lemmi', 'Mit Lemmi sprechen')}</h1>
+    {#if german}<p>
+        Wir können auf Deutsch miteinander sprechen. Aktivitäten auf Deutsch sind noch nicht
+        verfügbar.
+      </p>{:else}<p>Lemmi offers a topic. Tell Lemmi about it in your own words.</p>{/if}
+    {#if !german}<p>
+        Use Speak now to choose an activity or reply. A short pause sends your words. Unmute alone
+        keeps listening off. Pause, Stop and mute remain available.
+      </p>{:else}<p>
+        Wähle „Sprechen“. Eine kurze Pause sendet deine Worte. Mikrofon freigeben startet das
+        Zuhören nicht. Pause, Stopp und Mikrofon stummschalten bleiben verfügbar.
+      </p>{/if}
+    {#if !german}<p class="disclosure">
+        Audio goes to the team backend for speech recognition. Text goes to the external AI
+        provider. This demo saves no conversation recording or journal excerpt.
+      </p>{:else}<p class="disclosure">
+        Sprache wird auf dem Teamserver erkannt. Text geht an den externen KI-Anbieter. Diese Demo
+        speichert keine Gesprächsaufnahme und keine Gesprächsauszüge.
+      </p>{/if}
+    {#if !german}<ActivityVoicePhrases
+        teaching={voice.teaching || !voice.connected}
+        photos={false}
+        voice={voice.connected && voice.audio}
+      />{/if}
     {#if !active}<button onclick={start} disabled={!configured || !!startup || paused}>
-        {startup ? 'Connecting…' : 'Connect conversation'}
+        {startup
+          ? wording('Connecting…', 'Verbindung wird hergestellt…')
+          : wording('Connect conversation', 'Gespräch verbinden')}
       </button>{:else}
-      <div class="controls" aria-label="Microphone controls">
-        {#if voice.listening}<button onclick={() => client.done()}>Finish speaking</button>
-        {:else}<button disabled={!canSpeak} onclick={() => client.speak()}>Speak now</button>{/if}
+      <div class="controls" aria-label={wording('Microphone controls', 'Mikrofonsteuerung')}>
+        {#if voice.listening}<button onclick={() => client.done()}
+            >{wording('Finish speaking', 'Fertig gesprochen')}</button
+          >
+        {:else}<button disabled={!canSpeak} onclick={() => client.speak()}
+            >{wording('Speak now', 'Sprechen')}</button
+          >{/if}
       </div>
     {/if}
   {:else}
@@ -175,12 +202,16 @@
       automaticReplies={voice.automaticReplies}
       command={control}
     />
-    <div class="controls" aria-label="Microphone controls">
-      {#if voice.listening}<button onclick={() => client.done()}>Finish speaking</button>
-      {:else}<button disabled={!canSpeak} onclick={() => client.speak()}>Speak now</button>{/if}
+    <div class="controls" aria-label={wording('Microphone controls', 'Mikrofonsteuerung')}>
+      {#if voice.listening}<button onclick={() => client.done()}
+          >{wording('Finish speaking', 'Fertig gesprochen')}</button
+        >
+      {:else}<button disabled={!canSpeak} onclick={() => client.speak()}
+          >{wording('Speak now', 'Sprechen')}</button
+        >{/if}
       {#if !voice.automaticReplies && !paused && voice.session.communicationSupport.preset !== 'quiet'}
         <button disabled={!canSpeak} onclick={() => client.startConversation()}
-          >Continue conversation</button
+          >{wording('Continue conversation', 'Gespräch fortsetzen')}</button
         >
       {/if}
     </div>
@@ -191,15 +222,17 @@
     </p>{/if}
   <p role="status" aria-live="polite">{voice.message}</p>
   {#if active}
-    <div class="controls sticky" aria-label="Session controls">
+    <div class="controls sticky" aria-label={wording('Session controls', 'Gesprächssteuerung')}>
       <button onclick={() => control(paused ? 'resume' : 'pause')}
-        >{paused ? 'Resume to ready' : 'Pause'}</button
+        >{paused ? wording('Resume to ready', 'Weiter') : 'Pause'}</button
       >
-      <button onclick={() => control('stop')}>Stop</button>
+      <button onclick={() => control('stop')}>{wording('Stop', 'Stopp')}</button>
       <button onclick={() => control(voice.session?.micMuted ? 'unmute' : 'mute')}
-        >{voice.session?.micMuted ? 'Unmute (microphone stays off)' : 'Mute microphone'}</button
+        >{voice.session?.micMuted
+          ? wording('Unmute (microphone stays off)', 'Mikrofon freigeben (bleibt aus)')
+          : wording('Mute microphone', 'Mikrofon stummschalten')}</button
       >
-      <button onclick={() => control('help')}>Ask for help</button>
+      <button onclick={() => control('help')}>{wording('Ask for help', 'Hilfe holen')}</button>
     </div>
   {/if}
 </section>

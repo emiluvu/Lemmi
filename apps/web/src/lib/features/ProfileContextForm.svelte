@@ -218,6 +218,7 @@
       files = [];
       saved({
         id: result.data.profileId,
+        language: profile?.language ?? 'en',
         preferredName: result.data.preferredName,
         avatarId: result.data.avatarId,
         revision: result.data.revision,

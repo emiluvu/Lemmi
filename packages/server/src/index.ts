@@ -23,3 +23,5 @@ export * from './data/service';
 export * from './data/device-authority';
 export * from './data/http';
 export * from './http-body';
+
+export * from './profile-language';

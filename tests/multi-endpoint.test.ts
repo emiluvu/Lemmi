@@ -9,6 +9,7 @@ import {
 } from '@lemmi/contracts';
 import { caregiverProfile, controlHelloFixture } from '@lemmi/contracts/fixtures';
 import { startControlGateway } from '../apps/realtime/src/control';
+import { createProfileLanguageResolver } from '@lemmi/server';
 
 const publicOrigin = 'https://lemmi.invalid';
 const internalToken = 'multi-endpoint-test-internal-token-only';
@@ -798,6 +799,78 @@ test('public Photo Story Stop cancels an in-flight opening and suppresses a late
     expect(browser.latest()?.phase).toBe('ended');
     expect(browser.latest()?.captureGrant).toBeNull();
     expect(latestPhoto(browser).phase).toBe('ended');
+  } finally {
+    await h.close();
+  }
+});
+
+test('device readiness, text and capture use isolated server-resolved profile language', async () => {
+  const h = harness({
+    languageForProfile: createProfileLanguageResolver('profile-casey'),
+    demoEnrollment: true,
+    speech: {
+      stt: {
+        async transcribe(input) {
+          return ok({ text: 'Guten Morgen', language: input.language === 'de' ? 'de' : 'en' });
+        },
+      },
+      tts: {
+        async synthesize(input) {
+          return ok({
+            pcm: new Uint8Array(1764),
+            sampleRate: 22050,
+            channels: 1,
+            encoding: 'pcm_s16le',
+            language: input.language,
+          });
+        },
+      },
+    },
+    chatAdapter: {
+      async complete(input) {
+        return ok({
+          text: input.language === 'de' ? 'Guten Morgen.' : 'Good morning.',
+          language: input.language,
+        });
+      },
+    },
+  });
+  try {
+    const alex = h.connect(await h.issue('robot-alex', 'profile-alex'));
+    const german = h.connect(await h.issue('robot-casey', 'profile-casey'));
+    await Promise.all([alex.hello(true), german.hello(true)]);
+    const germanReady = german.events.find((e) => e.type === 'device.ready');
+    const alexReady = alex.events.find((e) => e.type === 'device.ready');
+    expect(germanReady?.type === 'device.ready' && germanReady.payload.language).toBe('de');
+    expect(germanReady?.type === 'device.ready' && germanReady.payload.teaching).toBe(false);
+    expect(germanReady?.type === 'device.ready' && germanReady.payload.photoStory).toBe(false);
+    expect(alexReady?.type === 'device.ready' && alexReady.payload.language).toBe('en');
+    await Promise.all([alex.apply('input.start', null), german.apply('input.start', null)]);
+    expect(
+      await german.rejected('input.text', german.latest(), { text: 'Hello', language: 'en' }),
+    ).toBe('VALIDATION_ERROR');
+    const deText = german.send('input.text', german.latest(), {
+      text: 'Guten Morgen',
+      language: 'de',
+    });
+    const enText = alex.send('input.text', alex.latest(), { text: 'Good morning', language: 'en' });
+    const [deReply, enReply] = await Promise.all([
+      german.wait((e) => e.type === 'response.text' && e.payload.turnId === deText),
+      alex.wait((e) => e.type === 'response.text' && e.payload.turnId === enText),
+    ]);
+    expect(deReply.type === 'response.text' && deReply.payload.language).toBe('de');
+    expect(enReply.type === 'response.text' && enReply.payload.language).toBe('en');
+    expect(await german.rejected('input.teaching.start')).toBe('UNAVAILABLE');
+    await german.apply('input.mute', german.latest(), { muted: false });
+    expect(await german.rejected('input.speak', german.latest(), { language: 'en' })).toBe(
+      'VALIDATION_ERROR',
+    );
+    expect(german.latest()?.captureGrant).toBeNull();
+    const listening = await german.apply('input.speak', german.latest(), { language: 'de' });
+    expect(listening.captureGrant?.language).toBe('de');
+    await german.apply('input.stop', listening);
+    expect(german.latest()?.captureGrant).toBeNull();
+    expect(alex.latest()?.phase).not.toBe('ended');
   } finally {
     await h.close();
   }

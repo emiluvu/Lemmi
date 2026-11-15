@@ -301,6 +301,7 @@ export class PersistentData {
       return ok(
         ParticipantProfileSchema.parse({
           id: profile.id,
+          language: profile.language,
           preferredName: profile.preferredName,
           avatarId: profile.avatarId,
           revision: profile.revision,

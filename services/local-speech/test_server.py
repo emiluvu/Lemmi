@@ -87,6 +87,11 @@ class Boundaries(unittest.TestCase):
         self.assertEqual(metadata["X-Lemmi-Encoding"], "pcm_s16le")
         self.assertEqual(len(body), 200)
         self.assertEqual(self.call("/v1/tts", json.dumps({"text": "Hallo", "language": "de"}), headers=headers)[0], 503)
+        # Missing German must not poison English readiness or synthesize it as English.
+        status, _, health = self.call("/health", method="GET")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(health)["data"]["tts"]["languages"], ["en"])
+        self.assertEqual(self.call("/v1/tts", json.dumps({"text": "Hello", "language": "en"}), headers=headers)[0], 200)
         self.assertEqual(self.call("/v1/tts", json.dumps({"text": "Hello", "language": "en", "url": "https://injected.invalid"}), headers=headers)[0], 400)
 
     def test_cancel_hard_stops_work_and_other_request_cannot_queue(self):

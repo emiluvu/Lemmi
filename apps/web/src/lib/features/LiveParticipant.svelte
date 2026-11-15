@@ -67,6 +67,10 @@
       ? (profiles.find((p) => p.id === assignment?.profileId) ?? assignment.profile)
       : profiles.find((p) => p.id === requestedProfileId),
   );
+  let connectionLanguage = $state<'en' | 'de' | null>(null);
+  const language = $derived(connectionLanguage ?? currentProfile?.language ?? 'en');
+  const german = $derived(language === 'de');
+  const wording = (en: string, de: string) => (german ? de : en);
   let ownsEndpoint = $derived(!!assignment && session?.activeEndpointId === assignment.deviceId);
   function clearConversation() {
     reply = '';
@@ -74,7 +78,9 @@
   }
   function show<T>(result: Result<T>): T | null {
     if (result.ok) return result.data;
-    message = result.error.message;
+    message = german
+      ? 'Die Anfrage ist nicht verfügbar. Bitte versuche es erneut.'
+      : result.error.message;
     return null;
   }
   async function run(work: () => Promise<void>) {
@@ -83,7 +89,10 @@
     try {
       await work();
     } catch {
-      message = 'Request unavailable. Try again.';
+      message = wording(
+        'Request unavailable. Try again.',
+        'Die Anfrage ist nicht verfügbar. Bitte versuche es erneut.',
+      );
     } finally {
       busy = false;
     }
@@ -93,6 +102,7 @@
   }
   function received(event: ServerEvent) {
     if (event.type === 'device.ready') {
+      connectionLanguage = event.payload.language ?? 'en';
       connected = true;
       textAvailable = event.payload.textChat ?? false;
       speechAvailable = event.payload.audio !== false;
@@ -133,7 +143,9 @@
       transcript = appendConversationTurn(transcript, { speaker: 'lemmi', text: reply });
     }
     if (event.type === 'error') {
-      message = event.payload.message;
+      message = german
+        ? 'Das ist gerade nicht verfügbar. Das Mikrofon ist aus. Bitte versuche es erneut.'
+        : event.payload.message;
       audio?.cancelInput();
     }
     const staleOutput =
@@ -168,7 +180,10 @@
         : null;
     }
     if (!connection?.send(type, payload, independent))
-      message = 'Connection unavailable. Reconnect when ready.';
+      message = wording(
+        'Connection unavailable. Reconnect when ready.',
+        'Die Verbindung ist nicht verfügbar. Verbinde dich erneut, wenn du bereit bist.',
+      );
   }
   function photoAction(action: ActivityAction) {
     if (!photo) return;
@@ -180,6 +195,7 @@
   }
   function connect() {
     const epoch = ++connectionEpoch;
+    connectionLanguage = null;
     audio?.close();
     audio = null;
     connection?.close();
@@ -211,7 +227,9 @@
       },
       onError: (value) => {
         if (epoch === connectionEpoch) {
-          message = value;
+          message = german
+            ? 'Die Verbindung ist nicht verfügbar. Das Mikrofon ist aus. Bitte verbinde dich erneut.'
+            : value;
           clearConversation();
           outputBlocked = true;
           replyBlocked = true;
@@ -243,7 +261,9 @@
         listening = value;
       },
       (value) => {
-        message = value;
+        message = german
+          ? 'Die Verbindung ist nicht verfügbar. Das Mikrofon ist aus. Bitte verbinde dich erneut.'
+          : value;
       },
       (value) => {
         speaking = value;
@@ -334,7 +354,7 @@
     replyBlocked = false;
     outputAfterGeneration = null;
     reply = '';
-    if (connection?.send('input.text', { text: text.trim(), language: 'en' })) {
+    if (connection?.send('input.text', { text: text.trim(), language })) {
       transcript = appendConversationTurn(transcript, { speaker: 'participant', text });
       text = '';
       message = '';
@@ -348,7 +368,10 @@
         if (!disposed && result.ok) {
           profiles = [result.data];
           if (assignment) assignment = { ...assignment, profile: result.data };
-        } else if (!disposed && !result.ok) message = result.error.message;
+        } else if (!disposed && !result.ok)
+          message = german
+            ? 'Die Anfrage ist nicht verfügbar. Bitte versuche es erneut.'
+            : result.error.message;
       });
       assignment = {
         deviceId: 'preview-browser',
@@ -413,32 +436,40 @@
 </script>
 
 {#snippet safetyControls()}
-  <div class="safety-controls" aria-label="Session safety controls">
+  <div
+    class="safety-controls"
+    aria-label={wording('Session safety controls', 'Sicherheitssteuerung')}
+  >
     <button
       onclick={() => control(session?.phase === 'paused' ? 'input.resume' : 'input.pause')}
       disabled={!session ||
         session.phase === 'ended' ||
         (session.phase === 'paused' && !ownsEndpoint)}
-      >{session?.phase === 'paused' ? 'Resume' : 'Pause'}</button
+      >{session?.phase === 'paused' ? wording('Resume', 'Weiter') : 'Pause'}</button
     >
     <button onclick={() => control('input.stop')} disabled={!session || session.phase === 'ended'}
-      >Stop</button
+      >{wording('Stop', 'Stopp')}</button
     >
     <button
       onclick={() => control('input.help')}
-      disabled={!connected || !session || session.phase === 'ended'}>Get help</button
+      disabled={!connected || !session || session.phase === 'ended'}
+      >{wording('Get help', 'Hilfe holen')}</button
     >
   </div>
 {/snippet}
 
 <section
+  lang={language}
   class="conversation-screen"
   class:captioning={speaking && !!(reply || session?.teaching?.prompt)}
   aria-labelledby="conversation-title"
 >
-  <h1 id="conversation-title" class="sr-only">Talk with Lemmi</h1>
+  <h1 id="conversation-title" class="sr-only">
+    {wording('Talk with Lemmi', 'Mit Lemmi sprechen')}
+  </h1>
   <ConversationExit
     bind:this={exitGate}
+    {language}
     prepare={prepareExit}
     beforeExit={pauseBeforeExit}
     exited={leaveConversation}
@@ -466,7 +497,7 @@
             talking={speaking}
             thinking={session?.phase === 'processing'}
           />
-        {:else}<p>Loading your companion…</p>{/if}
+        {:else}<p>{wording('Loading your companion…', 'Lemmi wird geladen…')}</p>{/if}
       </div>
       {#if speaking && (reply || session?.teaching?.prompt)}
         <div class="caption-anchor">
@@ -479,16 +510,22 @@
       {/if}
     </div>
     <h2 class:sr-only={speaking}>
-      {session?.phase === 'paused'
-        ? 'Take your time'
-        : session?.phase === 'ended'
-          ? 'Here when you need me'
-          : 'Ready when you are'}
+      {german && listening
+        ? 'Ich höre zu'
+        : german && session?.phase === 'processing'
+          ? 'Lemmi überlegt…'
+          : session?.phase === 'paused'
+            ? wording('Take your time', 'Lass dir Zeit')
+            : session?.phase === 'ended'
+              ? wording('Here when you need me', 'Ich bin da, wenn du mich brauchst')
+              : wording('Ready when you are', 'Bereit, wenn du es bist')}
     </h2>
     <button
       class="capture-state"
       aria-live="polite"
-      aria-label={listening ? 'Stop conversation immediately' : 'Open voice controls'}
+      aria-label={listening
+        ? wording('Stop conversation immediately', 'Gespräch sofort stoppen')
+        : wording('Open voice controls', 'Sprachsteuerung öffnen')}
       onclick={() => {
         if (listening) {
           audio?.cancel();
@@ -497,34 +534,43 @@
       }}
     >
       {listening
-        ? 'Microphone listening'
+        ? wording('Microphone listening', 'Mikrofon hört zu')
         : session?.micMuted
-          ? 'Microphone muted'
-          : 'Microphone off'} · Camera off
+          ? wording('Microphone muted', 'Mikrofon stummgeschaltet')
+          : wording('Microphone off', 'Mikrofon aus')} · {wording('Camera off', 'Kamera aus')}
     </button>
   </div>
   <div class="conversation-panel" class:has-reply={!!(reply || session?.teaching?.prompt)}>
     {#if assignment}
-      {#if !connected && !preview}<p role="status">Connection unavailable.</p>
-        <button onclick={connect} disabled={busy}>Reconnect</button>{/if}
+      {#if !connected && !preview}<p role="status">
+          {wording('Connection unavailable.', 'Die Verbindung ist nicht verfügbar.')}
+        </p>
+        <button onclick={connect} disabled={busy}>{wording('Reconnect', 'Erneut verbinden')}</button
+        >{/if}
       {#if !session || session.phase === 'ended'}
-        <p>Start when you are ready.</p>
+        <p>{wording('Start when you are ready.', 'Starte, wenn du bereit bist.')}</p>
         <button onclick={() => control('input.start', {}, true)} disabled={!connected}
-          >Start conversation</button
+          >{wording('Start conversation', 'Gespräch starten')}</button
         >
       {:else if !ownsEndpoint}<p>
-          The {session.endpoint === 'robot' ? 'robot' : 'other browser'} is active.
+          {german
+            ? 'Ein anderes Gerät ist aktiv.'
+            : `The ${session.endpoint === 'robot' ? 'robot' : 'other browser'} is active.`}
         </p>
         <button onclick={() => control('input.handoff')} disabled={!connected}
-          >Use this browser</button
+          >{wording('Use this browser', 'Diesen Browser verwenden')}</button
         >
       {:else}
-        <ActivityVoicePhrases
-          teaching={teachingAvailable}
-          photos={photoAvailable}
-          voice={!preview && speechAvailable}
-          compact
-        />
+        {#if german}<p>
+            Wir können auf Deutsch miteinander sprechen. Aktivitäten auf Deutsch sind noch nicht
+            verfügbar.
+          </p>
+        {:else}<ActivityVoicePhrases
+            teaching={teachingAvailable}
+            photos={photoAvailable}
+            voice={!preview && speechAvailable}
+            compact
+          />{/if}
         {#if session.teaching}<p class="active-mode">
             Teach Lemmi · {session.teaching.topicLabel ?? 'No eligible topics'}
           </p>{/if}
@@ -537,7 +583,8 @@
           </p>
           {#if visibleReply.length > 70}<button
               class="text-button"
-              onclick={() => replyDialog.showModal()}>Read full reply</button
+              onclick={() => replyDialog.showModal()}
+              >{wording('Read full reply', 'Ganze Antwort lesen')}</button
             >{/if}
         {/if}
       {/if}
@@ -559,39 +606,58 @@
     {#if photoLoadError}<p role="alert">
         The picture is unavailable. Pause or choose another activity.
       </p>{/if}
+    {#if german && connected && !speechAvailable}<p role="status">
+        Die deutsche Sprachausgabe ist gerade nicht verfügbar. Das Mikrofon bleibt aus. Du kannst
+        stattdessen schreiben.
+      </p>{/if}
     {#if message}<p class="connection-message" role="status">{message}</p>{/if}
   </div>
 </section>
 
-<dialog bind:this={controlsDialog} class="conversation-dialog" aria-labelledby="controls-title">
+<dialog
+  lang={language}
+  bind:this={controlsDialog}
+  class="conversation-dialog"
+  aria-labelledby="controls-title"
+>
   <div class="dialog-heading">
-    <h2 id="controls-title">Voice controls</h2>
+    <h2 id="controls-title">{wording('Voice controls', 'Sprachsteuerung')}</h2>
     <button
       class="secondary"
-      aria-label="Close voice controls"
+      aria-label={wording('Close voice controls', 'Sprachsteuerung schließen')}
       onclick={() => controlsDialog.close()}>✕</button
     >
   </div>
-  <div class="conversation-controls" aria-label="Conversation and safety controls">
+  <div
+    class="conversation-controls"
+    aria-label={wording('Conversation and safety controls', 'Gesprächs- und Sicherheitssteuerung')}
+  >
     <button
       onclick={() => control(session?.phase === 'paused' ? 'input.resume' : 'input.pause')}
       disabled={!connected ||
         !session ||
         session.phase === 'ended' ||
         (session.phase === 'paused' && !ownsEndpoint)}
-      >{session?.phase === 'paused' ? 'Resume' : 'Pause'}</button
+      >{session?.phase === 'paused' ? wording('Resume', 'Weiter') : 'Pause'}</button
     >
     <button
       onclick={() => control('input.stop')}
-      disabled={!connected || !session || session.phase === 'ended'}>Stop</button
+      disabled={!connected || !session || session.phase === 'ended'}
+      >{wording('Stop', 'Stopp')}</button
     >
     <button
       onclick={() => control('input.mute', { muted: !session?.micMuted })}
       disabled={!connected || !ownsEndpoint || !session || session.phase === 'ended'}
-      >{session?.micMuted ? 'Unmute' : 'Mute mic'}</button
+      >{session?.micMuted
+        ? wording('Unmute', 'Mikrofon freigeben')
+        : wording('Mute mic', 'Mikrofon stummschalten')}</button
     >
-    <button onclick={() => control('input.help')} disabled={!connected}>Get help</button>
-    {#if listening}<button onclick={() => audio?.finish()}>Finish speaking</button>
+    <button onclick={() => control('input.help')} disabled={!connected}
+      >{wording('Get help', 'Hilfe holen')}</button
+    >
+    {#if listening}<button onclick={() => audio?.finish()}
+        >{wording('Finish speaking', 'Fertig gesprochen')}</button
+      >
     {:else}<button
         class="speak"
         onclick={() => {
@@ -608,7 +674,7 @@
           !session ||
           session.micMuted ||
           photoBlocksConversation ||
-          !['ready', 'waiting'].includes(session.phase)}>Speak now</button
+          !['ready', 'waiting'].includes(session.phase)}>{wording('Speak now', 'Sprechen')}</button
       >{/if}
     <button
       onclick={() => {
@@ -616,21 +682,30 @@
         controlsDialog.close();
         typingDialog.showModal();
       }}
-      disabled={!assignment}>Type instead</button
+      disabled={!assignment}>{wording('Type instead', 'Stattdessen schreiben')}</button
     >
   </div>
 </dialog>
 
-<dialog bind:this={typingDialog} class="conversation-dialog" aria-labelledby="typing-title">
+<dialog
+  lang={language}
+  bind:this={typingDialog}
+  class="conversation-dialog"
+  aria-labelledby="typing-title"
+>
   <div class="dialog-heading">
-    <h2 id="typing-title">Type to Lemmi</h2>
-    <button class="secondary" aria-label="Close typing" onclick={() => typingDialog.close()}
-      >✕</button
+    <h2 id="typing-title">{wording('Type to Lemmi', 'An Lemmi schreiben')}</h2>
+    <button
+      class="secondary"
+      aria-label={wording('Close typing', 'Texteingabe schließen')}
+      onclick={() => typingDialog.close()}>✕</button
     >
   </div>
   {@render safetyControls()}
   <form onsubmit={sendText}>
-    <label for="participant-text">Your message or activity phrase</label>
+    <label for="participant-text"
+      >{wording('Your message or activity phrase', 'Deine Nachricht')}</label
+    >
     <textarea
       id="participant-text"
       bind:value={text}
@@ -648,26 +723,36 @@
         !session ||
         !textAvailable ||
         !text.trim() ||
-        !['ready', 'waiting'].includes(session.phase)}>Send</button
+        !['ready', 'waiting'].includes(session.phase)}>{wording('Send', 'Senden')}</button
     >
     {#if preview}<p>
         Local visual preview. Voice and conversation services are not connected.
       </p>{/if}
   </form>
 </dialog>
-<dialog bind:this={replyDialog} class="conversation-dialog" aria-labelledby="reply-title">
+<dialog
+  lang={language}
+  bind:this={replyDialog}
+  class="conversation-dialog"
+  aria-labelledby="reply-title"
+>
   <div class="dialog-heading">
-    <h2 id="reply-title">Lemmi’s reply</h2>
-    <button class="secondary" aria-label="Close reply" onclick={() => replyDialog.close()}>✕</button
+    <h2 id="reply-title">{wording('Lemmi’s reply', 'Lemmis Antwort')}</h2>
+    <button
+      class="secondary"
+      aria-label={wording('Close reply', 'Antwort schließen')}
+      onclick={() => replyDialog.close()}>✕</button
     >
   </div>
   {@render safetyControls()}
   <p>{reply || session?.teaching?.prompt}</p>
   {#if transcript.length}
-    <section aria-label="This conversation">
-      <h3>This conversation</h3>
+    <section aria-label={wording('This conversation', 'Dieses Gespräch')}>
+      <h3>{wording('This conversation', 'Dieses Gespräch')}</h3>
       {#each transcript as turn}
-        <p><strong>{turn.speaker === 'participant' ? 'You' : 'Lemmi'}</strong>: {turn.text}</p>
+        <p>
+          <strong>{turn.speaker === 'participant' ? wording('You', 'Du') : 'Lemmi'}</strong>: {turn.text}
+        </p>
       {/each}
     </section>
   {/if}

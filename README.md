@@ -1,5 +1,11 @@
 # Lemmi
 
+German browser/backend conversation is available as an **undeployed candidate**
+with server-resolved per-profile language and optional pinned German voice
+provisioning. Follow the [Tilda release handoff](docs/handoffs/tilda-german-release.md)
+for exact-ID enrollment/configuration, staging checks and remaining human audio
+acceptance. Existing profiles keep English unless explicitly configured.
+
 Source branch increment: [richer profile form, private pictures and optional conversation summaries](docs/handoffs/profile-context-memory-2026-11-14.md). Requires migration `006` and coordinated web/gateway/proxy rollout; not part of the deployment stated below. Summary memory starts off. The handoff includes the safe fictional-profile backfill command.
 
 Current UI/backend release **`95bdcef`**: [reviewed spoken mode selection, caregiver name/avatar edits, single conversation screen and exit keypad](docs/handoffs/ui-voice-backend-review-2026-11-14.md). Unlock `/access`, create/select a fictional profile in `/caregiver`, then open Conversation and explicitly Start. Tap microphone status for Speak now or Type instead; reviewed phrases include “Start Teach Lemmi”, “Start Photo Story”, “Explore pictures” and “Back to conversation”. Pause/Stop/Get help remain visible. The live exit keypad code is stored privately as `LEMMI_CAREGIVER_EXIT_PASSWORD` in the protected host `.env`; local mock `1234` is not the live code. [Actual runtime, acceptance and remaining limits](docs/backend-status.md).

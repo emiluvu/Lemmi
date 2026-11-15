@@ -8,6 +8,7 @@ import {
   ActivityTransitionSchema,
   validateActivityCommandContext,
   ConversationTextCommandSchema,
+  SpeechStartCommandSchema,
   ConversationReplySchema,
   EligibilitySnapshotSchema,
   type EligibilitySnapshot,
@@ -251,6 +252,8 @@ export class SessionCoordinator {
   private readonly speech?: SpeechTurns;
   async speakTeachingPrompt(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
     this.sweepTeaching();
+    if (this.language() === 'de')
+      return fail('UNAVAILABLE', 'Diese Aktivität ist auf Deutsch noch nicht verfügbar.');
     if (this.configurationChanges.size)
       return fail('REVISION_CONFLICT', 'Configuration save is pending');
     const prompt = this.session?.teaching?.prompt;
@@ -263,8 +266,20 @@ export class SessionCoordinator {
   speechConfigured() {
     return !!this.speech;
   }
+  language(): 'en' | 'de' {
+    return this.profile.language;
+  }
   requestCapture(raw: unknown, rates: number[], outputWindow: SpeechOutputWindow = 4) {
     this.sweepTeaching();
+    const parsed = SpeechStartCommandSchema.safeParse(raw);
+    if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid capture request');
+    if (parsed.data.language !== this.language())
+      return fail(
+        'VALIDATION_ERROR',
+        this.language() === 'de'
+          ? 'Bitte die aktuelle Profilsprache verwenden.'
+          : 'Use the current profile language',
+      );
     if (this.configurationChanges.size)
       return fail('REVISION_CONFLICT', 'Configuration save is pending');
     if (
@@ -275,7 +290,7 @@ export class SessionCoordinator {
       return fail('REVISION_CONFLICT', 'Leave the activity before speaking');
     if (this.pendingChat) return fail('REVISION_CONFLICT', 'A text turn is pending');
     const result =
-      this.speech?.start(raw, rates, outputWindow) ??
+      this.speech?.start(parsed.data, rates, outputWindow) ??
       fail('UNAVAILABLE', 'Speech adapters are disabled');
     if (result.ok) this.lastChat = null;
     return result;
@@ -325,6 +340,7 @@ export class SessionCoordinator {
   }
   private photoStoryEnabled() {
     return (
+      this.language() === 'en' &&
       !!this.photoStory &&
       this.photoStory.profileId === this.profile.id &&
       ((this.photoStory.publicDemo === true && this.publicPhotoAuthorized) ||
@@ -360,6 +376,8 @@ export class SessionCoordinator {
     );
   }
   startPhoto(commandId: string) {
+    if (this.language() === 'de')
+      return fail('UNAVAILABLE', 'Diese Aktivität ist auf Deutsch noch nicht verfügbar.');
     if (!this.publicPhotoEnabled() || !this.session || !this.photoStory)
       return fail('UNAVAILABLE', 'Photo Story is not available');
     return this.handle('activities.start', {
@@ -535,6 +553,12 @@ export class SessionCoordinator {
       policyRevision: _policy,
       ...caregiver
     } = profile;
+    if (
+      this.profile.language !== caregiver.language &&
+      this.session &&
+      this.session.phase !== 'ended'
+    )
+      this.interrupt({ type: 'system.pause', reason: 'config_change' });
     this.profile = structuredClone(caregiver);
     if (syncPausedRevision) this.teachingEligibility = null;
     this.privacyRevision = _privacy;
@@ -635,6 +659,13 @@ export class SessionCoordinator {
     const parsed = ConversationTextCommandSchema.safeParse(raw);
     if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid participant text command');
     const input = parsed.data;
+    if (input.language !== this.language())
+      return fail(
+        'VALIDATION_ERROR',
+        this.language() === 'de'
+          ? 'Bitte die aktuelle Profilsprache verwenden.'
+          : 'Use the current profile language',
+      );
     const session = this.session;
     if (this.mode !== 'live' && session?.conversationMode !== 'teach_lemmi')
       return fail('UNAVAILABLE', 'Live text conversation is unavailable in mock mode');
@@ -716,15 +747,18 @@ export class SessionCoordinator {
       input.purpose = 'photo_opening';
     }
     const fixed =
-      route === 'recap' &&
-      input.language === 'en' &&
-      (!this.decisions || !!session.teaching || this.photoTalking())
-        ? conversationRecap(
-            this.dialogue,
-            this.profile.conversationRedirects?.awayFrom ?? [],
-            this.lastRedirectedMessage,
-          )
-        : fixedInputReply(route, input.language);
+      input.language === 'de' &&
+      route === 'ordinary' &&
+      requestedActivity(input.text, input.language)
+        ? 'Diese Aktivität ist auf Deutsch noch nicht verfügbar. Wir können uns unterhalten.'
+        : route === 'recap' && (!this.decisions || !!session.teaching || this.photoTalking())
+          ? conversationRecap(
+              this.dialogue,
+              this.profile.conversationRedirects?.awayFrom ?? [],
+              this.lastRedirectedMessage,
+              input.language,
+            )
+          : fixedInputReply(route, input.language);
     if (route === 'topic_refusal' && session.teaching?.entityId)
       this.teachingHidden.add(session.teaching.entityId);
     const interrupts = [
@@ -1327,6 +1361,7 @@ export class SessionCoordinator {
   private participant() {
     return ParticipantProfileSchema.parse({
       id: this.profile.id,
+      language: this.language(),
       preferredName: this.profile.preferredName,
       avatarId: this.profile.avatarId,
       revision: this.profile.revision,
@@ -1395,6 +1430,16 @@ export class SessionCoordinator {
     const parsed = operations[op].input.safeParse(raw);
     if (!parsed.success) return fail('VALIDATION_ERROR', 'Invalid command shape');
     const input = parsed.data;
+    if (
+      this.language() === 'de' &&
+      (op.startsWith('activities.') ||
+        (op === 'session.command' &&
+          SessionCommandSchema.safeParse(input).data?.action.type.startsWith('teaching.')))
+    )
+      return fail(
+        'UNAVAILABLE',
+        'Diese Aktivität ist auf Deutsch noch nicht verfügbar. Wir können uns unterhalten.',
+      );
     if (op === 'conversation.submit')
       return fail('UNAVAILABLE', 'Use the asynchronous conversation submission path');
     if (
@@ -1483,6 +1528,8 @@ export class SessionCoordinator {
       case 'profile.previews':
         return ok(previewProfiles);
       case 'profile.save':
+        if (input.profile.language !== this.language())
+          return fail('VALIDATION_ERROR', 'Profile language is server configured');
         if (input.expectedRevision !== this.profile.revision)
           return fail('REVISION_CONFLICT', 'Reload current profile');
         if (input.profile.rememberingEnabled || input.profile.excerptSavingEnabled)

@@ -18,6 +18,7 @@ export interface BrowserAudioOptions {
 
 // Transient browser PCM only. Every capture begins with a user gesture and a server grant.
 export class BrowserAudio {
+  private language: 'en' | 'de' = 'en';
   private context: AudioContext | null = null;
   private stream: MediaStream | null = null;
   private processor: ScriptProcessorNode | null = null;
@@ -116,7 +117,11 @@ export class BrowserAudio {
           if (epoch !== this.epoch) return;
           this.detector?.destroy();
           this.detector = null;
-          this.error('Automatic turn ending is unavailable. Tap Finish speaking when ready.');
+          this.error(
+            this.language === 'de'
+              ? 'Automatisches Beenden ist nicht verfügbar. Wähle „Fertig gesprochen“, wenn du bereit bist.'
+              : 'Automatic turn ending is unavailable. Tap Finish speaking when ready.',
+          );
         } finally {
           if (timer) clearTimeout(timer);
         }
@@ -134,17 +139,25 @@ export class BrowserAudio {
         track.enabled = false;
       });
       this.stream = stream;
-      if (!this.connection.send('input.speak', { language: 'en' }))
+      if (!this.connection.send('input.speak', { language: this.language }))
         throw new Error('Connection unavailable');
       this.deadline = setTimeout(() => {
         this.cancelInput();
         this.connection.send('input.pause');
-        this.error('Listening did not start. Try again.');
+        this.error(
+          this.language === 'de'
+            ? 'Das Zuhören konnte nicht starten. Bitte versuche es erneut.'
+            : 'Listening did not start. Try again.',
+        );
       }, 5000);
     } catch {
       if (epoch === this.epoch) {
         this.cancelInput();
-        this.error('Microphone unavailable. Check browser permission and try again.');
+        this.error(
+          this.language === 'de'
+            ? 'Das Mikrofon ist nicht verfügbar. Bitte prüfe die Browserberechtigung und versuche es erneut.'
+            : 'Microphone unavailable. Check browser permission and try again.',
+        );
       }
     }
   }
@@ -189,7 +202,11 @@ export class BrowserAudio {
           this.detector?.destroy();
           this.detector = null;
           this.turnEnd = null;
-          this.error('Automatic turn ending stopped. Tap Finish speaking when ready.');
+          this.error(
+            this.language === 'de'
+              ? 'Automatisches Beenden wurde unterbrochen. Wähle „Fertig gesprochen“, wenn du bereit bist.'
+              : 'Automatic turn ending stopped. Tap Finish speaking when ready.',
+          );
         }
         pcm.fill(0);
         if (
@@ -237,7 +254,11 @@ export class BrowserAudio {
     this.cancelInput();
     // Reuse the existing explicit pause path: no empty recognition/model request.
     this.connection.send('input.pause');
-    this.error('No speech detected. Listening is paused. Resume when you are ready.');
+    this.error(
+      this.language === 'de'
+        ? 'Keine Sprache erkannt. Das Zuhören ist pausiert. Wähle „Weiter“, wenn du bereit bist.'
+        : 'No speech detected. Listening is paused. Resume when you are ready.',
+    );
   }
   finish(reason: 'manual' | 'silence' | 'limit' = 'manual') {
     const grant = this.grant;
@@ -254,7 +275,12 @@ export class BrowserAudio {
       if (sent) {
         this.submitted = { turnId: grant.turnId, at: this.now() };
         this.timing({ stage: 'capture', durationMs, reason });
-      } else this.error('Connection unavailable. Your speech was not submitted.');
+      } else
+        this.error(
+          this.language === 'de'
+            ? 'Die Verbindung ist nicht verfügbar. Deine Sprache wurde nicht gesendet.'
+            : 'Connection unavailable. Your speech was not submitted.',
+        );
     } else if (grant) this.connection.send('input.pause');
   }
   cancelInput() {
@@ -340,9 +366,11 @@ export class BrowserAudio {
     ].every((key) => token[key as keyof SessionSnapshot] === session[key as keyof SessionSnapshot]);
   }
   receive(event: ServerEvent, deviceId: string) {
-    if (event.type === 'device.ready')
+    if (event.type === 'device.ready') {
+      this.language = event.payload.language ?? 'en';
       this.outputWindow =
         event.payload.audio !== false ? event.payload.audio.outputWindowChunks : 4;
+    }
     const current = this.connection.session;
     if (
       event.type === 'response.text' &&
@@ -424,7 +452,11 @@ export class BrowserAudio {
           false,
           event.payload.turnId,
         );
-        this.error('Enable browser sound with Speak now, then retry.');
+        this.error(
+          this.language === 'de'
+            ? 'Aktiviere den Browserton mit „Sprechen“ und versuche es erneut.'
+            : 'Enable browser sound with Speak now, then retry.',
+        );
         return;
       }
       this.output = {
@@ -465,7 +497,11 @@ export class BrowserAudio {
       if (output.nodes.size >= this.outputWindow) {
         this.receipt('failed', output.played);
         this.cancel();
-        this.error('Browser playback fell behind. Try again.');
+        this.error(
+          this.language === 'de'
+            ? 'Die Wiedergabe wurde unterbrochen. Bitte versuche es erneut.'
+            : 'Browser playback fell behind. Try again.',
+        );
         return;
       }
       const raw = atob(event.payload.data);
@@ -476,7 +512,11 @@ export class BrowserAudio {
       if (output.received >= output.meta.chunkCount || raw.length !== expected) {
         this.receipt('failed', output.played);
         this.cancel();
-        this.error('Invalid playback data. Try again.');
+        this.error(
+          this.language === 'de'
+            ? 'Die Wiedergabe ist nicht verfügbar. Bitte versuche es erneut.'
+            : 'Invalid playback data. Try again.',
+        );
         return;
       }
       const pcm = new Uint8Array(raw.length);

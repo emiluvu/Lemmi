@@ -1,5 +1,36 @@
 # Lemmi — Build and demo plan
 
+## Tilda German candidate — November 14, 2026
+
+Undeployed `codex/tilda-german-integration`, based on `79051d9`: exact-ID
+server-resolved `en`/`de`, safe profile/ready language, browser text/capture and
+essential German controls/errors, deterministic German control/privacy/sensitive
+routes, unavailable German activities, and opt-in pinned German voice candidate
+provisioning. Existing profile permissions/data/keys and English defaults remain.
+Independent read-only backend authority/cancellation review found no blocker.
+
+Observed locally with pinned Bun **1.4.4**: frozen install, **317 passed / 40
+database cases skipped / zero failed**, **5,224 expectations**; Svelte/TypeScript
+check, production build, full source formatting and whitespace passed. All **15
+Python speech/provisioning tests** passed. Existing production SvelteKit → fixture
+managed identity → verified HTTPS/WSS → pairing/chat/Pause/Resume/revoke smoke
+passed. New tests cover concurrent language isolation, wire readiness, text and
+capture mismatch rejection, German missing-voice capture-off behavior, late work
+cancellation, fixed recap, quoted/negated routing and browser propagation/reset.
+Sandbox socket/build-worker restrictions required reruns with local permissions;
+the successful results above are those reruns. PostgreSQL/Docker are unavailable
+in this WSL environment, so database acceptance was not repeated.
+
+Host `mobrob-Precision-3680` could not resolve over batch SSH. No deployment,
+Tilda profile/enrollment, private config change, real German model/voice download,
+human microphone/speaker/room-noise, fluent-speaker review, browser visual/keyboard
+or K151 check was performed. The Thorsten voice remains a candidate pending
+listening review; missing German synthesis has no English fallback. Anay reviews
+server/data/deployment, Kylie human browser wording/flow, Lukas unavailable
+activity boundaries, and Emilia hardware/language handoff. Follow the
+[release handoff](handoffs/tilda-german-release.md) before staging on
+`backend-deploy`; do not reset/reseed the shared database.
+
 ## November 14 profile-context source acceptance
 
 `codex/profile-context-memory` adds rich create/edit forms, optional private pictures/portrait, approved-context grounding and separately permitted rolling conversation summaries. [Backend rollout and demo backfill](handoffs/profile-context-memory-2026-11-14.md). Focused regression run: 39 pass, four database skips; the five new memory tests passed. Browser preview interactions, type/Svelte checking (zero errors/warnings) and production build passed. Full run after frozen installation restored the missing pinned VAD dependency: 300 pass, 40 skipped database checks, three environment failures (two missing OpenSSL PATH checks and a Windows POSIX file-mode assertion). Database migration/upload/revocation checks, live provider continuity, human speech/mobile/assistive-technology and K151 acceptance remain pending; none are marked passed. No deployment or remote backfill performed. Separate journal/overview work appeared concurrently in the shared checkout and is preserved. Anay reviews server/data/permission fences; Kylie reviews the form and portrait layout.
