@@ -167,6 +167,26 @@
   });
 
   function received(event: ServerEvent) {
+    if (event.type === 'help.changed' && event.payload.help.profileId === assignment?.profileId) {
+      message = german
+        ? ({
+            created: 'Ich versuche, deine Betreuungsperson zu kontaktieren.',
+            sending: 'Ich versuche, deine Betreuungsperson zu kontaktieren.',
+            accepted:
+              'Telegram hat die Nachricht angenommen. Eine Antwort ist noch nicht bestätigt.',
+            delivery_unknown: 'Der Nachrichtenstatus ist unklar. Eine Antwort ist nicht bestätigt.',
+            acknowledged:
+              'Eine Betreuungsperson hat bestätigt. Das bestätigt nicht, dass sie angekommen ist.',
+            resolved: 'Eine Betreuungsperson hat die Anfrage als erledigt markiert.',
+            canceled: 'Weitere Kontaktversuche wurden beendet.',
+            delivered: 'Die Zustellung wurde gemeldet. Eine Antwort ist nicht bestätigt.',
+            failed:
+              'Ich konnte keinen Kontakt bestätigen. Bitte kontaktiere eine vertraute Person direkt.',
+            expired: 'Ich konnte keine Antwort bestätigen.',
+            no_response: 'Ich konnte keine Antwort bestätigen.',
+          }[event.payload.help.status] ?? 'Ich konnte keinen Kontakt bestätigen.')
+        : event.payload.help.message;
+    }
     if (event.type === 'device.ready') {
       connectionLanguage = event.payload.language ?? 'en';
       connected = true;

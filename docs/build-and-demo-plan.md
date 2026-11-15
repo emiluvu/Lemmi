@@ -1418,3 +1418,9 @@ root post-speech silence changed to 1500 ms. Rollback pointer
 [Evidence and limits](backend-status.md#conversation-reliability-deployed--november-15-2026).
 Thirty-human-turn, actual microphone/room/speaker and this release's K151 checks
 remain unrun; Kylie/Lukas/Emilia retain their counterpart rehearsal handoffs.
+
+## Observed Telegram contact slice — November 15, 2026
+
+Implementation: `feat/telegram-caregiver-contact`, persistent worktree `.worktrees/telegram-caregiver-contact`; [handoff](handoffs/telegram-caregiver-contact.md). Added durable requests/leased bounded send attempts, manual/fixed/Jev triggers, protected acknowledgment/cancel/resolve, resource-scoped status events, participant status copy and proxy-template routes. Technical agent review found and prompted fixes for cancellation during SQL, full pre-send authorization, startup consent resurrection and stale-revision deduplication; regression tests cover those findings.
+
+Observed against isolated PostgreSQL 14.24 and Bun 1.4.4: initial full suite 489 passed / 19 skipped / 0 failed; separate gateway tests 2 passed / 25 expectations; speech-contact tests 2 passed / 37 expectations; reviewed contact suite 14 passed / 154 expectations. Final combined checks are recorded in the contact handoff. Actual manual help and actual Jev classification each reached Telegram acceptance using the existing private tg-notify configuration; the user confirmed both fictional alerts arrived. Requests were stored only in a disposable smoke database and future smoke attempts canceled. No conversational LLM generation, real participant data or hardware was used. No production configuration, deployed database or running public service changed.

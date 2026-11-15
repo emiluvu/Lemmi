@@ -30,6 +30,7 @@
     "test:data": "bun test tests/data.test.ts",
     "smoke:data": "bun scripts/smoke-data.ts",
     "smoke:participant": "bun scripts/smoke-participant.ts",
+    "smoke:telegram-contact": "bun scripts/smoke-telegram-contact.ts",
     "enroll-device": "bun scripts/enroll-device.ts"
   },
   "devDependencies": {

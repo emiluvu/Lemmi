@@ -7,6 +7,7 @@ import type { ConversationDecisionAdapter } from './adapters/conversation-decisi
 import type { SpeechAdapters } from './speech-turns';
 import { SessionCoordinator } from './session-coordinator';
 import { alexProfilePhotoPack } from './profile-photo-pack';
+import type { CaregiverContact, ConcernAdapter } from './contact/types';
 
 // One gateway authority, with isolated coordinator state per authorized profile.
 export class SessionRegistry {
@@ -20,6 +21,8 @@ export class SessionRegistry {
     private readonly publicPhotoStory = false,
     private readonly decisions?: ConversationDecisionAdapter,
     private readonly languageForProfile = configuredProfileLanguage,
+    private readonly contact?: CaregiverContact,
+    private readonly concerns?: ConcernAdapter,
   ) {
     this.acceptPersistentProfile({
       ...structuredClone(caregiverProfile),
@@ -71,6 +74,8 @@ export class SessionRegistry {
             }
           : undefined,
         this.decisions,
+        this.contact,
+        this.concerns,
       );
       this.entries.set(profile.id, coordinator);
     }

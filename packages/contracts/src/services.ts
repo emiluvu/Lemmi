@@ -44,26 +44,8 @@ import {
   RevokeDeviceInputSchema,
   RevokeDeviceResultSchema,
 } from './device-access';
-export const HelpSnapshotSchema = z.strictObject({
-  id: IdSchema,
-  profileId: IdSchema,
-  status: z.enum([
-    'created',
-    'sending',
-    'accepted',
-    'delivery_unknown',
-    'delivered',
-    'acknowledged',
-    'failed',
-    'no_response',
-    'canceled',
-    'expired',
-    'resolved',
-  ]),
-  mode: z.enum(['simulation', 'real']),
-  reason: z.enum(['manual', 'urgent_concern']),
-  message: z.string().max(200),
-});
+import { HelpSnapshotSchema } from './help';
+export { HelpSnapshotSchema } from './help';
 export const JournalEventSchema = z.union([
   ...ActivityEventSchema.options.map((event) =>
     event.extend({ source: z.literal('measured_event') }),

@@ -1,4 +1,12 @@
 import {
+  contactStatusText,
+  ConcernCategorySchema,
+  type CaregiverContact,
+  type ConcernAdapter,
+  type ContactCategory,
+  type ContactSource,
+} from './contact/types';
+import {
   operations,
   ok,
   fail,
@@ -102,6 +110,8 @@ export class SessionCoordinator {
       availableAssetIds: string[];
     },
     private readonly decisions?: ConversationDecisionAdapter,
+    private readonly contact?: CaregiverContact,
+    private readonly concerns?: ConcernAdapter,
   ) {
     this.now = now === Date.now ? elapsedEpochClock() : now;
     if (mode === 'live' && chatAdapter && speech)
@@ -866,7 +876,9 @@ export class SessionCoordinator {
     this.summaryController?.abort();
     this.summaryController = null;
   }
+  private contactWorkRevision = 0;
   private cancelChat(inputOnly = false, preserveSpeech?: object, preserveReminder = false) {
+    this.contactWorkRevision++;
     if (!preserveReminder && !inputOnly) {
       this.photoReminder = null;
       this.conversationReminder = null;
@@ -885,6 +897,96 @@ export class SessionCoordinator {
   // never retain raw participant utterances/results after Stop, pause, mute or disconnect.
   async submitText(raw: unknown): Promise<Result<ConversationTextResult>> {
     return this.submitTextInternal(raw);
+  }
+  // Manual help is deliberately separate from generation and factual journal checkpointing.
+  async requestHelp(profileId: string, commandId: string) {
+    if (profileId !== this.profile.id) return fail('FORBIDDEN', 'Help profile is not assigned');
+    this.interrupt({ type: 'system.pause', reason: 'help' });
+    this.onFixedReply();
+    if (!this.contact)
+      return fail(
+        'UNAVAILABLE',
+        'Caregiver contact is not configured; no request was created or sent',
+      );
+    return this.contact.create({
+      profileId,
+      commandId,
+      category: 'help_request',
+      source: 'manual',
+    });
+  }
+  private async contactReply(
+    input: { commandId: string; language: 'en' | 'de' },
+    category: ContactCategory,
+    source: ContactSource,
+    speechOwner?: object,
+  ): Promise<Result<ConversationTextResult>> {
+    const token = this.session!;
+    const pause = () => this.interrupt({ type: 'system.pause', reason: 'help' });
+    let turnId = input.commandId;
+    if (speechOwner) {
+      const fresh = this.speech?.replaceForFixedReply(speechOwner, pause);
+      if (!fresh) return fail('REVISION_CONFLICT', 'Concern turn was canceled');
+      turnId = fresh;
+    } else pause();
+    const paused = this.session!;
+    const contactRevision = this.contactWorkRevision;
+    this.onFixedReply();
+    const current = () =>
+      !!this.session &&
+      this.session.id === paused.id &&
+      this.session.generation === paused.generation &&
+      this.session.leaseId === paused.leaseId &&
+      this.session.phase === 'paused' &&
+      this.session.profileRevision === paused.profileRevision &&
+      this.session.privacyRevision === paused.privacyRevision &&
+      this.session.policyRevision === paused.policyRevision &&
+      this.contactWorkRevision === contactRevision;
+    const creation = this.contact!.create({
+      profileId: token.profileId,
+      commandId: input.commandId,
+      category,
+      source,
+      profileRevision: token.profileRevision,
+      privacyRevision: token.privacyRevision,
+      policyRevision: token.policyRevision,
+      current,
+    });
+    // Do not delay immediate-danger guidance on a database lock or notification status.
+    const immediate = category === 'urgent' || category === 'safeguarding';
+    if (immediate) void creation.catch(() => {});
+    const sent = immediate ? null : await creation;
+    if (!current() || (speechOwner && !this.speech?.fixedReplyPending(turnId)))
+      return fail('REVISION_CONFLICT', 'Discarded obsolete contact response');
+    const de = input.language === 'de';
+    let text = !sent
+      ? category === 'safeguarding'
+        ? de
+          ? 'Ich prüfe, ob ein sicherer alternativer Kontakt verfügbar ist.'
+          : 'I am checking whether a safe alternate contact is available.'
+        : de
+          ? 'Ich versuche, eine Kontaktanfrage zu starten.'
+          : 'I am trying to start a caregiver contact request.'
+      : sent.ok
+        ? contactStatusText(sent.data.status, input.language)
+        : category === 'safeguarding'
+          ? de
+            ? 'Ein sicherer alternativer Kontakt ist nicht verfügbar. Bitte wende dich direkt an eine andere vertraute Person.'
+            : 'A safe alternate contact is unavailable. Please contact another trusted person directly.'
+          : de
+            ? 'Ich konnte die Kontaktanfrage nicht starten. Bitte kontaktiere eine vertraute Person direkt.'
+            : "I couldn't start the contact request. Please contact a trusted person directly.";
+    if (category === 'urgent' || category === 'safeguarding')
+      text += de
+        ? ' Ich kann keinen Notruf absetzen. Rufe bei unmittelbarer Gefahr den örtlichen Notruf an oder bitte jemanden in der Nähe darum.'
+        : ' I cannot call emergency services. If you are in immediate danger, call local emergency services or ask someone nearby to call.';
+    const result = ok<ConversationTextResult>({
+      kind: 'reply',
+      reply: { turnId, text, language: input.language, source: 'fixed' },
+      session: this.snapshot()!,
+    });
+    this.lastChat = { commandId: input.commandId, result };
+    return result;
   }
   private async submitTextInternal(
     raw: unknown,
@@ -954,6 +1056,24 @@ export class SessionCoordinator {
       });
       return result.ok ? ok({ kind: 'control', action: route, session: this.snapshot()! }) : result;
     }
+    if (
+      this.contact &&
+      ['help', 'urgent', 'unwell', 'frightening', 'safeguarding'].includes(route)
+    ) {
+      if (this.chatIds.size < 256) this.chatIds.set(input.commandId, fingerprint);
+      return this.contactReply(
+        input,
+        route === 'help'
+          ? 'help_request'
+          : route === 'urgent'
+            ? 'urgent'
+            : route === 'safeguarding'
+              ? 'safeguarding'
+              : 'concern',
+        'participant_phrase',
+        speechOwner,
+      );
+    }
     if (route === 'help')
       return this.handle('help.create', {
         profileId: session.profileId,
@@ -1010,6 +1130,7 @@ export class SessionCoordinator {
       this.teachingHidden.add(session.teaching.entityId);
     const interrupts = [
       'urgent',
+      'safeguarding',
       'unwell',
       'topic_refusal',
       'privacy_refusal',
@@ -1436,6 +1557,7 @@ export class SessionCoordinator {
     pending.promise = (async () => {
       let result: Result<ConversationTextResult>;
       let fixedDecisionReply = false;
+      let detectedConcern: ContactCategory | null = null;
       let proposedActivity: 'photo' | 'teaching' | null = null;
       try {
         const response = await new Promise<Awaited<ReturnType<ChatAdapter['complete']>>>(
@@ -1445,6 +1567,25 @@ export class SessionCoordinator {
             Promise.resolve()
               .then(async () => {
                 signal.throwIfAborted();
+                if (this.contact && this.concerns && !input.purpose) {
+                  const evaluated = await abortable(
+                    () => this.concerns!.classify(input.text, input.language, signal),
+                    signal,
+                  );
+                  if (!current() || signal.aborted) throw new Error('Obsolete concern');
+                  if (!evaluated.ok)
+                    return fail(
+                      'UNAVAILABLE',
+                      'Concern detection unavailable; manual help remains available',
+                    );
+                  const category = ConcernCategorySchema.safeParse(evaluated.data);
+                  if (!category.success)
+                    return fail('UNAVAILABLE', 'Invalid concern classification');
+                  if (category.data !== 'none') {
+                    detectedConcern = category.data;
+                    return ok({ text: 'Contact request', language: input.language });
+                  }
+                }
                 if (
                   this.decisions &&
                   input.language === 'en' &&
@@ -1562,6 +1703,7 @@ export class SessionCoordinator {
         );
         if (!current() || signal.aborted)
           return fail('REVISION_CONFLICT', 'Discarded an obsolete conversation result');
+        if (detectedConcern) return this.contactReply(input, detectedConcern, 'model', speechOwner);
         const photoClaim =
           response.ok &&
           input.language === 'en' &&

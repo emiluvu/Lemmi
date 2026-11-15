@@ -3,6 +3,7 @@ import { IdSchema, RevisionSchema, ErrorCodeSchema } from './common';
 import { SessionSnapshotSchema } from './session';
 import { ActivityViewSchema, ActivityActionSchema } from './activity';
 import { ConversationReplySchema } from './conversation';
+import { HelpSnapshotSchema } from './help';
 import {
   PlaybackCapabilitySchema,
   PlaybackReceiptPayloadSchema,
@@ -198,6 +199,11 @@ export type DeviceEvent = z.infer<typeof DeviceEventSchema>;
 // Frame sizes are negotiation targets only. Starter transports reject media/camera events.
 
 export const ServerEventSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    ...base,
+    type: z.literal('help.changed'),
+    payload: z.strictObject({ help: HelpSnapshotSchema }),
+  }),
   z.strictObject({
     ...base,
     type: z.literal('device.ready'),

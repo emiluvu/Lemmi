@@ -1,5 +1,11 @@
 # Lemmi
 
+**Telegram caregiver-contact source increment:** manual help and reviewed/Jev concern
+signals now have an opt-in durable Telegram sender. Follow the
+[setup, real-send smoke and deployment handoff](docs/handoffs/telegram-caregiver-contact.md).
+This branch change does not update the running deployment; Telegram acceptance is
+distinct from caregiver acknowledgment or arrival.
+
 **Conversation reliability deployed — web/gateway/local speech `ea66280`:**
 Initial browser silence waits 30 seconds; post-speech ending uses 1.5 seconds.
 Fresh listening/Resume survives retired-output cancellation. Natural teaching

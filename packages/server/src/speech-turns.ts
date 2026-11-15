@@ -120,6 +120,10 @@ export class SpeechTurns {
     const v = this.#owner;
     return !!v && v.turnId === turnId && !!this.outputInfo();
   }
+  fixedReplyPending(turnId: string): boolean {
+    const owner = this.#owner;
+    return !!owner && !!owner.fixedFor && owner.turnId === turnId && this.current(owner);
+  }
   private current(v: Owner): boolean {
     const s = this.snapshot();
     return (

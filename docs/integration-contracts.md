@@ -310,3 +310,7 @@ Natural menu topic choices and whole-request photo next/previous/skip and activi
 exit/switch phrases reuse existing reviewed eligibility, reducers and commands.
 Photo openings avoid reciting approved captions; approved model grounding and existing activity caption metadata remain.
 See [handoff](handoffs/conversation-reliability.md) for checks and limitations.
+
+## Telegram contact integration — November 15, 2026
+
+See [the exact contact handoff](handoffs/telegram-caregiver-contact.md). The existing authority pauses before help; manual `input.help` works without an active session and bypasses all models. Spoken/typed recognized concern replies retain fresh paused speech authority. Optional independent Jev concern questions return bounded categories only; the application owns recipients and fixed messages. No transcript or paraphrase is retained in requests/outbox. `help.changed {help: HelpSnapshot}` is participant-safe and resource-scoped; browser status consumes it without interrupting already approved urgent guidance. `HelpSnapshot.reason` additionally accepts `concern`. Caregiver acknowledgment/resolve/cancel use authorized POST routes; GET/link previews never acknowledge. Kylie consumes these APIs for a future request-detail UI, Emilia can consume status events and must verify actual device controls, and Anay coordinates migration/configuration/review/deployment. No hardware or production-rollout claim follows from local checks.

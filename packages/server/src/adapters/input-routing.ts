@@ -6,6 +6,7 @@ export type InputRoute =
   | 'incomplete_need'
   | 'unwell'
   | 'urgent'
+  | 'safeguarding'
   | 'identity'
   | 'unclear'
   | 'medication'
@@ -135,7 +136,7 @@ export function routeParticipantText(text: string): InputRoute {
     return 'stop';
   if (/^(pause|please pause|take a break|eine pause|pause bitte)$/.test(value)) return 'pause';
   if (
-    /^(help(?: me)?|i need help|get help|please (?:get )?help(?: me)?|hilfe|ich brauche hilfe|bitte hilfe)$/.test(
+    /^(help(?: me)?|i need (?:help|assistance)|(?:can|could) you (?:please )?(?:help|assist) me|get help|(?:please )?(?:get|call|contact) (?:my |a )?(?:caregiver|carer)|please (?:get )?help(?: me)?|hilfe|ich brauche hilfe|bitte hilfe)$/.test(
       value,
     )
   )
@@ -153,6 +154,12 @@ export function routeParticipantText(text: string): InputRoute {
   )
     return 'privacy_refusal';
   if (/^(i need|ich brauche)$/.test(value)) return 'incomplete_need';
+  if (
+    /^(?:my (?:caregiver|carer|husband|wife|partner|son|daughter) (?:is hurting|hit|hits|is threatening) me|(?:meine pflegeperson|mein mann|meine frau) (?:schlägt|bedroht) mich)$/.test(
+      value,
+    )
+  )
+    return 'safeguarding';
   if (/^(i (?:do not|don't) feel well|i feel unwell|mir geht es nicht gut)$/.test(value))
     return 'unwell';
   if (
@@ -205,6 +212,10 @@ export function routeParticipantText(text: string): InputRoute {
 
 export function fixedInputReply(route: InputRoute, language: 'en' | 'de'): string | null {
   const de = language === 'de';
+  if (route === 'safeguarding')
+    return de
+      ? 'Bitte wende dich an eine andere vertraute Person. Bei unmittelbarer Gefahr rufe den örtlichen Notruf an. Ich kann keinen Notruf absetzen.'
+      : 'Please contact another trusted person. If you are in immediate danger, call local emergency services. I cannot call emergency services.';
   if (route === 'topic_refusal')
     return de
       ? 'Wir lassen dieses Thema. Sie können später etwas anderes wählen.'

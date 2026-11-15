@@ -25,3 +25,8 @@ export * from './data/http';
 export * from './http-body';
 
 export * from './profile-language';
+export * from './contact/types';
+export * from './contact/telegram';
+export * from './contact/concerns';
+export * from './contact/service';
+export * from './contact/http';
