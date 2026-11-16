@@ -1,5 +1,22 @@
 # Lemmi backend status
 
+## Project shut down — November 15, 2026
+
+At the user's request, Lemmi was taken offline at **2026-11-16 04:40:40 UTC**.
+The public Cloudflare tunnel, web, gateway and local speech user services are
+stopped and disabled. The Lemmi Nginx and PostgreSQL containers are stopped with
+restart policies set to `no`; their volumes remain intact. All four service
+MainPIDs are zero and no cloudflared process remains. Prior deployment records
+below describe historical acceptance, not current availability.
+
+Code, private configuration, database/media, rollback checkpoints and the working
+conversation tag are preserved. Uncommitted UI changes remain untouched; a private
+patch copy is in `.data/shutdown/uncommitted-ui.patch`. Temporary test outputs and
+rebuildable caches were cleaned; source clones and dirty workspaces retained.
+Re-enabling services/containers is an explicit future action. Existing durable
+notification jobs are retained, so review pending/uncertain sends before any
+future gateway restart. No shutdown notification was sent.
+
 ## Branded access page deployed — November 15, 2026
 
 **Web `5b4c23e`**, integrating `codex/auth-welcome/c8a1cf9` through merge

@@ -1573,3 +1573,12 @@ unlock/cookie/relock, zero CSP/browser errors. No profile writes or alert sends.
 Full application and hardware checks were not rerun for this page-only increment.
 Kylie may review the deployed visuals; observed automated acceptance does not claim
 human visual approval. [Release and rollback](backend-status.md#branded-access-page-deployed--november-15-2026).
+
+## Project shutdown — November 15, 2026
+
+User requested end-of-project shutdown. At 2026-11-16 04:40:40 UTC, tunnel/web/gateway/speech
+were stopped and disabled; proxy/PostgreSQL containers stopped with restart=no.
+Zero service MainPIDs and no tunnel process verified. Code, data, configuration,
+checkpoints and uncommitted UI work preserved. Temporary test artifacts and
+rebuildable caches cleaned. Public deployment acceptance above is historical;
+no new provider or hardware test was performed.

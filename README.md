@@ -1,5 +1,10 @@
 # Lemmi
 
+**Project offline:** all Lemmi services and the public tunnel are stopped and
+automatic startup is disabled. Proxy/database containers are stopped; code,
+private data and rollback checkpoints are preserved.
+[Shutdown record](docs/backend-status.md#project-shut-down--november-15-2026).
+
 **Branded login deployed — web `5b4c23e`:** `/access` now matches Lemmi's
 mascot, font, cream texture and sage controls. Public desktop/mobile, keyboard,
 wrong-key, unlock and relock checks passed. Conversation and Telegram runtimes
